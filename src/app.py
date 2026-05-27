@@ -110,15 +110,18 @@ def query(req: QueryRequest, x_user_id: str | None = Header(default=None)) -> di
     user_id = _resolve_user_id(x_user_id)
     if not req.question.strip():
         raise HTTPException(status_code=400, detail="Empty question")
-    return handlers.handle_query(
-        user_id=user_id,
-        question=req.question,
-        ai_client=ai_client,
-        userstore=userstore,
-        vector_store=vector_store,
-        vector_backend=config.vector_backend,
-        bedrock_kb_id=config.vector_bedrock_kb_id,
-    )
+    try:
+        return handlers.handle_query(
+            user_id=user_id,
+            question=req.question,
+            ai_client=ai_client,
+            userstore=userstore,
+            vector_store=vector_store,
+            vector_backend=config.vector_backend,
+            bedrock_kb_id=config.vector_bedrock_kb_id,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}")
 
 
 class EvaluateRequest(BaseModel):

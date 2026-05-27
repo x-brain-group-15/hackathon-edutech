@@ -1,12 +1,10 @@
-"""Endpoint handlers. Pure business logic — knows nothing about FastAPI or AWS specifics."""
+﻿"""Endpoint handlers. Pure business logic — knows nothing about FastAPI or AWS specifics."""
 import uuid
 import json
 import time
 import logging
 import traceback
-from pathlib import Path
 from typing import Optional
-import io
 
 from src.config import config
 from src.pdf_extractor import extract_pdf
@@ -81,18 +79,13 @@ def _extract_text(filename: str, data: bytes) -> str:
     """Extract plain text from PDF or .txt upload."""
     if filename.lower().endswith(".pdf"):
         try:
-            from pypdf import PdfReader
-        except ImportError:
-            return "(pypdf not installed — install requirements.txt)"
-        reader = PdfReader(io.BytesIO(data))
-        return "\n\n".join(page.extract_text() or "" for page in reader.pages)
-    # Default: assume UTF-8 text
+            return extract_pdf(data).text
+        except RuntimeError as exc:
+            return f"({exc})"
     try:
         return data.decode("utf-8", errors="replace")
     except Exception:
         return ""
-
-
 
 def handle_upload(
     user_id: str,
@@ -117,8 +110,34 @@ def handle_upload(
         location = storage.put(key, data)
         log_step("upload", "store_file_done", user_id=user_id, doc_id=doc_id, filename=filename, location=location)
 
+        # Write companion metadata.json for Bedrock KB multi-tenant filtering
+        try:
+            import json
+            metadata_json = {
+                "metadataAttributes": {
+                    "user_id": user_id,
+                    "doc_id": doc_id,
+                    "filename": filename,
+                }
+            }
+            storage.put(key + ".metadata.json", json.dumps(metadata_json).encode("utf-8"))
+        except Exception:
+            pass
+
+        extraction_metadata = {}
         log_step("upload", "extract_text_start", user_id=user_id, doc_id=doc_id, filename=filename)
-        text = _extract_text(filename, data)
+        if filename.lower().endswith(".pdf"):
+            asset_prefix = f"{user_id}/{doc_id}/extracted-assets"
+
+            def write_image_asset(asset_filename: str, asset_data: bytes) -> str:
+                return storage.put(f"{asset_prefix}/{asset_filename}", asset_data)
+
+            extracted = extract_pdf(data, image_writer=write_image_asset)
+            text = extracted.text
+            extraction_metadata = extracted.metadata
+            extraction_metadata["asset_prefix"] = asset_prefix
+        else:
+            text = _extract_text(filename, data)
         log_step("upload", "extract_text_done", user_id=user_id, doc_id=doc_id, filename=filename, chars_extracted=len(text))
 
         if text.strip():
@@ -126,7 +145,12 @@ def handle_upload(
             vector_store.ingest(
                 doc_id=doc_id,
                 text=text,
-                metadata={"user_id": user_id, "filename": filename},
+                metadata={
+                    "user_id": user_id,
+                    "filename": filename,
+                    "extraction_strategy": extraction_metadata.get("strategy", "plain_text"),
+                    "asset_prefix": extraction_metadata.get("asset_prefix", ""),
+                },
                 strategy=strategy,
                 size=size,
                 overlap=overlap,
@@ -145,6 +169,7 @@ def handle_upload(
                 "size": len(data),
                 "location": location,
                 "chars": len(text),
+                "extraction": extraction_metadata,
             },
         )
         log_step("upload", "save_metadata_done", user_id=user_id, doc_id=doc_id, filename=filename)
@@ -158,6 +183,8 @@ def handle_upload(
             filename=filename,
             size=len(data),
             chars_extracted=len(text),
+            images_extracted=extraction_metadata.get("images_extracted", 0),
+            pages_requiring_ocr=extraction_metadata.get("pages_requiring_ocr", []),
             location=location,
             status="success",
         )
@@ -170,6 +197,7 @@ def handle_upload(
             "size": len(data),
             "chars_extracted": len(text),
             "location": location,
+            "extraction": extraction_metadata,
         }
 
     except Exception as e:
@@ -693,10 +721,21 @@ def handle_evaluate(
                 query=q
             )
 
-            chunks = vector_store.search(q, top_k=5, filter={"user_id": user_id})
+            # Filter by BOTH user_id AND doc_id so we only evaluate chunks
+            # from the specific document — not all documents of this user.
+            chunks = vector_store.search(q, top_k=5, filter={"user_id": user_id, "doc_id": doc_id})
+            if not chunks:
+                # Fallback 1: filter by user_id only (covers cases where doc_id metadata is missing)
+                chunks = vector_store.search(q, top_k=5, filter={"user_id": user_id})
             if not chunks and hasattr(vector_store, "kb_id"):
-                # Fallback for legacy Bedrock KB files that don't have metadata sidecars
+                # Fallback 2: Bedrock KB — metadata sidecars may not have been written yet
                 chunks = vector_store.search(q, top_k=5, filter=None)
+            # Post-filter: if we got chunks from multiple docs, keep only those belonging to this doc
+            if chunks and doc_id:
+                doc_chunks = [c for c in chunks if c.get("doc_id") == doc_id or c.get("metadata", {}).get("doc_id") == doc_id]
+                if doc_chunks:
+                    chunks = doc_chunks
+
 
             log_step(
                 "evaluate",

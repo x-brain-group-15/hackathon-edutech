@@ -11,12 +11,13 @@ import re
 import hashlib
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 
 MIN_TEXT_CHARS_FOR_TEXT_LAYER = 40
 MAX_IMAGE_CONTEXT_CHARS = 500
 MIN_IMAGE_BYTES_TO_KEEP = 8 * 1024
+ImageWriter = Callable[[str, bytes], str]
 
 
 @dataclass
@@ -102,14 +103,20 @@ def _content_type_for_filename(filename: str) -> str:
     }.get(suffix, "application/octet-stream")
 
 
-def _extract_images(page: Any, page_number: int, output_dir: Path | None = None) -> list[ImageExtraction]:
-    return _extract_images_with_dedup(page, page_number, output_dir, set())
+def _extract_images(
+    page: Any,
+    page_number: int,
+    output_dir: Path | None = None,
+    image_writer: ImageWriter | None = None,
+) -> list[ImageExtraction]:
+    return _extract_images_with_dedup(page, page_number, output_dir, image_writer, set())
 
 
 def _extract_images_with_dedup(
     page: Any,
     page_number: int,
     output_dir: Path | None,
+    image_writer: ImageWriter | None,
     seen_hashes: set[str],
 ) -> list[ImageExtraction]:
     images: list[ImageExtraction] = []
@@ -131,7 +138,9 @@ def _extract_images_with_dedup(
             continue
         seen_hashes.add(digest)
         location = None
-        if output_dir and data:
+        if image_writer and data:
+            location = image_writer(filename, data)
+        elif output_dir and data:
             path = output_dir / filename
             path.write_bytes(data)
             location = str(path.resolve())
@@ -183,12 +192,17 @@ def _visual_context(page_number: int, text: str, images: list[ImageExtraction]) 
     )
 
 
-def extract_pdf(data: bytes, image_output_dir: str | Path | None = None) -> DocumentExtraction:
+def extract_pdf(
+    data: bytes,
+    image_output_dir: str | Path | None = None,
+    image_writer: ImageWriter | None = None,
+) -> DocumentExtraction:
     """Extract text and page-level metadata from a PDF.
 
-    This function saves embedded images when image_output_dir is provided. It
-    does not run OCR directly; instead it marks pages that need OCR/Textract or
-    Vision so the production pipeline spends money only on those pages.
+    This function saves embedded images when image_output_dir or image_writer is
+    provided. It does not run OCR directly; instead it marks pages that need
+    OCR/Textract or Vision so the production pipeline spends money only on
+    those pages.
     """
     try:
         from pypdf import PdfReader
@@ -205,7 +219,7 @@ def extract_pdf(data: bytes, image_output_dir: str | Path | None = None) -> Docu
         raw_text = page.extract_text() or ""
         text = _clean_text(raw_text)
         images = _image_count(page)
-        extracted_images = _extract_images_with_dedup(page, idx, image_dir, seen_image_hashes)
+        extracted_images = _extract_images_with_dedup(page, idx, image_dir, image_writer, seen_image_hashes)
         table_lines = _table_like_line_count(text)
         warnings: list[str] = []
 

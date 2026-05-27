@@ -18,14 +18,14 @@ The system uses a text-layer-first plus image-asset strategy:
 
 1. Store the original PDF.
 2. Read each page with `pypdf`.
-3. Extract embedded images/charts into an asset folder.
+3. Extract embedded images/charts into storage under `{user_id}/{doc_id}/extracted-assets/`.
 4. If the page has enough extractable text, ingest that text directly.
 5. Add image references plus nearby slide text to the retrieval text so the Knowledge Base can cite visual assets.
 6. If the page has little text but contains images, mark it as `needs_ocr_or_textract`.
 7. If table-like lines are found, attach metadata so downstream chunking can treat them carefully.
 8. Return normalized text plus page-level metadata.
 
-This keeps the default path cheap because normal text PDFs do not need OCR. Embedded images are extracted locally, while more expensive OCR/Textract/Vision processing is reserved only for pages that need it.
+This keeps the default path cheap because normal text PDFs do not need OCR. Embedded images are saved through the app storage adapter, so local runs write to disk and production runs write to S3. More expensive OCR/Textract/Vision processing is reserved only for pages that need it.
 
 ## Image Filtering
 
@@ -67,7 +67,7 @@ Upload responses now include extraction metadata:
             "filename": "page_001_image_001.png",
             "content_type": "image/png",
             "bytes_size": 10240,
-            "location": "_data/uploads/extracted_assets/doc-id/page_001_image_001.png"
+            "location": "s3://studybot-uploads/user-id/doc-id/extracted-assets/page_001_image_001.png"
           }
         ],
         "table_like_line_count": 0
@@ -86,6 +86,23 @@ This handles scan PDFs, but it is not cost optimal. A slide deck with a valid te
 ### Text parser only
 
 This is the cheapest option, but it fails silently on scan/image-only pages and misses important visual content in slides. In the current implementation, image assets are extracted and weak pages are marked so the production pipeline can route only those pages to OCR/Textract/Vision.
+
+## Production Storage Flow
+
+The upload handler stores both the original PDF and extracted visual assets through the same storage adapter:
+
+```text
+Original PDF:
+{user_id}/{doc_id}/{filename}
+
+Filtered image/chart assets:
+{user_id}/{doc_id}/extracted-assets/page_001_image_001.png
+```
+
+With `STORAGE_BACKEND=local`, locations are returned as `file://...`.
+With `STORAGE_BACKEND=s3`, locations are returned as `s3://bucket/...`.
+
+The Knowledge Base should ingest text plus metadata/S3 URIs, not raw image bytes. OCR/Textract can then be run only for pages listed in `pages_requiring_ocr`.
 
 ## Test Evidence
 
