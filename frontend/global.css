@@ -1118,3 +1118,17 @@ details pre {
   50% { transform: translateY(-8px); }
   100% { transform: translateY(0px); }
 }
+
+/* ---------- Sticky Sidebar & Scrollable Doc List on Desktop ---------- */
+@media (min-width: 1025px) {
+  .sidebar {
+    position: sticky;
+    top: 100px;
+    max-height: calc(100vh - 140px);
+  }
+  .doc-list {
+    max-height: calc(100vh - 280px);
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+}
