@@ -109,6 +109,24 @@ def list_docs(x_user_id: str | None = Header(default=None)) -> dict:
     return handlers.handle_list_docs(_resolve_user_id(x_user_id), userstore)
 
 
+class FlashcardRequest(BaseModel):
+    topic: str
+    limit: int = 5
+
+@app.post("/flashcards")
+def generate_flashcards(req: FlashcardRequest, x_user_id: str | None = Header(default=None)) -> dict:
+    user_id = _resolve_user_id(x_user_id)
+    if not req.topic.strip():
+        raise HTTPException(status_code=400, detail="Empty topic")
+    return handlers.handle_generate_flashcards(
+        user_id=user_id,
+        topic=req.topic,
+        limit=req.limit,
+        ai_client=ai_client,
+        vector_store=vector_store,
+        aws_region=config.aws_region
+    )
+
 @app.get("/queries/recent")
 def recent(x_user_id: str | None = Header(default=None), limit: int = 10) -> dict:
     return handlers.handle_recent_queries(_resolve_user_id(x_user_id), userstore, limit=limit)
