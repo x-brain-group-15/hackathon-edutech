@@ -443,6 +443,100 @@ def handle_recent_queries(user_id: str, userstore, limit: int = 10) -> dict:
     return {"user_id": user_id, "queries": queries}
 
 
+def handle_delete_doc(
+    user_id: str,
+    doc_id: str,
+    storage,
+    userstore,
+    vector_store,
+) -> dict:
+    """Delete a document: remove from storage, vector store, and userstore."""
+
+    start_time = time.time()
+
+    log_step(
+        "delete_doc",
+        "delete_doc_start",
+        user_id=user_id,
+        doc_id=doc_id,
+    )
+
+    try:
+        # 1. Find the document metadata to get the filename / S3 key
+        docs = userstore.list_docs(user_id)
+        doc = next((d for d in docs if d["doc_id"] == doc_id), None)
+
+        if not doc:
+            raise ValueError(f"Document {doc_id} not found for user {user_id}")
+
+        filename = doc.get("filename", "unknown")
+        key = f"{user_id}/{doc_id}/{filename}"
+
+        log_step(
+            "delete_doc",
+            "found_document",
+            user_id=user_id,
+            doc_id=doc_id,
+            filename=filename,
+        )
+
+        # 2. Delete from object storage (best-effort — don't crash if missing)
+        try:
+            storage.delete(key)
+            log_step("delete_doc", "storage_deleted", user_id=user_id, doc_id=doc_id, key=key)
+        except Exception as e:
+            logger.warning(f"Storage delete failed for {key}: {e}")
+
+        # 3. Delete chunks from vector store (best-effort)
+        try:
+            if hasattr(vector_store, "clear_doc"):
+                vector_store.clear_doc(doc_id)
+                log_step("delete_doc", "vector_cleared", user_id=user_id, doc_id=doc_id)
+        except Exception as e:
+            logger.warning(f"Vector store clear_doc failed for {doc_id}: {e}")
+
+        # 4. Remove from userstore
+        userstore.delete_doc(user_id=user_id, doc_id=doc_id)
+
+        latency_ms = int((time.time() - start_time) * 1000)
+
+        log_event(
+            "DOCUMENT_DELETE",
+            user_id=user_id,
+            doc_id=doc_id,
+            filename=filename,
+            latency_ms=latency_ms,
+            status="success",
+        )
+
+        log_step(
+            "delete_doc",
+            "delete_doc_done",
+            user_id=user_id,
+            doc_id=doc_id,
+            latency_ms=latency_ms,
+            status="success",
+        )
+
+        return {"doc_id": doc_id, "deleted": True}
+
+    except Exception as e:
+        latency_ms = int((time.time() - start_time) * 1000)
+
+        log_event(
+            "DELETE_ERROR",
+            user_id=user_id,
+            doc_id=doc_id,
+            latency_ms=latency_ms,
+            error_type=type(e).__name__,
+            error_message=str(e),
+            stack_trace=traceback.format_exc(),
+            status="error",
+        )
+
+        raise
+
+
 def handle_evaluate(
     user_id: str,
     doc_id: str,
