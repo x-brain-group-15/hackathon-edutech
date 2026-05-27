@@ -1,5 +1,4 @@
 """Endpoint handlers. Pure business logic — knows nothing about FastAPI or AWS specifics."""
-import io
 import re
 import uuid
 import json
@@ -84,11 +83,9 @@ def _extract_text(filename: str, data: bytes) -> str:
     """Extract plain text from PDF or .txt upload."""
     if filename.lower().endswith(".pdf"):
         try:
-            from pypdf import PdfReader
-        except ImportError:
-            return "(pypdf not installed — install requirements.txt)"
-        reader = PdfReader(io.BytesIO(data))
-        return "\n\n".join(page.extract_text() or "" for page in reader.pages)
+            return extract_pdf(data).text
+        except RuntimeError as exc:
+            return f"({exc})"
     # Default: assume UTF-8 text
     try:
         return data.decode("utf-8", errors="replace")
@@ -806,19 +803,17 @@ def handle_quiz(
     vector_store,
     vector_backend: str,
     bedrock_kb_id: str,
+    storage=None,
 ) -> dict:
     """Generate a multiple-choice quiz from the user's uploaded documents.
 
-    When doc_id is provided the quiz is scoped to that single document.
-    When doc_id is None the quiz draws from all documents the user has uploaded.
-
     Flow:
-      1. If doc_id given, verify it belongs to this user.
-      2. Retrieve relevant chunks from the vector store (filtered to user / doc).
-      3. Build a quiz-generation prompt with the retrieved context.
-      4. Call AI to produce a JSON array of questions.
-      5. Parse + validate the response.
-      6. Persist the quiz in userstore and return it.
+      1. If doc_id given → fetch full text from storage for that source (precise).
+         If no doc_id → retrieve chunks from vector store across all user docs.
+      2. Build a quiz-generation prompt with the retrieved context.
+      3. Call AI to produce a JSON array of questions.
+      4. Parse + validate the response.
+      5. Persist the quiz in userstore and return it.
     """
     start_time = time.time()
 
@@ -830,11 +825,16 @@ def handle_quiz(
     log_step("quiz", "quiz_start", user_id=user_id, doc_id=doc_id,
              difficulty=difficulty, num_questions=num_questions)
 
-    # --- 1. Validate doc_id ownership when scoping to a specific document ---
-    source_filename: Optional[str] = None
-    if doc_id:
+    # --- 1. Retrieve context ---
+    context = ""
+    resolved_doc_id = doc_id or "all"
+
+    if doc_id and storage:
+        # Scoped to a specific doc: pull full text directly from storage
+        # so the quiz covers the entire source, not just indexed chunks.
         docs = userstore.list_docs(user_id)
         doc_meta = next((d for d in docs if d["doc_id"] == doc_id), None)
+
         if not doc_meta:
             return {
                 "quiz_id": None,
@@ -842,78 +842,80 @@ def handle_quiz(
                 "difficulty": difficulty,
                 "num_questions": 0,
                 "questions": [],
-                "error": f"Document {doc_id} not found for this user.",
+                "error": f"Document {doc_id} not found.",
             }
-        source_filename = doc_meta.get("filename")
 
-    # --- 2. Retrieve context ---
-    search_filter: dict = {"user_id": user_id}
-    if doc_id:
-        search_filter["doc_id"] = doc_id
+        filename = doc_meta.get("filename", "unknown")
+        key = f"{user_id}/{doc_id}/{filename}"
+        try:
+            data = storage.get(key)
+            text = _extract_text(filename, data)
+            if text.strip():
+                # Chunk the text to stay within token limits
+                from src import chunker as _chunker
+                chunks_text = _chunker.chunk_fixed(text, size=500, overlap=100)
+                # Take up to 10 chunks for context
+                context = "\n\n".join(
+                    f"[chunk {i+1}] {c}" for i, c in enumerate(chunks_text[:10])
+                )
+        except Exception as e:
+            log_event("QUIZ_STORAGE_FALLBACK", user_id=user_id, doc_id=doc_id,
+                      error=str(e))
+            # Fall through to vector search fallback below
 
-    if vector_backend == "bedrock_kb":
-        chunks = vector_store.search(
-            query="key concepts definitions important facts",
-            top_k=10,
-            filter=search_filter,
-        )
-        # Fallback for legacy KB files without metadata sidecars
-        if not chunks and doc_id is None:
+    if not context:
+        # Fallback: vector search (used when no doc_id, or storage fetch failed)
+        search_filter: dict = {"user_id": user_id}
+        if doc_id:
+            search_filter["doc_id"] = doc_id
+
+        if vector_backend == "bedrock_kb":
             chunks = vector_store.search(
                 query="key concepts definitions important facts",
                 top_k=10,
-                filter=None,
+                filter=search_filter,
             )
-    else:
-        # Local keyword index: try a broad query first; if nothing matches (no
-        # shared tokens with the generic query), fall back to all chunks for
-        # this user/doc via empty-query scan.
-        chunks = vector_store.search(
-            query="key concepts definitions important facts",
-            top_k=10,
-            filter=search_filter,
-        )
-        if not chunks:
+        else:
             chunks = vector_store.search(
-                query="",
+                query="key concepts definitions important facts",
                 top_k=10,
                 filter=search_filter,
             )
+            if not chunks:
+                chunks = vector_store.search(query="", top_k=10, filter=search_filter)
 
-    log_step("quiz", "chunks_retrieved", user_id=user_id, doc_id=doc_id,
-             chunks_found=len(chunks))
+        if not chunks:
+            return {
+                "quiz_id": None,
+                "doc_id": resolved_doc_id,
+                "difficulty": difficulty,
+                "num_questions": 0,
+                "questions": [],
+                "error": "No content found. Upload a document first.",
+            }
 
-    if not chunks:
-        return {
-            "quiz_id": None,
-            "doc_id": doc_id,
-            "difficulty": difficulty,
-            "num_questions": 0,
-            "questions": [],
-            "error": "No content found. Upload a document first.",
-        }
+        context = "\n\n".join(f"[chunk {i+1}] {c['text']}" for i, c in enumerate(chunks))
 
-    context = "\n\n".join(f"[chunk {i+1}] {c['text']}" for i, c in enumerate(chunks))
+    log_step("quiz", "context_ready", user_id=user_id, doc_id=resolved_doc_id,
+             context_chars=len(context))
 
-    # --- 3. Build prompt ---
+    # --- 2. Build prompt ---
     prompt = QUIZ_PROMPT_TEMPLATE.format(
         num_questions=num_questions,
         difficulty=difficulty,
         context=context,
     )
 
-    # --- 4. Call AI ---
-    log_step("quiz", "ai_invoke_start", user_id=user_id, doc_id=doc_id)
+    # --- 3. Call AI ---
+    log_step("quiz", "ai_invoke_start", user_id=user_id)
     raw = ai_client.generate_quiz(prompt, max_tokens=2048, temperature=0.4)
-    log_step("quiz", "ai_invoke_done", user_id=user_id, doc_id=doc_id,
-             raw_chars=len(raw))
+    log_step("quiz", "ai_invoke_done", user_id=user_id, raw_chars=len(raw))
 
-    # --- 5. Parse JSON ---
+    # --- 4. Parse JSON ---
     questions = _parse_quiz_json(raw)
 
-    # --- 6. Persist + return ---
+    # --- 5. Persist + return ---
     quiz_id = str(uuid.uuid4())
-    resolved_doc_id = doc_id or "all"
     userstore.save_quiz(
         user_id=user_id,
         quiz_id=quiz_id,
@@ -923,22 +925,13 @@ def handle_quiz(
     )
 
     latency_ms = int((time.time() - start_time) * 1000)
-    log_event(
-        "QUIZ_GENERATED",
-        user_id=user_id,
-        quiz_id=quiz_id,
-        doc_id=resolved_doc_id,
-        source_filename=source_filename,
-        difficulty=difficulty,
-        num_questions=len(questions),
-        latency_ms=latency_ms,
-        status="success",
-    )
+    log_event("QUIZ_GENERATED", user_id=user_id, quiz_id=quiz_id,
+              doc_id=resolved_doc_id, difficulty=difficulty,
+              num_questions=len(questions), latency_ms=latency_ms, status="success")
 
     return {
         "quiz_id": quiz_id,
         "doc_id": resolved_doc_id,
-        "source_filename": source_filename,
         "difficulty": difficulty,
         "num_questions": len(questions),
         "questions": questions,
