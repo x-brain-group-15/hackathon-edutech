@@ -1538,3 +1538,38 @@ details pre {
     margin-right: -4px;
   }
 }
+
+/* ─── Benchmark / Evaluate overflow fix ──────────────────────────────────── */
+/* Grid children không tự thu nhỏ → phải set min-width: 0 toàn bộ chuỗi     */
+#benchmark-section,
+#benchmark-results,
+#benchmark-queries {
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+/* Mỗi ô câu hỏi và chunk đều phải bọc chữ lại */
+#benchmark-queries > div,
+#benchmark-queries > div > div {
+  min-width: 0;
+  overflow: hidden;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+/* Nội dung text chunk: wrap + giới hạn chiều cao */
+#benchmark-queries .chunk-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  max-height: 8rem;
+  overflow-y: auto;
+}
+
+/* Hàng keyword + MRR: xuống dòng khi hẹp */
+#benchmark-queries .chunk-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  min-width: 0;
+}

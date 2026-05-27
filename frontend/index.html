@@ -284,7 +284,7 @@
         </div>
       </div>
       
-      <div id="benchmark-results" style="display: none; border-top: 1px solid var(--border); padding-top: 1.5rem;">
+      <div id="benchmark-results" style="display: none; border-top: 1px solid var(--border); padding-top: 1.5rem; overflow-x: hidden; min-width: 0;">
         <h3 style="margin: 0 0 1rem; font-size: 0.96rem; font-weight: 700; color: var(--text);" data-i18n="benchmarkMetricsTitle"></h3>
         
         <!-- Metrics Grid -->
@@ -317,7 +317,7 @@
         </div>
 
         <h3 style="margin: 1.5rem 0 1rem; font-size: 0.92rem; font-weight: 700; color: var(--text);" data-i18n="benchmarkDetailsTitle"></h3>
-        <div id="benchmark-queries" style="display: grid; gap: 1.25rem;"></div>
+        <div id="benchmark-queries" style="display: grid; gap: 1.25rem; min-width: 0; overflow: hidden;"></div>
       </div>
     </section>
 
@@ -1319,30 +1319,31 @@ async function runBenchmark() {
   // Populate individual query results
   $('benchmark-queries').innerHTML = data.queries.map((q, qidx) => {
     return `
-      <div style="border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.9rem; background: var(--bg); margin-bottom: 0.5rem;">
-        <div style="font-weight: 700; font-size: 0.9rem; margin-bottom: 0.4rem; color: var(--text);">
+      <div style="border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.9rem; background: var(--bg); margin-bottom: 0.5rem; overflow: hidden; min-width: 0;">
+        <div style="font-weight: 700; font-size: 0.9rem; margin-bottom: 0.4rem; color: var(--text); word-break: break-word;">
           ${t('benchmarkQuestionLabel', {index: qidx + 1, query: q.query})}
         </div>
-        <div style="font-size: 0.74rem; color: var(--muted); margin-bottom: 0.6rem; display: flex; justify-content: space-between;">
-          <span>${t('benchmarkTargetKeywords')}: <code>${q.keywords.join(', ')}</code></span>
-          <span style="font-weight:600; color: ${q.metrics.mrr > 0 ? 'var(--success)' : 'var(--error)'}">
+        <div style="font-size: 0.74rem; color: var(--muted); margin-bottom: 0.6rem; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.35rem; min-width: 0;">
+          <span style="word-break: break-word; min-width: 0; flex: 1 1 auto;">${t('benchmarkTargetKeywords')}: <code style="word-break: break-all;">${q.keywords.join(', ')}</code></span>
+          <span style="font-weight:600; color: ${q.metrics.mrr > 0 ? 'var(--success)' : 'var(--error)'}; white-space: nowrap; flex-shrink: 0;">
             ${t('benchmarkMrrLabel')}: ${q.metrics.mrr.toFixed(2)} | ${t('benchmarkP3Label')}: ${(q.metrics.precision_at_3 * 100).toFixed(0)}%
           </span>
         </div>
-        <div style="display: grid; gap: 0.5rem;">
+        <div style="display: grid; gap: 0.5rem; min-width: 0;">
           ${q.retrieved.map(r => `
-            <div style="padding: 0.6rem; background: var(--card); border-left: 3px solid ${r.relevant ? 'var(--success)' : 'var(--error)'}; font-size: 0.78rem; border-radius: 0 4px 4px 0; border-top: 1px solid var(--border); border-right: 1px solid var(--border); border-bottom: 1px solid var(--border);">
-              <div style="display:flex; justify-content: space-between; font-weight:600; font-size: 0.72rem; color: var(--muted); margin-bottom:0.25rem;">
-                <span>${t('benchmarkChunkLabel', {chunk: r.chunk, score: r.score.toFixed(2)})}</span>
-                <span style="color: ${r.relevant ? 'var(--success)' : 'var(--error)'}">${r.relevant ? t('benchmarkRelevant') : t('benchmarkIrrelevant')}</span>
+            <div style="padding: 0.6rem; background: var(--card); border-left: 3px solid ${r.relevant ? 'var(--success)' : 'var(--error)'}; font-size: 0.78rem; border-radius: 0 4px 4px 0; border-top: 1px solid var(--border); border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); overflow: hidden; min-width: 0;">
+              <div style="display:flex; justify-content: space-between; flex-wrap: wrap; gap: 0.25rem; font-weight:600; font-size: 0.72rem; color: var(--muted); margin-bottom:0.25rem; min-width: 0;">
+                <span style="white-space: nowrap;">${t('benchmarkChunkLabel', {chunk: r.chunk, score: r.score.toFixed(2)})}</span>
+                <span style="color: ${r.relevant ? 'var(--success)' : 'var(--error)'}; white-space: nowrap;">${r.relevant ? t('benchmarkRelevant') : t('benchmarkIrrelevant')}</span>
               </div>
-              <div style="white-space: pre-wrap; font-family: var(--font-sans); line-height:1.4; color: var(--text);">${r.text.replace(/</g, '&lt;')}</div>
+              <div style="white-space: pre-wrap; word-break: break-word; overflow-wrap: break-word; font-family: var(--font-sans); line-height:1.4; color: var(--text); max-height: 8rem; overflow-y: auto;">${r.text.replace(/</g, '&lt;')}</div>
             </div>
           `).join('')}
         </div>
       </div>
     `;
   }).join('');
+
 
   toast(t('benchmarkSuccess'), 'success');
 }

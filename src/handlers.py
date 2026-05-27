@@ -1,4 +1,4 @@
-﻿"""Endpoint handlers. Pure business logic — knows nothing about FastAPI or AWS specifics."""
+"""Endpoint handlers. Pure business logic — knows nothing about FastAPI or AWS specifics."""
 import uuid
 import json
 import time
@@ -600,38 +600,40 @@ def handle_evaluate(
             chars_extracted=len(text)
         )
 
-        if strategy:
-            log_step(
-                "evaluate",
-                "reingest_start",
-                user_id=user_id,
+        # ── Always use a local in-memory index for evaluation ───────────────────
+        # Bedrock KB is async (ingestion may not have completed) and has no
+        # per-document isolation when metadata sidecars are missing.
+        # We build a fresh LocalVector from the doc text so results are
+        # deterministic and isolated to this exact document + strategy.
+        from src.adapters.vector import LocalVector
+        eval_store = LocalVector()
+        if text.strip():
+            eval_store.ingest(
                 doc_id=doc_id,
+                text=text,
+                metadata={"user_id": user_id, "doc_id": doc_id, "filename": filename},
                 strategy=strategy,
                 size=size,
                 overlap=overlap,
-                threshold=threshold
+                threshold=threshold,
             )
 
-            if hasattr(vector_store, "clear_doc"):
-                vector_store.clear_doc(doc_id)
+        num_chunks_total = len(eval_store.docs)
 
-            if text.strip():
+        # Also trigger Bedrock KB sync in the background (best-effort, fire-and-forget)
+        if text.strip() and hasattr(vector_store, "kb_id"):
+            try:
                 vector_store.ingest(
                     doc_id=doc_id,
                     text=text,
-                    metadata={"user_id": user_id, "filename": filename},
+                    metadata={"user_id": user_id, "doc_id": doc_id, "filename": filename},
                     strategy=strategy,
                     size=size,
                     overlap=overlap,
                     threshold=threshold,
                 )
-
-            log_step(
-                "evaluate",
-                "reingest_done",
-                user_id=user_id,
-                doc_id=doc_id
-            )
+            except Exception:
+                pass
 
         probe_questions = [
             {
@@ -655,6 +657,7 @@ def handle_evaluate(
                 "keywords": ["130 terawatts", "six times", "human civilization", "civilisation"],
             },
         ]
+
 
         queries_results = []
         rr_scores = []
@@ -688,21 +691,8 @@ def handle_evaluate(
                 query=q
             )
 
-            # Filter by BOTH user_id AND doc_id so we only evaluate chunks
-            # from the specific document — not all documents of this user.
-            chunks = vector_store.search(q, top_k=5, filter={"user_id": user_id, "doc_id": doc_id})
-            if not chunks:
-                # Fallback 1: filter by user_id only (covers cases where doc_id metadata is missing)
-                chunks = vector_store.search(q, top_k=5, filter={"user_id": user_id})
-            if not chunks and hasattr(vector_store, "kb_id"):
-                # Fallback 2: Bedrock KB — metadata sidecars may not have been written yet
-                chunks = vector_store.search(q, top_k=5, filter=None)
-            # Post-filter: if we got chunks from multiple docs, keep only those belonging to this doc
-            if chunks and doc_id:
-                doc_chunks = [c for c in chunks if c.get("doc_id") == doc_id or c.get("metadata", {}).get("doc_id") == doc_id]
-                if doc_chunks:
-                    chunks = doc_chunks
-
+            # Search the temporary local eval store — always accurate & isolated
+            chunks = eval_store.search(q, top_k=5, filter={"doc_id": doc_id})
 
             log_step(
                 "evaluate",
@@ -776,12 +766,9 @@ def handle_evaluate(
 
         avg_mrr = sum(rr_scores) / len(rr_scores)
 
-        total_chunks = -1
-        if hasattr(vector_store, "docs"):
-            total_chunks = len([
-                d for d in vector_store.docs
-                if d[2].get("doc_id") == doc_id
-            ])
+        # Use the count from our local eval_store (always accurate)
+        total_chunks = num_chunks_total
+
 
         latency_ms = int((time.time() - start_time) * 1000)
 
