@@ -150,3 +150,13 @@ Document your customization in `docs/W7_evidence.md` section 7.
 | `botocore.exceptions.NoCredentialsError` | Set AWS creds: `aws configure` or env `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY` |
 | Bedrock KB returns empty | KB ingestion job hasn't run. Sync the KB in console after uploading docs to its S3 source. |
 | SQLite "database is locked" | Don't run multiple uvicorn workers against SQLite. Use DynamoDB or Postgres in production. |
+
+---
+
+## 🚀 W7 Enhanced Features Added
+
+We have successfully enhanced this repository to include the following capabilities:
+- **Dynamic Chunking Pipeline ([`src/chunker.py`](file:///e:/x-brain/w7/hackathon-edutech/src/chunker.py))**: Support for Fixed-size (sentence-aware), Structural (Markdown headings), and Local Semantic (Jaccard similarity distance) chunking.
+- **RAG Retrieval Quality Dashboard**: Exposing `/docs/{doc_id}/evaluate` to automatically test 5 probe questions on photosynthesis and calculate Precision@K, Recall@K, and MRR in real time.
+- **Vibrant Light/Dark Themes**: Fully responsive data-theme driven UI styled in Vanilla CSS.
+- **CI/CD Deployment Pipeline ([`.github/workflows/deploy.yml`](file:///e:/x-brain/w7/hackathon-edutech/.github/workflows/deploy.yml))**: Automated pytest suite running as a quality gate, followed by automated SAM CLI building and deployment on GitHub push!

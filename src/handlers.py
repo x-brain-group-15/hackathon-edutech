@@ -11,7 +11,7 @@ from src.config import config
 from src.pdf_extractor import extract_pdf
 
 logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+logger.setLevel(getattr(logging, config.log_level.upper(), logging.INFO))
 
 
 def log_event(event_type: str, **kwargs):
@@ -75,41 +75,42 @@ def handle_upload(
 
     start_time = time.time()
     doc_id = str(uuid.uuid4())
-    key = f"{user_id}/{doc_id}/{filename}"
-    location = storage.put(key, data)
-    text = _extract_text(filename, data)
-    if text.strip():
-        vector_store.ingest(
+    try:
+        key = f"{user_id}/{doc_id}/{filename}"
+        location = storage.put(key, data)
+        text = _extract_text(filename, data)
+        if text.strip():
+            vector_store.ingest(
+                doc_id=doc_id,
+                text=text,
+                metadata={"user_id": user_id, "filename": filename},
+                strategy=strategy,
+                size=size,
+                overlap=overlap,
+                threshold=threshold,
+            )
+        userstore.add_doc(
+            user_id=user_id,
             doc_id=doc_id,
-            text=text,
-            metadata={"user_id": user_id, "filename": filename},
-            strategy=strategy,
-            size=size,
-            overlap=overlap,
-            threshold=threshold,
+            metadata={"filename": filename, "size": len(data), "location": location, "chars": len(text)},
         )
-    userstore.add_doc(
-        user_id=user_id,
-        doc_id=doc_id,
-        metadata={"filename": filename, "size": len(data), "location": location, "chars": len(text)},
-    )
-    log_event(
-        "DOCUMENT_UPLOAD",
-        user_id=user_id,
-        doc_id=doc_id,
-        filename=filename,
-        size=len(data),
-        chars_extracted=len(text),
-        location=location,
-        status="success"
-    )
-    return {
-        "doc_id": doc_id,
-        "filename": filename,
-        "size": len(data),
-        "chars_extracted": len(text),
-        "location": location,
-    }
+        log_event(
+            "DOCUMENT_UPLOAD",
+            user_id=user_id,
+            doc_id=doc_id,
+            filename=filename,
+            size=len(data),
+            chars_extracted=len(text),
+            location=location,
+            status="success"
+        )
+        return {
+            "doc_id": doc_id,
+            "filename": filename,
+            "size": len(data),
+            "chars_extracted": len(text),
+            "location": location,
+        }
 
     except Exception as e:
         latency_ms = int((time.time() - start_time) * 1000)
@@ -653,3 +654,19 @@ def handle_evaluate(
             "queries": queries_results,
         }
 
+
+    except Exception as e:
+        latency_ms = int((time.time() - start_time) * 1000)
+
+        log_event(
+            "EVALUATE_ERROR",
+            user_id=user_id,
+            doc_id=doc_id,
+            latency_ms=latency_ms,
+            error_type=type(e).__name__,
+            error_message=str(e),
+            stack_trace=traceback.format_exc(),
+            status="error"
+        )
+
+        raise

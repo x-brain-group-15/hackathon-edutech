@@ -50,6 +50,22 @@ Parameters:
     Default: ''
     Description: "Bedrock Knowledge Base ID \u2014 get from AWS Console after creating\
       \ KB"
+  ChunkingStrategy:
+    Type: String
+    Default: fixed
+    AllowedValues:
+    - fixed
+    - structural
+    - semantic
+  ChunkSize:
+    Type: String
+    Default: '500'
+  ChunkOverlap:
+    Type: String
+    Default: '100'
+  SemanticThreshold:
+    Type: String
+    Default: '0.3'
 Globals:
   Function:
     Runtime: python3.12
@@ -77,6 +93,14 @@ Globals:
           Ref: VectorBackend
         VECTOR_BEDROCK_KB_ID:
           Ref: VectorBedrockKbId
+        CHUNKING_STRATEGY:
+          Ref: ChunkingStrategy
+        CHUNK_SIZE:
+          Ref: ChunkSize
+        CHUNK_OVERLAP:
+          Ref: ChunkOverlap
+        SEMANTIC_THRESHOLD:
+          Ref: SemanticThreshold
         SERVE_FRONTEND: 'false'
         CORS_ORIGINS: '*'
         LOG_LEVEL: INFO
@@ -233,6 +257,7 @@ Resources:
         AllowMethods:
         - GET
         - POST
+        - DELETE
         - OPTIONS
         AllowHeaders:
         - Content-Type
@@ -476,6 +501,58 @@ Resources:
       PortRange:
         From: 1024
         To: 65535
+  PrivateNaclOutboundAllowDnsUdp:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId:
+        Ref: PrivateNacl
+      RuleNumber: 120
+      Protocol: 17
+      RuleAction: allow
+      Egress: true
+      CidrBlock: '0.0.0.0/0'
+      PortRange:
+        From: 53
+        To: 53
+  PrivateNaclOutboundAllowDnsTcp:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId:
+        Ref: PrivateNacl
+      RuleNumber: 130
+      Protocol: 6
+      RuleAction: allow
+      Egress: true
+      CidrBlock: '0.0.0.0/0'
+      PortRange:
+        From: 53
+        To: 53
+  PrivateNaclInboundAllowDnsUdpEphemeral:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId:
+        Ref: PrivateNacl
+      RuleNumber: 120
+      Protocol: 17
+      RuleAction: allow
+      Egress: false
+      CidrBlock: '0.0.0.0/0'
+      PortRange:
+        From: 1024
+        To: 65535
+  PrivateNaclInboundAllowDnsUdp53:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId:
+        Ref: PrivateNacl
+      RuleNumber: 130
+      Protocol: 17
+      RuleAction: allow
+      Egress: false
+      CidrBlock: '0.0.0.0/0'
+      PortRange:
+        From: 53
+        To: 53
   PrivateSubnetNaclAssociation:
     Type: AWS::EC2::SubnetNetworkAclAssociation
     Properties:
@@ -565,6 +642,16 @@ Resources:
         ToPort: 443
         CidrIp: '0.0.0.0/0'
         Description: Allow HTTPS traffic out to VPC Endpoints and AWS services
+      - IpProtocol: udp
+        FromPort: 53
+        ToPort: 53
+        CidrIp: '0.0.0.0/0'
+        Description: Allow DNS queries via UDP
+      - IpProtocol: tcp
+        FromPort: 53
+        ToPort: 53
+        CidrIp: '0.0.0.0/0'
+        Description: Allow DNS queries via TCP
       Tags:
       - Key: Name
         Value:
@@ -648,6 +735,158 @@ Resources:
       - Ref: PrivateSubnet
       SecurityGroupIds:
       - Ref: VpcEndpointsSecurityGroup
+  StudyBotCostDenyPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName:
+        Fn::Sub: studybot-cost-deny-${TeamName}
+      Description: Deny Bedrock and S3 Put when budget is exceeded
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Sid: DenyBedrockAndS3Put
+          Effect: Deny
+          Action:
+          - bedrock:*
+          - s3:PutObject
+          - aoss:*
+          Resource: '*'
+  BudgetAlertSnsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName:
+        Fn::Sub: studybot-budget-alerts-${TeamName}
+  BudgetAlertSnsTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics:
+      - Ref: BudgetAlertSnsTopic
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Sid: AllowBudgetsToPublish
+          Effect: Allow
+          Principal:
+            Service: budgets.amazonaws.com
+          Action: sns:Publish
+          Resource:
+            Ref: BudgetAlertSnsTopic
+  MonthlyCostBudget:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        BudgetName:
+          Fn::Sub: studybot-monthly-budget-${TeamName}
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit:
+          Amount: 70.0
+          Unit: USD
+      NotificationsWithSubscribers:
+      - Notification:
+          ComparisonOperator: GREATER_THAN
+          NotificationType: ACTUAL
+          Threshold: 30
+          ThresholdType: PERCENTAGE
+        Subscribers:
+        - SubscriptionType: SNS
+          Address:
+            Ref: BudgetAlertSnsTopic
+      - Notification:
+          ComparisonOperator: GREATER_THAN
+          NotificationType: ACTUAL
+          Threshold: 50
+          ThresholdType: PERCENTAGE
+        Subscribers:
+        - SubscriptionType: SNS
+          Address:
+            Ref: BudgetAlertSnsTopic
+      - Notification:
+          ComparisonOperator: GREATER_THAN
+          NotificationType: ACTUAL
+          Threshold: 80
+          ThresholdType: PERCENTAGE
+        Subscribers:
+        - SubscriptionType: SNS
+          Address:
+            Ref: BudgetAlertSnsTopic
+  CostGuardFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: studybot-cost-guard-${TeamName}
+      Handler: cost_guard.lambda_handler
+      CodeUri: CostGuardFunction
+      Description: Cost Guard Lambda to freeze backend (reserved concurrency=0) and
+        IAM role on budget thresholds (30%, 50%, 80%)
+      Timeout: 30
+      Policies:
+      - Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - lambda:PutFunctionConcurrency
+          - iam:AttachRolePolicy
+          - aoss:DeleteCollection
+          - aoss:ListCollections
+          Resource: '*'
+      Environment:
+        Variables:
+          STUDYBOT_BACKEND_LAMBDA:
+            Ref: StudyBotFunction
+          APP_IAM_ROLE_NAME:
+            Fn::Sub: studybot-lambda-role-${TeamName}
+          DENY_POLICY_ARN:
+            Ref: StudyBotCostDenyPolicy
+      Events:
+        BudgetAlertSns:
+          Type: SNS
+          Properties:
+            Topic:
+              Ref: BudgetAlertSnsTopic
+    Metadata:
+      SamResourceId: CostGuardFunction
+  AutoFixInfraFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: studybot-auto-fix-infra-${TeamName}
+      Handler: auto_fix_infra.lambda_handler
+      CodeUri: AutoFixInfraFunction
+      Description: Auto Fix Infra Lambda to terminate unauthorized EC2, RDS or OpenSearch
+        Serverless instances
+      Timeout: 30
+      Policies:
+      - Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - ec2:TerminateInstances
+          - rds:DeleteDBInstance
+          - aoss:DeleteCollection
+          Resource: '*'
+      Events:
+        CloudTrailEvent:
+          Type: EventBridgeRule
+          Properties:
+            Pattern:
+              source:
+              - aws.rds
+              - aws.ec2
+              - aws.aoss
+              detail-type:
+              - AWS API Call via CloudTrail
+              detail:
+                eventSource:
+                - rds.amazonaws.com
+                - ec2.amazonaws.com
+                - aoss.amazonaws.com
+                eventName:
+                - CreateDBInstance
+                - RunInstances
+                - CreateCollection
+    Metadata:
+      SamResourceId: AutoFixInfraFunction
 Outputs:
   ApiUrl:
     Description: "API Gateway HTTP API URL \u2014 use this as your backend URL"
@@ -690,3 +929,19 @@ Outputs:
     Description: Lambda Security Group ID
     Value:
       Ref: LambdaSecurityGroup
+  CostGuardFunctionArn:
+    Description: Cost Guard Lambda Function ARN
+    Value:
+      Fn::GetAtt:
+      - CostGuardFunction
+      - Arn
+  AutoFixInfraFunctionArn:
+    Description: Auto Fix Infra Lambda Function ARN
+    Value:
+      Fn::GetAtt:
+      - AutoFixInfraFunction
+      - Arn
+  BudgetAlertSnsTopicArn:
+    Description: Budget Alerts SNS Topic ARN
+    Value:
+      Ref: BudgetAlertSnsTopic
