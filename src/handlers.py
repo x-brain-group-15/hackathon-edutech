@@ -1,8 +1,21 @@
 """Endpoint handlers. Pure business logic — knows nothing about FastAPI or AWS specifics."""
 import io
 import uuid
+import json
+import time
+import logging
+import traceback
 from typing import Optional
 
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+
+def log_event(event_type: str, **kwargs):
+    logger.info(json.dumps({
+        "event_type": event_type,
+        **kwargs
+    }, ensure_ascii=False))
 
 PROMPT_TEMPLATE = """You are a study assistant. Answer the student's question using ONLY the
 context retrieved from their uploaded lecture notes. Cite the source by chunk
@@ -54,6 +67,16 @@ def handle_upload(
         doc_id=doc_id,
         metadata={"filename": filename, "size": len(data), "location": location, "chars": len(text)},
     )
+    log_event(
+        "DOCUMENT_UPLOAD",
+        user_id=user_id,
+        doc_id=doc_id,
+        filename=filename,
+        size=len(data),
+        chars_extracted=len(text),
+        location=location,
+        status="success"
+    )
     return {
         "doc_id": doc_id,
         "filename": filename,
@@ -73,28 +96,100 @@ def handle_query(
     bedrock_kb_id: str,
 ) -> dict:
     """RAG flow: retrieve user's relevant chunks → call AI with context → log + return."""
-    if vector_backend == "bedrock_kb":
-        # Production path: let Bedrock do retrieve + generate in one call
-        result = ai_client.retrieve_and_generate(query=question, kb_id=bedrock_kb_id)
-        answer = result["answer"]
-        citations = result["citations"]
-    else:
-        # Local path: do our own retrieve then prompt
-        chunks = vector_store.search(question, top_k=5, filter={"user_id": user_id})
-        if not chunks:
-            answer = "No relevant content found in your uploaded documents. Upload some first."
-            citations = []
-        else:
-            context = "\n\n".join(f"[chunk {i+1}] {c['text']}" for i, c in enumerate(chunks))
-            prompt = PROMPT_TEMPLATE.format(context=context, question=question)
-            answer = ai_client.invoke(prompt, max_tokens=512)
-            citations = [
-                {"chunk": i + 1, "doc_id": c["doc_id"], "score": c["score"], "text": c["text"][:200]}
-                for i, c in enumerate(chunks)
-            ]
+    
+    start_time = time.time()
 
-    userstore.log_query(user_id=user_id, query=question, answer=answer)
-    return {"question": question, "answer": answer, "citations": citations}
+    try:
+        if vector_backend == "bedrock_kb":
+            result = ai_client.retrieve_and_generate(
+                query=question,
+                kb_id=bedrock_kb_id
+            )
+
+            answer = result["answer"]
+            citations = result.get("citations", [])
+
+            input_tokens = result.get("input_tokens", 0)
+            output_tokens = result.get("output_tokens", 0)
+
+        else:
+            chunks = vector_store.search(
+                question,
+                top_k=5,
+                filter={"user_id": user_id}
+            )
+
+            if not chunks:
+                answer = "No relevant content found in your uploaded documents. Upload some first."
+                citations = []
+                input_tokens = 0
+                output_tokens = 0
+
+            else:
+                context = "\n\n".join(
+                    f"[chunk {i+1}] {c['text']}"
+                    for i, c in enumerate(chunks)
+                )
+
+                prompt = PROMPT_TEMPLATE.format(
+                    context=context,
+                    question=question
+                )
+
+                answer = ai_client.invoke(prompt, max_tokens=512)
+
+                citations = [
+                    {
+                        "chunk": i + 1,
+                        "doc_id": c["doc_id"],
+                        "score": c["score"],
+                        "text": c["text"][:200]
+                    }
+                    for i, c in enumerate(chunks)
+                ]
+
+                input_tokens = len(prompt.split())
+                output_tokens = len(answer.split())
+
+        latency_ms = int((time.time() - start_time) * 1000)
+        total_tokens = input_tokens + output_tokens
+
+        userstore.log_query(user_id=user_id, query=question, answer=answer)
+
+        log_event(
+            "RAG_QUERY",
+            user_id=user_id,
+            question=question,
+            latency_ms=latency_ms,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            total_tokens=total_tokens,
+            citations_count=len(citations),
+            vector_backend=vector_backend,
+            status="success"
+        )
+
+        return {
+            "question": question,
+            "answer": answer,
+            "citations": citations
+        }
+
+    except Exception as e:
+        latency_ms = int((time.time() - start_time) * 1000)
+
+        log_event(
+            "RAG_ERROR",
+            user_id=user_id,
+            question=question,
+            latency_ms=latency_ms,
+            error_type=type(e).__name__,
+            error_message=str(e),
+            stack_trace=traceback.format_exc(),
+            status="error"
+        )
+
+        raise
 
 
 def handle_list_docs(user_id: str, userstore) -> dict:
