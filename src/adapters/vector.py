@@ -32,7 +32,24 @@ class BedrockKBVector:
         # Ingestion is typically S3-event driven. Trigger a manual sync if needed
         # via StartIngestionJob — but the doc must already be in the KB's S3 source.
         # This adapter assumes upstream code uploaded to S3 already.
-        pass
+        try:
+            import boto3
+            import logging
+            logger = logging.getLogger("StudyBot")
+            
+            client = boto3.client("bedrock-agent", region_name=self.agent_runtime.meta.region_name)
+            ds_resp = client.list_data_sources(knowledgeBaseId=self.kb_id)
+            ds_summaries = ds_resp.get("dataSourceSummaries", [])
+            if ds_summaries:
+                ds_id = ds_summaries[0]["dataSourceId"]
+                client.start_ingestion_job(
+                    knowledgeBaseId=self.kb_id,
+                    dataSourceId=ds_id
+                )
+                logger.info(f"Triggered automatic Bedrock KB ingestion sync job for data source: {ds_id}")
+        except Exception as e:
+            import logging
+            logging.getLogger("StudyBot").warning(f"Failed to auto-sync Bedrock KB data source (normal if IAM permissions not granted): {str(e)}")
 
     def search(self, query: str, top_k: int = 5, filter: Optional[dict] = None) -> list:
         kwargs = {
