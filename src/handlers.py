@@ -6,6 +6,7 @@ import logging
 import traceback
 from pathlib import Path
 from typing import Optional
+import io
 
 from src.config import config
 from src.pdf_extractor import extract_pdf
@@ -59,6 +60,22 @@ def _extract_text(filename: str, data: bytes) -> str:
         return ""
 
 
+def _extract_text(filename: str, data: bytes) -> str:
+    """Extract plain text from PDF or .txt upload."""
+    if filename.lower().endswith(".pdf"):
+        try:
+            from pypdf import PdfReader
+        except ImportError:
+            return "(pypdf not installed — install requirements.txt)"
+        reader = PdfReader(io.BytesIO(data))
+        return "\n\n".join(page.extract_text() or "" for page in reader.pages)
+
+    try:
+        return data.decode("utf-8", errors="replace")
+    except Exception:
+        return ""
+
+
 def handle_upload(
     user_id: str,
     filename: str,
@@ -71,45 +88,71 @@ def handle_upload(
     overlap: Optional[int] = None,
     threshold: Optional[float] = None,
 ) -> dict:
-    """Store the file, extract text, ingest into vector store, record in userstore."""
-
     start_time = time.time()
     doc_id = str(uuid.uuid4())
     key = f"{user_id}/{doc_id}/{filename}"
-    location = storage.put(key, data)
-    text = _extract_text(filename, data)
-    if text.strip():
-        vector_store.ingest(
+
+    log_step("upload", "upload_start", user_id=user_id, doc_id=doc_id, filename=filename, size=len(data))
+
+    try:
+        log_step("upload", "store_file_start", user_id=user_id, doc_id=doc_id, filename=filename)
+        location = storage.put(key, data)
+        log_step("upload", "store_file_done", user_id=user_id, doc_id=doc_id, filename=filename, location=location)
+
+        log_step("upload", "extract_text_start", user_id=user_id, doc_id=doc_id, filename=filename)
+        text = _extract_text(filename, data)
+        log_step("upload", "extract_text_done", user_id=user_id, doc_id=doc_id, filename=filename, chars_extracted=len(text))
+
+        if text.strip():
+            log_step("upload", "vector_ingest_start", user_id=user_id, doc_id=doc_id, filename=filename, strategy=strategy or "default")
+            vector_store.ingest(
+                doc_id=doc_id,
+                text=text,
+                metadata={"user_id": user_id, "filename": filename},
+                strategy=strategy,
+                size=size,
+                overlap=overlap,
+                threshold=threshold,
+            )
+            log_step("upload", "vector_ingest_done", user_id=user_id, doc_id=doc_id, filename=filename, strategy=strategy or "default")
+        else:
+            log_step("upload", "vector_ingest_skipped", user_id=user_id, doc_id=doc_id, filename=filename, message="No text extracted from document")
+
+        log_step("upload", "save_metadata_start", user_id=user_id, doc_id=doc_id, filename=filename)
+        userstore.add_doc(
+            user_id=user_id,
             doc_id=doc_id,
-            text=text,
-            metadata={"user_id": user_id, "filename": filename},
-            strategy=strategy,
-            size=size,
-            overlap=overlap,
-            threshold=threshold,
+            metadata={
+                "filename": filename,
+                "size": len(data),
+                "location": location,
+                "chars": len(text),
+            },
         )
-    userstore.add_doc(
-        user_id=user_id,
-        doc_id=doc_id,
-        metadata={"filename": filename, "size": len(data), "location": location, "chars": len(text)},
-    )
-    log_event(
-        "DOCUMENT_UPLOAD",
-        user_id=user_id,
-        doc_id=doc_id,
-        filename=filename,
-        size=len(data),
-        chars_extracted=len(text),
-        location=location,
-        status="success"
-    )
-    return {
-        "doc_id": doc_id,
-        "filename": filename,
-        "size": len(data),
-        "chars_extracted": len(text),
-        "location": location,
-    }
+        log_step("upload", "save_metadata_done", user_id=user_id, doc_id=doc_id, filename=filename)
+
+        latency_ms = int((time.time() - start_time) * 1000)
+
+        log_event(
+            "DOCUMENT_UPLOAD",
+            user_id=user_id,
+            doc_id=doc_id,
+            filename=filename,
+            size=len(data),
+            chars_extracted=len(text),
+            location=location,
+            status="success",
+        )
+
+        log_step("upload", "upload_completed", user_id=user_id, doc_id=doc_id, filename=filename, latency_ms=latency_ms, status="success")
+
+        return {
+            "doc_id": doc_id,
+            "filename": filename,
+            "size": len(data),
+            "chars_extracted": len(text),
+            "location": location,
+        }
 
     except Exception as e:
         latency_ms = int((time.time() - start_time) * 1000)
@@ -123,7 +166,19 @@ def handle_upload(
             error_type=type(e).__name__,
             error_message=str(e),
             stack_trace=traceback.format_exc(),
-            status="error"
+            status="error",
+        )
+
+        log_step(
+            "upload",
+            "upload_failed",
+            user_id=user_id,
+            doc_id=doc_id,
+            filename=filename,
+            latency_ms=latency_ms,
+            error_type=type(e).__name__,
+            message=str(e),
+            status="error",
         )
 
         raise
