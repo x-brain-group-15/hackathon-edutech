@@ -86,8 +86,8 @@
           <span data-i18n="refresh"></span>
         </button>
       </div>
-      <div class="search-box-container" style="margin: 0 0 1rem; position: relative;">
-        <input type="text" id="doc-search" placeholder="🔍 Search library..." oninput="filterDocs()" style="width: 100%; padding: 0.55rem 0.8rem; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.8rem; background: rgba(0,0,0,0.15); color: var(--text); outline: none; transition: all 0.3s ease;">
+      <div class="search-box-container">
+        <input type="text" id="doc-search" class="doc-search" placeholder="" data-i18n-placeholder="docSearchPlaceholder" data-i18n-aria="docSearchLabel" oninput="filterDocs()">
       </div>
       <div class="doc-list" id="docs">
         <div class="empty">
@@ -139,27 +139,27 @@
               <circle cx="12" cy="12" r="3"></circle>
               <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
             </svg>
-            Chunking Settings (Cấu hình Tách)
+            <span data-i18n="chunkingSummary"></span>
           </summary>
           <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.8rem; margin-top: 0.8rem; padding: 0.8rem; background: rgba(255,255,255,0.02); border-radius: var(--radius-sm); border: 1px solid var(--border);">
             <div>
-              <label style="font-size: 0.78rem; font-weight: 700; display: block; margin-bottom: 0.3rem;">Chiến lược Chunking</label>
+              <label style="font-size: 0.78rem; font-weight: 700; display: block; margin-bottom: 0.3rem;" data-i18n="chunkingStrategyLabel"></label>
               <select id="chunk-strategy" style="width: 100%; padding: 0.45rem; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.82rem; background: var(--card); color: var(--text);" onchange="toggleStrategyFields()">
-                <option value="fixed">Fixed-Size (Sentence-aware)</option>
-                <option value="structural">Structural (Markdown Headers)</option>
-                <option value="semantic">Local Semantic (Jaccard)</option>
+                <option value="fixed" data-i18n="chunkingStrategyFixed"></option>
+                <option value="structural" data-i18n="chunkingStrategyStructural"></option>
+                <option value="semantic" data-i18n="chunkingStrategySemantic"></option>
               </select>
             </div>
             <div id="field-size">
-              <label style="font-size: 0.78rem; font-weight: 700; display: block; margin-bottom: 0.3rem;">Kích thước Chunk (ký tự)</label>
+              <label style="font-size: 0.78rem; font-weight: 700; display: block; margin-bottom: 0.3rem;" data-i18n="chunkingSizeLabel"></label>
               <input type="number" id="chunk-size" value="500" style="width: 100%; padding: 0.4rem; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.82rem; background: var(--card); color: var(--text);">
             </div>
             <div id="field-overlap">
-              <label style="font-size: 0.78rem; font-weight: 700; display: block; margin-bottom: 0.3rem;">Overlap gối đầu (ký tự)</label>
+              <label style="font-size: 0.78rem; font-weight: 700; display: block; margin-bottom: 0.3rem;" data-i18n="chunkingOverlapLabel"></label>
               <input type="number" id="chunk-overlap" value="100" style="width: 100%; padding: 0.4rem; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.82rem; background: var(--card); color: var(--text);">
             </div>
             <div id="field-threshold" style="display: none;">
-              <label style="font-size: 0.78rem; font-weight: 700; display: block; margin-bottom: 0.3rem;">Ngưỡng Semantic Distance</label>
+              <label style="font-size: 0.78rem; font-weight: 700; display: block; margin-bottom: 0.3rem;" data-i18n="chunkingThresholdLabel"></label>
               <input type="number" id="chunk-threshold" value="0.3" step="0.05" min="0" max="1" style="width: 100%; padding: 0.4rem; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.82rem; background: var(--card); color: var(--text);">
             </div>
           </div>
@@ -264,28 +264,28 @@
       <div class="card-header">
         <div class="card-title-group">
           <span class="step">📊</span>
-          <h2>RAG Quality Dashboard</h2>
+          <h2 data-i18n="benchmarkTitle"></h2>
         </div>
-        <span class="meta">Evaluate chunking quality</span>
+        <span class="meta" data-i18n="benchmarkMeta"></span>
       </div>
       
       <div style="margin-bottom: 1.5rem;">
         <p style="margin: 0 0 1rem; font-size: 0.88rem; color: var(--muted); line-height: 1.6;">
-          Hệ thống tự động thực thi **5 câu hỏi kiểm thử** đặc trưng về Photosynthesis, đối chiếu ranh giới ngữ cảnh tìm kiếm với các từ khóa đáp án chuẩn (ground truth) để tính toán độ chính xác. Bạn có thể thay đổi cấu hình tách ở Bước 1 và nhấn chạy lại benchmark để đo lường độ chính xác thay đổi trong thời gian thực!
+          <span data-i18n="benchmarkIntroPrefix"></span><strong data-i18n="benchmarkIntroStrong"></strong><span data-i18n="benchmarkIntroSuffix"></span>
         </p>
         <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center;">
           <button class="primary" id="benchmark-btn" onclick="runBenchmark()" style="background: var(--success); box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);">
             <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <polygon points="5 3 19 12 5 21 5 3"></polygon>
             </svg>
-            Chạy Bộ Đánh Giá Benchmark
+            <span data-i18n="benchmarkRunButton"></span>
           </button>
           <span id="benchmark-status" style="font-size: 0.82rem; color: var(--muted); font-weight: 500;"></span>
         </div>
       </div>
       
       <div id="benchmark-results" style="display: none; border-top: 1px solid var(--border); padding-top: 1.5rem;">
-        <h3 style="margin: 0 0 1rem; font-size: 0.96rem; font-weight: 700; color: var(--text);">Chỉ số Chất lượng Tìm kiếm (RAG Quality Metrics)</h3>
+        <h3 style="margin: 0 0 1rem; font-size: 0.96rem; font-weight: 700; color: var(--text);" data-i18n="benchmarkMetricsTitle"></h3>
         
         <!-- Metrics Grid -->
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
@@ -293,30 +293,30 @@
           <div style="padding: 1rem; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: var(--radius-sm); text-align: center; box-shadow: var(--shadow-sm);">
             <div style="font-size: 0.7rem; font-weight: 700; text-transform: uppercase; color: var(--muted); margin-bottom: 0.3rem; letter-spacing: 0.05em;">Precision@1</div>
             <div id="metric-p1" style="font-size: 1.8rem; font-weight: 800; color: var(--accent);">0%</div>
-            <div style="font-size: 0.68rem; color: var(--muted); margin-top: 0.2rem;">Độ chính xác top-1</div>
+            <div style="font-size: 0.68rem; color: var(--muted); margin-top: 0.2rem;" data-i18n="benchmarkMetricP1"></div>
           </div>
 
           <div style="padding: 1rem; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: var(--radius-sm); text-align: center; box-shadow: var(--shadow-sm);">
             <div style="font-size: 0.7rem; font-weight: 700; text-transform: uppercase; color: var(--muted); margin-bottom: 0.3rem; letter-spacing: 0.05em;">Precision@3</div>
             <div id="metric-p3" style="font-size: 1.8rem; font-weight: 800; color: var(--accent);">0%</div>
-            <div style="font-size: 0.68rem; color: var(--muted); margin-top: 0.2rem;">Độ chính xác top-3</div>
+            <div style="font-size: 0.68rem; color: var(--muted); margin-top: 0.2rem;" data-i18n="benchmarkMetricP3"></div>
           </div>
 
           <div style="padding: 1rem; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: var(--radius-sm); text-align: center; box-shadow: var(--shadow-sm);">
             <div style="font-size: 0.7rem; font-weight: 700; text-transform: uppercase; color: var(--muted); margin-bottom: 0.3rem; letter-spacing: 0.05em;">Precision@5</div>
             <div id="metric-p5" style="font-size: 1.8rem; font-weight: 800; color: var(--accent);">0%</div>
-            <div style="font-size: 0.68rem; color: var(--muted); margin-top: 0.2rem;">Độ chính xác top-5</div>
+            <div style="font-size: 0.68rem; color: var(--muted); margin-top: 0.2rem;" data-i18n="benchmarkMetricP5"></div>
           </div>
 
           <div style="padding: 1rem; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: var(--radius-sm); text-align: center; box-shadow: var(--shadow-sm);">
             <div style="font-size: 0.7rem; font-weight: 700; text-transform: uppercase; color: var(--muted); margin-bottom: 0.3rem; letter-spacing: 0.05em;">MRR</div>
             <div id="metric-mrr" style="font-size: 1.8rem; font-weight: 800; color: var(--success);">0.00</div>
-            <div style="font-size: 0.68rem; color: var(--muted); margin-top: 0.2rem;">Thứ hạng trung bình</div>
+            <div style="font-size: 0.68rem; color: var(--muted); margin-top: 0.2rem;" data-i18n="benchmarkMetricMrr"></div>
           </div>
 
         </div>
 
-        <h3 style="margin: 1.5rem 0 1rem; font-size: 0.92rem; font-weight: 700; color: var(--text);">Chi tiết truy xuất 5 câu hỏi kiểm thử</h3>
+        <h3 style="margin: 1.5rem 0 1rem; font-size: 0.92rem; font-weight: 700; color: var(--text);" data-i18n="benchmarkDetailsTitle"></h3>
         <div id="benchmark-queries" style="display: grid; gap: 1.25rem;"></div>
       </div>
     </section>
@@ -435,7 +435,52 @@ const I18N = {
     flashcardBackLabel: 'Definition',
     flashcardAria: 'Flip flashcard',
     flashcardEmptyFront: 'No cards yet',
-    flashcardEmptyBack: 'Add one below'
+    flashcardEmptyBack: 'Add one below',
+    docSearchPlaceholder: '🔍 Search library...',
+    docSearchLabel: 'Search documents',
+    chunkingSummary: 'Chunking settings',
+    chunkingStrategyLabel: 'Chunking strategy',
+    chunkingStrategyFixed: 'Fixed-size (sentence-aware)',
+    chunkingStrategyStructural: 'Structural (Markdown headers)',
+    chunkingStrategySemantic: 'Local semantic (Jaccard)',
+    chunkingSizeLabel: 'Chunk size (characters)',
+    chunkingOverlapLabel: 'Overlap (characters)',
+    chunkingThresholdLabel: 'Semantic distance threshold',
+    uploadChunkPrefix: ' (using ',
+    uploadChunkSuffix: ' chunking)',
+    benchmarkTitle: 'RAG Quality Dashboard',
+    benchmarkMeta: 'Evaluate chunking quality',
+    benchmarkIntroPrefix: 'We automatically run ',
+    benchmarkIntroStrong: '5 test questions',
+    benchmarkIntroSuffix: ' about Photosynthesis, compare retrieved context with ground-truth keywords, and score retrieval accuracy. Adjust chunking in Step 1 and rerun to see accuracy changes in real time.',
+    benchmarkRunButton: 'Run benchmark evaluation',
+    benchmarkStatusRunning: 'Running benchmark evaluation...',
+    benchmarkMetricsTitle: 'RAG quality metrics',
+    benchmarkMetricP1: 'Top-1 accuracy',
+    benchmarkMetricP3: 'Top-3 accuracy',
+    benchmarkMetricP5: 'Top-5 accuracy',
+    benchmarkMetricMrr: 'Mean reciprocal rank',
+    benchmarkDetailsTitle: 'Retrieval details for 5 test questions',
+    benchmarkNeedDoc: 'Please upload or select a document first.',
+    benchmarkFailed: 'Evaluation failed: {detail}',
+    benchmarkSuccess: 'Evaluation completed successfully.',
+    benchmarkQuestionLabel: 'Q{index}: {query}',
+    benchmarkTargetKeywords: 'Target keywords',
+    benchmarkMrrLabel: 'MRR',
+    benchmarkP3Label: 'P@3',
+    benchmarkChunkLabel: 'Chunk {chunk} (Score: {score})',
+    benchmarkRelevant: '✓ Relevant (match)',
+    benchmarkIrrelevant: '✗ Irrelevant (no match)',
+    docRecommended: 'Recommended',
+    docActive: 'Active',
+    docSelect: 'Select',
+    docDelete: 'Delete',
+    docDeleteTitle: 'Delete document',
+    docSelectedToast: 'Selected document: {filename}',
+    docDeleteConfirm: 'Are you sure you want to delete "{filename}"? This will delete the file from storage and clear its vector index.',
+    docDeleteProgress: 'Deleting {filename}...',
+    docDeleteFailed: 'Delete failed: {detail}',
+    docDeleteSuccess: 'Deleted {filename}'
   },
   vi: {
     pageTitle: 'StudyBot — Trợ lý học tập AI',
@@ -508,7 +553,52 @@ const I18N = {
     flashcardBackLabel: 'Định nghĩa',
     flashcardAria: 'Lật flashcard',
     flashcardEmptyFront: 'Chưa có thẻ nào',
-    flashcardEmptyBack: 'Hãy thêm thẻ mới'
+    flashcardEmptyBack: 'Hãy thêm thẻ mới',
+    docSearchPlaceholder: '🔍 Tìm tài liệu...',
+    docSearchLabel: 'Tìm kiếm tài liệu',
+    chunkingSummary: 'Cấu hình tách',
+    chunkingStrategyLabel: 'Chiến lược chunking',
+    chunkingStrategyFixed: 'Kích thước cố định (theo câu)',
+    chunkingStrategyStructural: 'Cấu trúc (tiêu đề Markdown)',
+    chunkingStrategySemantic: 'Ngữ nghĩa cục bộ (Jaccard)',
+    chunkingSizeLabel: 'Kích thước chunk (ký tự)',
+    chunkingOverlapLabel: 'Overlap gối đầu (ký tự)',
+    chunkingThresholdLabel: 'Ngưỡng khoảng cách ngữ nghĩa',
+    uploadChunkPrefix: ' (dùng ',
+    uploadChunkSuffix: ' chunking)',
+    benchmarkTitle: 'Bảng chất lượng RAG',
+    benchmarkMeta: 'Đánh giá chất lượng tách',
+    benchmarkIntroPrefix: 'Hệ thống tự động chạy ',
+    benchmarkIntroStrong: '5 câu hỏi kiểm thử',
+    benchmarkIntroSuffix: ' về quang hợp, đối chiếu ngữ cảnh truy xuất với từ khóa chuẩn để chấm độ chính xác. Hãy chỉnh cấu hình tách ở Bước 1 và chạy lại để xem độ chính xác thay đổi theo thời gian thực.',
+    benchmarkRunButton: 'Chạy đánh giá benchmark',
+    benchmarkStatusRunning: 'Đang chạy đánh giá benchmark...',
+    benchmarkMetricsTitle: 'Chỉ số chất lượng RAG',
+    benchmarkMetricP1: 'Độ chính xác top-1',
+    benchmarkMetricP3: 'Độ chính xác top-3',
+    benchmarkMetricP5: 'Độ chính xác top-5',
+    benchmarkMetricMrr: 'Thứ hạng trung bình',
+    benchmarkDetailsTitle: 'Chi tiết truy xuất 5 câu hỏi kiểm thử',
+    benchmarkNeedDoc: 'Vui lòng tải lên hoặc chọn tài liệu trước.',
+    benchmarkFailed: 'Đánh giá thất bại: {detail}',
+    benchmarkSuccess: 'Đánh giá hoàn tất.',
+    benchmarkQuestionLabel: 'Câu {index}: {query}',
+    benchmarkTargetKeywords: 'Từ khóa mục tiêu',
+    benchmarkMrrLabel: 'MRR',
+    benchmarkP3Label: 'P@3',
+    benchmarkChunkLabel: 'Chunk {chunk} (Điểm: {score})',
+    benchmarkRelevant: '✓ Phù hợp (khớp)',
+    benchmarkIrrelevant: '✗ Không phù hợp (không khớp)',
+    docRecommended: 'Nên dùng',
+    docActive: 'Đang chọn',
+    docSelect: 'Chọn',
+    docDelete: 'Xóa',
+    docDeleteTitle: 'Xóa tài liệu',
+    docSelectedToast: 'Đã chọn tài liệu: {filename}',
+    docDeleteConfirm: 'Bạn chắc chắn muốn xóa "{filename}"? Thao tác này sẽ xóa file khỏi bộ nhớ và làm sạch chỉ mục vector.',
+    docDeleteProgress: 'Đang xóa {filename}...',
+    docDeleteFailed: 'Xóa thất bại: {detail}',
+    docDeleteSuccess: 'Đã xóa {filename}'
   }
 };
 
@@ -717,7 +807,7 @@ async function doUpload(file) {
         </svg>
         <strong>${b.filename}</strong>
       </div>
-      <div>${t('uploadSuccessChars', {chars: b.chars_extracted.toLocaleString()})} (using <code>${strategy}</code> chunking)</div>
+      <div>${t('uploadSuccessChars', {chars: b.chars_extracted.toLocaleString()})}${t('uploadChunkPrefix')}<code>${strategy}</code>${t('uploadChunkSuffix')}</div>
       <div class="upload-success-meta">${t('uploadSuccessDoc', {docId: b.doc_id})}</div>
     </div>`;
     
@@ -1165,12 +1255,12 @@ function initLanguageControls() {
 async function runBenchmark() {
   const docId = window.selectedDocId || window.lastDocId;
   if (!docId) {
-    toast("Please upload or select a document first!", "warn");
+    toast(t('benchmarkNeedDoc'), 'warn');
     return;
   }
 
   $('benchmark-btn').disabled = true;
-  $('benchmark-status').innerHTML = '<span class="spinner"></span> Running benchmark evaluation...';
+  $('benchmark-status').innerHTML = `<span class="spinner"></span> ${t('benchmarkStatusRunning')}`;
   $('benchmark-results').style.display = 'none';
 
   const strategy = $('chunk-strategy').value;
@@ -1195,7 +1285,7 @@ async function runBenchmark() {
   $('benchmark-status').textContent = '';
 
   if (!res.ok) {
-    toast(`Evaluation failed: ${res.body.detail || res.status}`, 'error');
+    toast(t('benchmarkFailed', {detail: res.body.detail || res.status}), 'error');
     return;
   }
 
@@ -1216,20 +1306,20 @@ async function runBenchmark() {
     return `
       <div style="border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.9rem; background: var(--bg); margin-bottom: 0.5rem;">
         <div style="font-weight: 700; font-size: 0.9rem; margin-bottom: 0.4rem; color: var(--text);">
-          Q${qidx + 1}: ${q.query}
+          ${t('benchmarkQuestionLabel', {index: qidx + 1, query: q.query})}
         </div>
         <div style="font-size: 0.74rem; color: var(--muted); margin-bottom: 0.6rem; display: flex; justify-content: space-between;">
-          <span>Target Keywords: <code>${q.keywords.join(', ')}</code></span>
+          <span>${t('benchmarkTargetKeywords')}: <code>${q.keywords.join(', ')}</code></span>
           <span style="font-weight:600; color: ${q.metrics.mrr > 0 ? 'var(--success)' : 'var(--error)'}">
-            MRR: ${q.metrics.mrr.toFixed(2)} | P@3: ${(q.metrics.precision_at_3 * 100).toFixed(0)}%
+            ${t('benchmarkMrrLabel')}: ${q.metrics.mrr.toFixed(2)} | ${t('benchmarkP3Label')}: ${(q.metrics.precision_at_3 * 100).toFixed(0)}%
           </span>
         </div>
         <div style="display: grid; gap: 0.5rem;">
           ${q.retrieved.map(r => `
             <div style="padding: 0.6rem; background: var(--card); border-left: 3px solid ${r.relevant ? 'var(--success)' : 'var(--error)'}; font-size: 0.78rem; border-radius: 0 4px 4px 0; border-top: 1px solid var(--border); border-right: 1px solid var(--border); border-bottom: 1px solid var(--border);">
               <div style="display:flex; justify-content: space-between; font-weight:600; font-size: 0.72rem; color: var(--muted); margin-bottom:0.25rem;">
-                <span>Chunk Index ${r.chunk} (Score: ${r.score.toFixed(2)})</span>
-                <span style="color: ${r.relevant ? 'var(--success)' : 'var(--error)'}">${r.relevant ? '✓ RELEVANT (Match)' : '✗ IRRELEVANT (No Match)'}</span>
+                <span>${t('benchmarkChunkLabel', {chunk: r.chunk, score: r.score.toFixed(2)})}</span>
+                <span style="color: ${r.relevant ? 'var(--success)' : 'var(--error)'}">${r.relevant ? t('benchmarkRelevant') : t('benchmarkIrrelevant')}</span>
               </div>
               <div style="white-space: pre-wrap; font-family: var(--font-sans); line-height:1.4; color: var(--text);">${r.text.replace(/</g, '&lt;')}</div>
             </div>
@@ -1239,7 +1329,7 @@ async function runBenchmark() {
     `;
   }).join('');
 
-  toast("Evaluation completed successfully!", "success");
+  toast(t('benchmarkSuccess'), 'success');
 }
 
 // ============================================================================
@@ -1275,7 +1365,7 @@ async function refresh() {
     }
 
     const hint = d.filename.toLowerCase().includes('photosynthesis') 
-      ? '<span style="color: var(--success); font-weight: 700; font-size: 0.72rem; margin-left: 0.4rem;">💡 Recommended</span>' 
+      ? `<span style="color: var(--success); font-weight: 700; font-size: 0.72rem; margin-left: 0.4rem;">💡 ${t('docRecommended')}</span>` 
       : '';
       
     return `
@@ -1297,15 +1387,15 @@ async function refresh() {
             <div class="meta">${t('docMeta', {chars: (d.chars || 0).toLocaleString(), size: (d.size/1024).toFixed(1)})}</div>
           </div>
         </div>
-        <div class="doc-item-right" style="font-family: var(--font-mono); font-size: 0.72rem; text-align: right; display: flex; flex-direction: column; justify-content: space-between; align-items: flex-end;">
-          <div>${(d.doc_id || '').slice(0, 8)}</div>
-          <div style="font-size:0.65rem; font-weight:700; color:var(--accent); margin-top:0.15rem;">${isSelected ? 'Active' : 'Select'}</div>
-          <button class="ghost delete-btn" style="color: var(--error); padding: 2px 4px; margin-top: 6px; border: none; background: transparent; cursor: pointer; display: flex; align-items: center; gap: 3px; font-size: 0.7rem; font-weight: 600;" onclick="event.stopPropagation(); deleteDocument('${d.doc_id}', '${d.filename.replace(/'/g, "\\'")}')" title="Delete document">
+        <div class="doc-item-right">
+          <div class="doc-id">${(d.doc_id || '').slice(0, 8)}</div>
+          <div class="doc-state">${isSelected ? t('docActive') : t('docSelect')}</div>
+          <button class="ghost delete-btn" onclick="event.stopPropagation(); deleteDocument('${d.doc_id}', '${d.filename.replace(/'/g, "\\'")}')" title="${t('docDeleteTitle')}">
             <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="3 6 5 6 21 6"></polyline>
               <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
             </svg>
-            Delete
+            <span class="delete-text">${t('docDelete')}</span>
           </button>
         </div>
       </div>
@@ -1316,24 +1406,24 @@ async function refresh() {
 function selectDoc(docId, filename) {
   window.selectedDocId = docId;
   window.selectedDocName = filename;
-  toast(`Selected document: ${filename}`, 'info');
+  toast(t('docSelectedToast', {filename}), 'info');
   refresh();
 }
 
 async function deleteDocument(docId, filename) {
-  if (!confirm(`Are you sure you want to delete "${filename}"? This will delete the file from storage and clear its vector index.`)) {
+  if (!confirm(t('docDeleteConfirm', {filename}))) {
     return;
   }
   
-  toast(`Deleting ${filename}...`, 'info');
+  toast(t('docDeleteProgress', {filename}), 'info');
   const res = await call(`/docs/${docId}`, {method: 'DELETE'});
   
   if (!res.ok) {
-    toast(`Delete failed: ${res.body.detail || res.status}`, 'error');
+    toast(t('docDeleteFailed', {detail: res.body.detail || res.status}), 'error');
     return;
   }
   
-  toast(`Deleted ${filename}`, 'success');
+  toast(t('docDeleteSuccess', {filename}), 'success');
   
   if (window.selectedDocId === docId || window.lastDocId === docId) {
     window.selectedDocId = null;

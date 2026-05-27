@@ -1104,20 +1104,48 @@ button.ghost:hover {
 }
 
 /* ---------- Document Library ---------- */
+.search-box-container {
+  margin: 0 0 1rem;
+  position: relative;
+}
+
+.doc-search {
+  width: 100%;
+  padding: 0.55rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  background: rgba(0, 0, 0, 0.18);
+  color: var(--text);
+  outline: none;
+  transition: all 0.3s ease;
+}
+
+[data-theme="light"] .doc-search {
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.doc-search:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--border-focus);
+}
+
 .doc-list {
   display: grid;
   gap: 0.75rem;
 }
 
 .doc-item {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.75rem;
   align-items: center;
   padding: 0.85rem 1rem;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: rgba(255, 255, 255, 0.02);
   transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
 }
 
 [data-theme="light"] .doc-item {
@@ -1181,19 +1209,62 @@ button.ghost:hover {
 }
 
 .doc-item-right {
-  font-family: var(--font-mono);
-  color: rgba(255, 255, 255, 0.25);
-  font-size: 0.75rem;
+  display: grid;
+  justify-items: end;
+  gap: 0.3rem;
+  min-width: 90px;
   flex-shrink: 0;
-  padding-left: 0.5rem;
 }
 
-[data-theme="light"] .doc-item-right {
-  color: rgba(0, 0, 0, 0.3);
+.doc-id {
+  font-family: var(--font-mono);
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 0.72rem;
 }
 
-.doc-item:hover .doc-item-right {
+[data-theme="light"] .doc-id {
+  color: rgba(0, 0, 0, 0.35);
+}
+
+.doc-item:hover .doc-id {
   color: var(--accent);
+}
+
+.doc-state {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.delete-btn {
+  color: var(--error);
+  padding: 2px 6px;
+  margin-top: 2px;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  background: rgba(239, 68, 68, 0.08);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.delete-btn:hover {
+  background: rgba(239, 68, 68, 0.16);
+}
+
+@media (max-width: 560px) {
+  .doc-item {
+    grid-template-columns: 1fr;
+    align-items: flex-start;
+  }
+  .doc-item-right {
+    grid-auto-flow: column;
+    justify-items: start;
+    justify-content: space-between;
+    width: 100%;
+  }
 }
 
 /* ---------- Debug Log Drawer ---------- */
