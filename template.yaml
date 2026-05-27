@@ -159,7 +159,7 @@ Resources:
   # 2. IAM Role — least-privilege for Lambda
   #    Principle: only the exact actions this app actually calls.
   # --------------------------------------------------------------------------
-  StudyBotLambdaRole:
+  StudyBotLambdaRoleV2:
     Type: AWS::IAM::Role
     Properties:
       RoleName: !Sub "studybot-lambda-role-${TeamName}"
@@ -247,7 +247,7 @@ Resources:
       # Handler points to lambda_handler.py → handler object (Mangum instance)
       Handler: lambda_handler.handler
       CodeUri: .                  # sam build packages everything from this dir
-      Role: !GetAtt StudyBotLambdaRole.Arn
+      Role: !GetAtt StudyBotLambdaRoleV2.Arn
       Description: "StudyBot FastAPI app — RAG over uploaded lecture notes"
       VpcConfig:
         SecurityGroupIds: [!Ref LambdaSecurityGroup]
@@ -914,7 +914,7 @@ Outputs:
 
   LambdaRoleArn:
     Description: "IAM Role ARN (for Evidence Pack security section)"
-    Value: !GetAtt StudyBotLambdaRole.Arn
+    Value: !GetAtt StudyBotLambdaRoleV2.Arn
 
   DynamoTableName:
     Condition: CreateDynamoTable
