@@ -405,9 +405,24 @@
   <div class="toasts" id="toasts"></div>
 
   <script>
-    // ============================================================================
-    // Config
-    // ============================================================================
+    function detectTenant() {
+      const hostname = window.location.hostname;
+      let tenant = 'default';
+      
+      if (hostname.endsWith('.restx.food')) {
+        tenant = hostname.replace('.restx.food', '');
+      } else if (hostname.endsWith('.localhost')) {
+        tenant = hostname.replace('.localhost', '');
+      } else {
+        tenant = new URLSearchParams(location.search).get('tenant') || 'default';
+      }
+      
+      document.documentElement.setAttribute('data-tenant', tenant);
+      return tenant;
+    }
+    
+    const ACTIVE_TENANT = detectTenant();
+
     const getApiDefault = () => {
       if (window.API_BASE) return window.API_BASE;
       const param = new URLSearchParams(location.search).get('api');
