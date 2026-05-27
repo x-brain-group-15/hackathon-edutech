@@ -12,7 +12,7 @@ from src.config import config
 from src.pdf_extractor import extract_pdf
 
 logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+logger.setLevel(getattr(logging, config.log_level.upper(), logging.INFO))
 
 
 def log_event(event_type: str, **kwargs):
@@ -54,6 +54,22 @@ def _extract_text(filename: str, data: bytes) -> str:
         reader = PdfReader(io.BytesIO(data))
         return "\n\n".join(page.extract_text() or "" for page in reader.pages)
     # Default: assume UTF-8 text
+    try:
+        return data.decode("utf-8", errors="replace")
+    except Exception:
+        return ""
+
+
+def _extract_text(filename: str, data: bytes) -> str:
+    """Extract plain text from PDF or .txt upload."""
+    if filename.lower().endswith(".pdf"):
+        try:
+            from pypdf import PdfReader
+        except ImportError:
+            return "(pypdf not installed — install requirements.txt)"
+        reader = PdfReader(io.BytesIO(data))
+        return "\n\n".join(page.extract_text() or "" for page in reader.pages)
+
     try:
         return data.decode("utf-8", errors="replace")
     except Exception:
@@ -582,6 +598,9 @@ def handle_evaluate(
             )
 
             chunks = vector_store.search(q, top_k=5, filter={"user_id": user_id})
+            if not chunks and hasattr(vector_store, "kb_id"):
+                # Fallback for legacy Bedrock KB files that don't have metadata sidecars
+                chunks = vector_store.search(q, top_k=5, filter=None)
 
             log_step(
                 "evaluate",
@@ -708,3 +727,19 @@ def handle_evaluate(
             "queries": queries_results,
         }
 
+
+    except Exception as e:
+        latency_ms = int((time.time() - start_time) * 1000)
+
+        log_event(
+            "EVALUATE_ERROR",
+            user_id=user_id,
+            doc_id=doc_id,
+            latency_ms=latency_ms,
+            error_type=type(e).__name__,
+            error_message=str(e),
+            stack_trace=traceback.format_exc(),
+            status="error"
+        )
+
+        raise

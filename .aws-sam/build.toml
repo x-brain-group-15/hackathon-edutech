@@ -9,4 +9,13 @@ manifest_hash = ""
 packagetype = "Zip"
 functions = ["StudyBotFunction"]
 
+[function_build_definitions.b067776d-194d-4889-a4f8-92968b09991d]
+codeuri = "D:\\Codespace-Learning\\X_Brain\\W7\\W7\\starter_apps\\studybot\\aws"
+runtime = "python3.12"
+architecture = "x86_64"
+handler = "cost_guard.lambda_handler"
+manifest_hash = ""
+packagetype = "Zip"
+functions = ["CostGuardFunction", "AutoFixInfraFunction"]
+
 [layer_build_definitions]
