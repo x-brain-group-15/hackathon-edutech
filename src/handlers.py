@@ -1,11 +1,14 @@
 """Endpoint handlers. Pure business logic — knows nothing about FastAPI or AWS specifics."""
-import io
 import uuid
 import json
 import time
 import logging
 import traceback
+from pathlib import Path
 from typing import Optional
+
+from src.config import config
+from src.pdf_extractor import extract_pdf
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -32,15 +35,11 @@ ANSWER:"""
 
 def _extract_text(filename: str, data: bytes) -> str:
     """Extract plain text from PDF or .txt upload."""
-    name = filename.lower()
-    if name.endswith(".pdf"):
+    if filename.lower().endswith(".pdf"):
         try:
-            from pypdf import PdfReader
-        except ImportError:
-            return "(pypdf not installed — install requirements.txt)"
-        reader = PdfReader(io.BytesIO(data))
-        return "\n\n".join(page.extract_text() or "" for page in reader.pages)
-    # Default: assume UTF-8 text
+            return extract_pdf(data).text
+        except RuntimeError as exc:
+            return f"({exc})"
     try:
         return data.decode("utf-8", errors="replace")
     except Exception:
@@ -63,12 +62,23 @@ def handle_upload(
     doc_id = str(uuid.uuid4())
     key = f"{user_id}/{doc_id}/{filename}"
     location = storage.put(key, data)
-    text = _extract_text(filename, data)
+    extraction_metadata = {}
+    if filename.lower().endswith(".pdf"):
+        image_output_dir = Path(config.storage_local_dir) / "extracted_assets" / doc_id
+        extracted = extract_pdf(data, image_output_dir=image_output_dir)
+        text = extracted.text
+        extraction_metadata = extracted.metadata
+    else:
+        text = _extract_text(filename, data)
     if text.strip():
         vector_store.ingest(
             doc_id=doc_id,
             text=text,
-            metadata={"user_id": user_id, "filename": filename},
+            metadata={
+                "user_id": user_id,
+                "filename": filename,
+                "extraction_strategy": extraction_metadata.get("strategy", "plain_text"),
+            },
             strategy=strategy,
             size=size,
             overlap=overlap,
@@ -77,7 +87,13 @@ def handle_upload(
     userstore.add_doc(
         user_id=user_id,
         doc_id=doc_id,
-        metadata={"filename": filename, "size": len(data), "location": location, "chars": len(text)},
+        metadata={
+            "filename": filename,
+            "size": len(data),
+            "location": location,
+            "chars": len(text),
+            "extraction": extraction_metadata,
+        },
     )
     log_event(
         "DOCUMENT_UPLOAD",
@@ -95,6 +111,7 @@ def handle_upload(
         "size": len(data),
         "chars_extracted": len(text),
         "location": location,
+        "extraction": extraction_metadata,
     }
 
 
