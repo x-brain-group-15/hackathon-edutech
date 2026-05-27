@@ -1,7 +1,8 @@
-"""Endpoint handlers. Pure business logic — knows nothing about FastAPI or AWS specifics."""
-import io
+"""Endpoint handlers. Pure business logic; knows nothing about FastAPI or AWS specifics."""
 import uuid
 from typing import Optional
+
+from src.pdf_extractor import extract_pdf
 
 
 PROMPT_TEMPLATE = """You are a study assistant. Answer the student's question using ONLY the
@@ -22,12 +23,9 @@ def _extract_text(filename: str, data: bytes) -> str:
     name = filename.lower()
     if name.endswith(".pdf"):
         try:
-            from pypdf import PdfReader
-        except ImportError:
-            return "(pypdf not installed — install requirements.txt)"
-        reader = PdfReader(io.BytesIO(data))
-        return "\n\n".join(page.extract_text() or "" for page in reader.pages)
-    # Default: assume UTF-8 text
+            return extract_pdf(data).text
+        except RuntimeError as exc:
+            return f"({exc})"
     try:
         return data.decode("utf-8", errors="replace")
     except Exception:
@@ -46,13 +44,35 @@ def handle_upload(
     doc_id = str(uuid.uuid4())
     key = f"{user_id}/{doc_id}/{filename}"
     location = storage.put(key, data)
-    text = _extract_text(filename, data)
+
+    extraction_metadata = {}
+    if filename.lower().endswith(".pdf"):
+        extracted = extract_pdf(data)
+        text = extracted.text
+        extraction_metadata = extracted.metadata
+    else:
+        text = _extract_text(filename, data)
+
     if text.strip():
-        vector_store.ingest(doc_id=doc_id, text=text, metadata={"user_id": user_id, "filename": filename})
+        vector_store.ingest(
+            doc_id=doc_id,
+            text=text,
+            metadata={
+                "user_id": user_id,
+                "filename": filename,
+                "extraction_strategy": extraction_metadata.get("strategy", "plain_text"),
+            },
+        )
     userstore.add_doc(
         user_id=user_id,
         doc_id=doc_id,
-        metadata={"filename": filename, "size": len(data), "location": location, "chars": len(text)},
+        metadata={
+            "filename": filename,
+            "size": len(data),
+            "location": location,
+            "chars": len(text),
+            "extraction": extraction_metadata,
+        },
     )
     return {
         "doc_id": doc_id,
@@ -60,6 +80,7 @@ def handle_upload(
         "size": len(data),
         "chars_extracted": len(text),
         "location": location,
+        "extraction": extraction_metadata,
     }
 
 
@@ -72,14 +93,12 @@ def handle_query(
     vector_backend: str,
     bedrock_kb_id: str,
 ) -> dict:
-    """RAG flow: retrieve user's relevant chunks → call AI with context → log + return."""
+    """RAG flow: retrieve user's relevant chunks, call AI with context, log and return."""
     if vector_backend == "bedrock_kb":
-        # Production path: let Bedrock do retrieve + generate in one call
         result = ai_client.retrieve_and_generate(query=question, kb_id=bedrock_kb_id)
         answer = result["answer"]
         citations = result["citations"]
     else:
-        # Local path: do our own retrieve then prompt
         chunks = vector_store.search(question, top_k=5, filter={"user_id": user_id})
         if not chunks:
             answer = "No relevant content found in your uploaded documents. Upload some first."
