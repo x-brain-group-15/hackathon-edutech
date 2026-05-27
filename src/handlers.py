@@ -42,6 +42,39 @@ QUESTION: {question}
 ANSWER:"""
 
 
+FLASHCARD_PROMPT = """You are a study assistant. Generate {limit} flashcards for the topic: "{topic}".
+Base the flashcards ONLY on the provided context if available. 
+Return the output STRICTLY as a JSON array of objects, where each object has "front" (the question) and "back" (the answer). Do NOT include any markdown code blocks, text, or explanation before or after the JSON array.
+
+CONTEXT:
+{context}
+"""
+
+def _put_cloudwatch_metric(metric_name: str, value: float, unit: str, aws_region: str, status: str = "Success"):
+    """Real-world scenario: Put custom metrics to CloudWatch to monitor AI operations."""
+    try:
+        import boto3
+        cw = boto3.client("cloudwatch", region_name=aws_region)
+        cw.put_metric_data(
+            Namespace="StudyBot",
+            MetricData=[
+                {
+                    "MetricName": metric_name,
+                    "Value": value,
+                    "Unit": unit,
+                    "Dimensions": [
+                        {"Name": "Feature", "Value": "FlashcardGeneration"},
+                        {"Name": "Status", "Value": status}
+                    ]
+                }
+            ]
+        )
+    except Exception as e:
+        # Never fail the user request just because metrics failed to publish
+        print(f"Failed to put CloudWatch metric: {e}")
+
+
+
 def _extract_text(filename: str, data: bytes) -> str:
     """Extract plain text from PDF or .txt upload."""
     if filename.lower().endswith(".pdf"):
@@ -833,3 +866,38 @@ def handle_evaluate(
 
         raise
 
+
+def handle_generate_flashcards(user_id: str, topic: str, limit: int, doc_id: Optional[str], vector_store, llm_backend) -> dict:
+    start_time = time.time()
+    try:
+        context = ""
+        if doc_id:
+            results = vector_store.search(doc_id=doc_id, query=topic, limit=10)
+            context = "\n\n".join(r["text"] for r in results)
+        
+        prompt = FLASHCARD_PROMPT.format(limit=limit, topic=topic, context=context)
+        response = llm_backend.generate(prompt)
+        
+        # Clean JSON markdown
+        clean_json = response.strip()
+        if clean_json.startswith("```json"):
+            clean_json = clean_json[7:]
+        elif clean_json.startswith("```"):
+            clean_json = clean_json[3:]
+        if clean_json.endswith("```"):
+            clean_json = clean_json[:-3]
+        clean_json = clean_json.strip()
+        
+        flashcards = json.loads(clean_json)
+        
+        latency_ms = int((time.time() - start_time) * 1000)
+        _put_cloudwatch_metric("FlashcardGenerationLatency", latency_ms, "Milliseconds", "ap-southeast-1", "Success")
+        _put_cloudwatch_metric("FlashcardGenerationSuccess", 1, "Count", "ap-southeast-1", "Success")
+        
+        return {"flashcards": flashcards}
+    except Exception as e:
+        latency_ms = int((time.time() - start_time) * 1000)
+        _put_cloudwatch_metric("FlashcardGenerationFailure", 1, "Count", "ap-southeast-1", "Failed")
+        print(f"Error generating flashcards: {e}")
+        traceback.print_exc()
+        raise
