@@ -72,6 +72,10 @@ def health() -> dict:
 @app.post("/upload")
 async def upload(
     file: UploadFile = File(...),
+    strategy: str | None = None,
+    size: int | None = None,
+    overlap: int | None = None,
+    threshold: float | None = None,
     x_user_id: str | None = Header(default=None),
 ) -> dict:
     user_id = _resolve_user_id(x_user_id)
@@ -85,6 +89,10 @@ async def upload(
         storage=storage,
         userstore=userstore,
         vector_store=vector_store,
+        strategy=strategy,
+        size=size,
+        overlap=overlap,
+        threshold=threshold,
     )
 
 
@@ -102,6 +110,38 @@ def query(req: QueryRequest, x_user_id: str | None = Header(default=None)) -> di
         vector_backend=config.vector_backend,
         bedrock_kb_id=config.vector_bedrock_kb_id,
     )
+
+
+class EvaluateRequest(BaseModel):
+    strategy: str | None = None
+    size: int | None = None
+    overlap: int | None = None
+    threshold: float | None = None
+
+
+@app.post("/docs/{doc_id}/evaluate")
+def evaluate(
+    doc_id: str,
+    req: EvaluateRequest,
+    x_user_id: str | None = Header(default=None),
+) -> dict:
+    user_id = _resolve_user_id(x_user_id)
+    try:
+        return handlers.handle_evaluate(
+            user_id=user_id,
+            doc_id=doc_id,
+            storage=storage,
+            userstore=userstore,
+            vector_store=vector_store,
+            strategy=req.strategy,
+            size=req.size,
+            overlap=req.overlap,
+            threshold=req.threshold,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/docs/list")
