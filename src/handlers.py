@@ -688,10 +688,21 @@ def handle_evaluate(
                 query=q
             )
 
-            chunks = vector_store.search(q, top_k=5, filter={"user_id": user_id})
+            # Filter by BOTH user_id AND doc_id so we only evaluate chunks
+            # from the specific document — not all documents of this user.
+            chunks = vector_store.search(q, top_k=5, filter={"user_id": user_id, "doc_id": doc_id})
+            if not chunks:
+                # Fallback 1: filter by user_id only (covers cases where doc_id metadata is missing)
+                chunks = vector_store.search(q, top_k=5, filter={"user_id": user_id})
             if not chunks and hasattr(vector_store, "kb_id"):
-                # Fallback for legacy Bedrock KB files that don't have metadata sidecars
+                # Fallback 2: Bedrock KB — metadata sidecars may not have been written yet
                 chunks = vector_store.search(q, top_k=5, filter=None)
+            # Post-filter: if we got chunks from multiple docs, keep only those belonging to this doc
+            if chunks and doc_id:
+                doc_chunks = [c for c in chunks if c.get("doc_id") == doc_id or c.get("metadata", {}).get("doc_id") == doc_id]
+                if doc_chunks:
+                    chunks = doc_chunks
+
 
             log_step(
                 "evaluate",
