@@ -528,6 +528,9 @@ def handle_evaluate(
             )
 
             chunks = vector_store.search(q, top_k=5, filter={"user_id": user_id})
+            if not chunks and hasattr(vector_store, "kb_id"):
+                # Fallback for legacy Bedrock KB files that don't have metadata sidecars
+                chunks = vector_store.search(q, top_k=5, filter=None)
 
             log_step(
                 "evaluate",
