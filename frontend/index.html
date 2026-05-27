@@ -76,6 +76,9 @@
           Refresh
         </button>
       </div>
+      <div class="search-box-container" style="margin: 0 0 1rem; position: relative;">
+        <input type="text" id="doc-search" placeholder="🔍 Search library..." oninput="filterDocs()" style="width: 100%; padding: 0.55rem 0.8rem; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.8rem; background: rgba(0,0,0,0.15); color: var(--text); outline: none; transition: all 0.3s ease;">
+      </div>
       <div class="doc-list" id="docs">
         <div class="empty">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 44px; height: 44px; margin-bottom: 0.5rem; opacity: 0.4;">
@@ -732,6 +735,23 @@ async function deleteDocument(docId, filename) {
   }
   
   refresh();
+}
+
+function filterDocs() {
+  const query = $('doc-search').value.toLowerCase().trim();
+  const items = document.querySelectorAll('.doc-item');
+  items.forEach(item => {
+    // Search within the name element
+    const nameEl = item.querySelector('.name');
+    if (nameEl) {
+      const name = nameEl.textContent.toLowerCase();
+      if (name.includes(query)) {
+        item.style.display = 'flex';
+      } else {
+        item.style.display = 'none';
+      }
+    }
+  });
 }
 
 // ============================================================================

@@ -1119,16 +1119,26 @@ details pre {
   100% { transform: translateY(0px); }
 }
 
-/* ---------- Sticky Sidebar & Scrollable Doc List on Desktop ---------- */
+/* ---------- Premium Sticky Sidebar & Scrollable Doc List on Desktop ---------- */
 @media (min-width: 1025px) {
   .sidebar {
     position: sticky;
-    top: 100px;
-    max-height: calc(100vh - 140px);
+    top: 90px;
+    max-height: calc(100vh - 120px);
   }
-  .doc-list {
-    max-height: calc(100vh - 280px);
+  /* Bọc Card thư viện trong Sidebar giới hạn chiều cao */
+  .sidebar .card {
+    max-height: calc(100vh - 130px);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden; /* Giữ bo góc Card và ngăn tràn ra ngoài */
+  }
+  /* Bọc riêng vùng danh sách tài liệu để tự động hiển thị scrollbar nội bộ */
+  .sidebar .card .doc-list {
     overflow-y: auto;
-    padding-right: 4px;
+    flex-grow: 1;
+    max-height: calc(100vh - 270px);
+    padding-right: 6px;
+    margin-right: -4px;
   }
 }
