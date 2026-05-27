@@ -1,0 +1,692 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: "StudyBot \u2014 W7 Capstone Hackathon FastAPI RAG app deployed on AWS\
+  \ Lambda + API Gateway HTTP API. Stack covers: Compute (Lambda) + API (APIGW HTTP)\
+  \ + IAM least-privilege. Storage (S3, DynamoDB) and AI (Bedrock KB) are created\
+  \ separately and referenced here via Parameters so teardown is safe and independent.\n"
+Parameters:
+  TeamName:
+    Type: String
+    Default: G15
+    Description: "Your team name, e.g. G1, G2 \u2014 used in resource names & tags"
+  Environment:
+    Type: String
+    Default: hackathon
+    AllowedValues:
+    - hackathon
+    - staging
+    - prod
+  AiBackend:
+    Type: String
+    Default: bedrock
+    AllowedValues:
+    - bedrock
+    - local
+  AiModelId:
+    Type: String
+    Default: anthropic.claude-3-5-haiku-20241022-v1:0
+    Description: "Bedrock model ID \u2014 Haiku is cheapest sufficient option"
+  StorageBucket:
+    Type: String
+    Description: S3 bucket name for uploaded documents (create separately)
+  UserstoreBackend:
+    Type: String
+    Default: dynamodb
+    AllowedValues:
+    - dynamodb
+    - sqlite
+  UserstoreTable:
+    Type: String
+    Default: ''
+    Description: DynamoDB table name (leave blank to auto-create below)
+  VectorBackend:
+    Type: String
+    Default: bedrock_kb
+    AllowedValues:
+    - bedrock_kb
+    - local
+  VectorBedrockKbId:
+    Type: String
+    Default: ''
+    Description: "Bedrock Knowledge Base ID \u2014 get from AWS Console after creating\
+      \ KB"
+Globals:
+  Function:
+    Runtime: python3.12
+    MemorySize: 512
+    Timeout: 30
+    Architectures:
+    - x86_64
+    Environment:
+      Variables:
+        AI_BACKEND:
+          Ref: AiBackend
+        AI_MODEL_ID:
+          Ref: AiModelId
+        STORAGE_BACKEND: s3
+        STORAGE_BUCKET:
+          Ref: StorageBucket
+        USERSTORE_BACKEND:
+          Ref: UserstoreBackend
+        USERSTORE_TABLE:
+          Fn::If:
+          - CreateDynamoTable
+          - Ref: UserStateTable
+          - Ref: UserstoreTable
+        VECTOR_BACKEND:
+          Ref: VectorBackend
+        VECTOR_BEDROCK_KB_ID:
+          Ref: VectorBedrockKbId
+        SERVE_FRONTEND: 'false'
+        CORS_ORIGINS: '*'
+        LOG_LEVEL: INFO
+    Tags:
+      Project: W7Capstone
+      Team:
+        Ref: TeamName
+      Environment:
+        Ref: Environment
+Conditions:
+  CreateDynamoTable:
+    Fn::Equals:
+    - Ref: UserstoreTable
+    - ''
+Resources:
+  UserStateTable:
+    Condition: CreateDynamoTable
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      TableName:
+        Fn::Sub: studybot-users-${TeamName}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+      - AttributeName: user_id
+        AttributeType: S
+      - AttributeName: sk
+        AttributeType: S
+      KeySchema:
+      - AttributeName: user_id
+        KeyType: HASH
+      - AttributeName: sk
+        KeyType: RANGE
+      Tags:
+      - Key: Project
+        Value: W7Capstone
+      - Key: Team
+        Value:
+          Ref: TeamName
+  StudyBotLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        Fn::Sub: studybot-lambda-role-${TeamName}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+          Action: sts:AssumeRole
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      Policies:
+      - PolicyName: StudyBotAppPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Sid: S3DocsAccess
+            Effect: Allow
+            Action:
+            - s3:PutObject
+            - s3:GetObject
+            - s3:ListBucket
+            - s3:DeleteObject
+            Resource:
+            - Fn::Sub: arn:aws:s3:::${StorageBucket}
+            - Fn::Sub: arn:aws:s3:::${StorageBucket}/*
+          - Sid: DynamoDBAccess
+            Effect: Allow
+            Action:
+            - dynamodb:PutItem
+            - dynamodb:GetItem
+            - dynamodb:Query
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+            Resource:
+              Fn::If:
+              - CreateDynamoTable
+              - Fn::GetAtt:
+                - UserStateTable
+                - Arn
+              - Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${UserstoreTable}
+          - Sid: BedrockInvoke
+            Effect: Allow
+            Action:
+            - bedrock:InvokeModel
+            - bedrock:InvokeModelWithResponseStream
+            Resource:
+            - Fn::Sub: arn:aws:bedrock:${AWS::Region}::foundation-model/*
+          - Sid: BedrockKBRetrieve
+            Effect: Allow
+            Action:
+            - bedrock:Retrieve
+            - bedrock:RetrieveAndGenerate
+            Resource:
+            - Fn::Sub: arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*
+          - Sid: CloudWatchMetrics
+            Effect: Allow
+            Action:
+            - cloudwatch:PutMetricData
+            Resource: '*'
+            Condition:
+              StringEquals:
+                cloudwatch:namespace: StudyBot
+      Tags:
+      - Key: Project
+        Value: W7Capstone
+      - Key: Team
+        Value:
+          Ref: TeamName
+  StudyBotFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: studybot-api-${TeamName}
+      Handler: lambda_handler.handler
+      CodeUri: StudyBotFunction
+      Role:
+        Fn::GetAtt:
+        - StudyBotLambdaRole
+        - Arn
+      Description: "StudyBot FastAPI app \u2014 RAG over uploaded lecture notes"
+      VpcConfig:
+        SecurityGroupIds:
+        - Ref: LambdaSecurityGroup
+        SubnetIds:
+        - Ref: PrivateSubnet
+      Events:
+        ApiRoot:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: StudyBotHttpApi
+            Path: /{proxy+}
+            Method: ANY
+        ApiHealth:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: StudyBotHttpApi
+            Path: /health
+            Method: GET
+    Metadata:
+      SamResourceId: StudyBotFunction
+  StudyBotHttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: $default
+      CorsConfiguration:
+        AllowOrigins:
+        - '*'
+        AllowMethods:
+        - GET
+        - POST
+        - OPTIONS
+        AllowHeaders:
+        - Content-Type
+        - X-User-Id
+  StudyBotLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName:
+        Fn::Sub: /aws/lambda/studybot-api-${TeamName}
+      RetentionInDays: 3
+  StudyBotDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName:
+        Fn::Sub: StudyBot-${TeamName}
+      DashboardBody:
+        Fn::Sub: "{\n  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"\
+          properties\": {\n        \"title\": \"Lambda Invocations & Errors\",\n \
+          \       \"region\": \"${AWS::Region}\",\n        \"metrics\": [\n      \
+          \    [\"AWS/Lambda\", \"Invocations\", \"FunctionName\", \"studybot-api-${TeamName}\"\
+          ],\n          [\"AWS/Lambda\", \"Errors\",       \"FunctionName\", \"studybot-api-${TeamName}\"\
+          ]\n        ],\n        \"period\": 300, \"stat\": \"Sum\", \"view\": \"\
+          timeSeries\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n    \
+          \  \"properties\": {\n        \"title\": \"Lambda Duration (avg ms)\",\n\
+          \        \"region\": \"${AWS::Region}\",\n        \"metrics\": [\n     \
+          \     [\"AWS/Lambda\", \"Duration\", \"FunctionName\", \"studybot-api-${TeamName}\"\
+          ]\n        ],\n        \"period\": 300, \"stat\": \"Average\", \"view\"\
+          : \"timeSeries\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n\
+          \      \"properties\": {\n        \"title\": \"API Gateway Requests\",\n\
+          \        \"region\": \"${AWS::Region}\",\n        \"metrics\": [\n     \
+          \     [\"AWS/ApiGateway\", \"Count\", \"ApiId\", \"${StudyBotHttpApi}\"\
+          ]\n        ],\n        \"period\": 300, \"stat\": \"Sum\", \"view\": \"\
+          timeSeries\"\n      }\n    }\n  ]\n}\n"
+  StudyBotErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName:
+        Fn::Sub: StudyBot-${TeamName}-LambdaErrors
+      AlarmDescription: Lambda error count > 5 in 5 minutes
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Dimensions:
+      - Name: FunctionName
+        Value:
+          Ref: StudyBotFunction
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Sub: studybot-vpc-${TeamName}
+      - Key: Project
+        Value: W7Capstone
+      - Key: Team
+        Value:
+          Ref: TeamName
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: VPC
+      CidrBlock: 10.0.0.0/24
+      MapPublicIpOnLaunch: true
+      AvailabilityZone:
+        Fn::Select:
+        - 0
+        - Fn::GetAZs: ''
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Sub: studybot-public-subnet-${TeamName}
+      - Key: Project
+        Value: W7Capstone
+      - Key: Team
+        Value:
+          Ref: TeamName
+  PrivateSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: VPC
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: false
+      AvailabilityZone:
+        Fn::Select:
+        - 0
+        - Fn::GetAZs: ''
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Sub: studybot-private-subnet-${TeamName}
+      - Key: Project
+        Value: W7Capstone
+      - Key: Team
+        Value:
+          Ref: TeamName
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Sub: studybot-igw-${TeamName}
+      - Key: Project
+        Value: W7Capstone
+      - Key: Team
+        Value:
+          Ref: TeamName
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId:
+        Ref: VPC
+      InternetGatewayId:
+        Ref: InternetGateway
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: VPC
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Sub: studybot-public-rt-${TeamName}
+      - Key: Project
+        Value: W7Capstone
+      - Key: Team
+        Value:
+          Ref: TeamName
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      RouteTableId:
+        Ref: PublicRouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId:
+        Ref: InternetGateway
+  PublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: PublicSubnet
+      RouteTableId:
+        Ref: PublicRouteTable
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: VPC
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Sub: studybot-private-rt-${TeamName}
+      - Key: Project
+        Value: W7Capstone
+      - Key: Team
+        Value:
+          Ref: TeamName
+  PrivateSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: PrivateSubnet
+      RouteTableId:
+        Ref: PrivateRouteTable
+  PrivateNacl:
+    Type: AWS::EC2::NetworkAcl
+    Properties:
+      VpcId:
+        Ref: VPC
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Sub: studybot-private-nacl-${TeamName}
+      - Key: Project
+        Value: W7Capstone
+      - Key: Team
+        Value:
+          Ref: TeamName
+  PrivateNaclInboundAllowEphemeral:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId:
+        Ref: PrivateNacl
+      RuleNumber: 100
+      Protocol: 6
+      RuleAction: allow
+      Egress: false
+      CidrBlock: '0.0.0.0/0'
+      PortRange:
+        From: 1024
+        To: 65535
+  PrivateNaclInboundAllowHttpsInternal:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId:
+        Ref: PrivateNacl
+      RuleNumber: 110
+      Protocol: 6
+      RuleAction: allow
+      Egress: false
+      CidrBlock: 10.0.0.0/16
+      PortRange:
+        From: 443
+        To: 443
+  PrivateNaclOutboundAllowHttps:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId:
+        Ref: PrivateNacl
+      RuleNumber: 100
+      Protocol: 6
+      RuleAction: allow
+      Egress: true
+      CidrBlock: '0.0.0.0/0'
+      PortRange:
+        From: 443
+        To: 443
+  PrivateNaclOutboundAllowEphemeral:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId:
+        Ref: PrivateNacl
+      RuleNumber: 110
+      Protocol: 6
+      RuleAction: allow
+      Egress: true
+      CidrBlock: '0.0.0.0/0'
+      PortRange:
+        From: 1024
+        To: 65535
+  PrivateSubnetNaclAssociation:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId:
+        Ref: PrivateSubnet
+      NetworkAclId:
+        Ref: PrivateNacl
+  PublicNacl:
+    Type: AWS::EC2::NetworkAcl
+    Properties:
+      VpcId:
+        Ref: VPC
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Sub: studybot-public-nacl-${TeamName}
+      - Key: Project
+        Value: W7Capstone
+      - Key: Team
+        Value:
+          Ref: TeamName
+  PublicNaclInboundAllowHttp:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId:
+        Ref: PublicNacl
+      RuleNumber: 100
+      Protocol: 6
+      RuleAction: allow
+      Egress: false
+      CidrBlock: '0.0.0.0/0'
+      PortRange:
+        From: 80
+        To: 80
+  PublicNaclInboundAllowHttps:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId:
+        Ref: PublicNacl
+      RuleNumber: 110
+      Protocol: 6
+      RuleAction: allow
+      Egress: false
+      CidrBlock: '0.0.0.0/0'
+      PortRange:
+        From: 443
+        To: 443
+  PublicNaclInboundAllowEphemeral:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId:
+        Ref: PublicNacl
+      RuleNumber: 120
+      Protocol: 6
+      RuleAction: allow
+      Egress: false
+      CidrBlock: '0.0.0.0/0'
+      PortRange:
+        From: 1024
+        To: 65535
+  PublicNaclOutboundAllowAll:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId:
+        Ref: PublicNacl
+      RuleNumber: 100
+      Protocol: -1
+      RuleAction: allow
+      Egress: true
+      CidrBlock: '0.0.0.0/0'
+  PublicSubnetNaclAssociation:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId:
+        Ref: PublicSubnet
+      NetworkAclId:
+        Ref: PublicNacl
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security Group for StudyBot Lambda
+      VpcId:
+        Ref: VPC
+      SecurityGroupEgress:
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        CidrIp: '0.0.0.0/0'
+        Description: Allow HTTPS traffic out to VPC Endpoints and AWS services
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Sub: studybot-lambda-sg-${TeamName}
+      - Key: Project
+        Value: W7Capstone
+      - Key: Team
+        Value:
+          Ref: TeamName
+  VpcEndpointsSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security Group for VPC Interface Endpoints
+      VpcId:
+        Ref: VPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        SourceSecurityGroupId:
+          Ref: LambdaSecurityGroup
+        Description: Allow HTTPS traffic from Lambda Security Group
+      SecurityGroupEgress:
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        CidrIp: 10.0.0.0/16
+        Description: Allow HTTPS outbound traffic within VPC
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Sub: studybot-vpce-sg-${TeamName}
+      - Key: Project
+        Value: W7Capstone
+      - Key: Team
+        Value:
+          Ref: TeamName
+  DynamoDbEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId:
+        Ref: VPC
+      ServiceName:
+        Fn::Sub: com.amazonaws.${AWS::Region}.dynamodb
+      VpcEndpointType: Gateway
+      RouteTableIds:
+      - Ref: PrivateRouteTable
+  S3Endpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId:
+        Ref: VPC
+      ServiceName:
+        Fn::Sub: com.amazonaws.${AWS::Region}.s3
+      VpcEndpointType: Gateway
+      RouteTableIds:
+      - Ref: PrivateRouteTable
+  BedrockRuntimeEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId:
+        Ref: VPC
+      ServiceName:
+        Fn::Sub: com.amazonaws.${AWS::Region}.bedrock-runtime
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: true
+      SubnetIds:
+      - Ref: PrivateSubnet
+      SecurityGroupIds:
+      - Ref: VpcEndpointsSecurityGroup
+  BedrockAgentRuntimeEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId:
+        Ref: VPC
+      ServiceName:
+        Fn::Sub: com.amazonaws.${AWS::Region}.bedrock-agent-runtime
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: true
+      SubnetIds:
+      - Ref: PrivateSubnet
+      SecurityGroupIds:
+      - Ref: VpcEndpointsSecurityGroup
+Outputs:
+  ApiUrl:
+    Description: "API Gateway HTTP API URL \u2014 use this as your backend URL"
+    Value:
+      Fn::Sub: https://${StudyBotHttpApi}.execute-api.${AWS::Region}.amazonaws.com
+  LambdaFunctionArn:
+    Description: Lambda function ARN
+    Value:
+      Fn::GetAtt:
+      - StudyBotFunction
+      - Arn
+  LambdaRoleArn:
+    Description: IAM Role ARN (for Evidence Pack security section)
+    Value:
+      Fn::GetAtt:
+      - StudyBotLambdaRole
+      - Arn
+  DynamoTableName:
+    Condition: CreateDynamoTable
+    Description: DynamoDB table name (auto-created)
+    Value:
+      Ref: UserStateTable
+  DashboardUrl:
+    Description: CloudWatch Dashboard URL
+    Value:
+      Fn::Sub: https://${AWS::Region}.console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=StudyBot-${TeamName}
+  VpcId:
+    Description: VPC ID
+    Value:
+      Ref: VPC
+  PrivateSubnetId:
+    Description: Private Subnet ID
+    Value:
+      Ref: PrivateSubnet
+  PublicSubnetId:
+    Description: Public Subnet ID
+    Value:
+      Ref: PublicSubnet
+  LambdaSecurityGroupId:
+    Description: Lambda Security Group ID
+    Value:
+      Ref: LambdaSecurityGroup
