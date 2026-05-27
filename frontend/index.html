@@ -16,6 +16,19 @@
     document.documentElement.setAttribute('data-lang', initialLang);
     document.documentElement.lang = initialLang;
   })();
+
+  // ---------- toggleTheme defined early so inline onclick always works ----------
+  function toggleTheme() {
+    const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
+    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', newTheme);
+    localStorage.setItem('studybot-theme', newTheme);
+    // toast & i18n may not be ready yet — show a simple alert as fallback
+    if (typeof toast === 'function' && typeof t === 'function') {
+      const modeLabel = newTheme === 'dark' ? t('themeDark') : t('themeLight');
+      toast(t('themeSwitched', {mode: modeLabel}), 'success');
+    }
+  }
 </script>
 </head>
 <body>
