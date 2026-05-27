@@ -27,6 +27,15 @@ The system uses a text-layer-first plus image-asset strategy:
 
 This keeps the default path cheap because normal text PDFs do not need OCR. Embedded images are extracted locally, while more expensive OCR/Textract/Vision processing is reserved only for pages that need it.
 
+## Image Filtering
+
+PowerPoint-exported PDFs often split one slide into many small image objects, such as logos, icons, masks, and repeated backgrounds. To avoid storing noisy assets in the Knowledge Base, the extractor filters images before saving them:
+
+- Skip images smaller than `8KB`.
+- Deduplicate images by SHA-256 hash across the whole PDF.
+- Keep the raw image count in metadata so we still know whether a page was visual-heavy.
+- Store only filtered image assets in the `images` list.
+
 ## Output Shape
 
 Upload responses now include extraction metadata:
@@ -77,6 +86,33 @@ This handles scan PDFs, but it is not cost optimal. A slide deck with a valid te
 ### Text parser only
 
 This is the cheapest option, but it fails silently on scan/image-only pages and misses important visual content in slides. In the current implementation, image assets are extracted and weak pages are marked so the production pipeline can route only those pages to OCR/Textract/Vision.
+
+## Test Evidence
+
+Test file: `tests/W6_Operations_Hardening_&_Cost-Aware_Cloud_-_Nhóm_15.pptx.pdf`
+
+Hybrid extraction result:
+
+```text
+page_count: 20
+chars_extracted: 5671
+images_extracted: 27
+pages_requiring_ocr: [20]
+```
+
+Image filtering comparison:
+
+```text
+Without filtering: 83 image objects
+After size filtering: 43 image assets
+After size filtering + document-level deduplication: 27 image assets
+```
+
+Interpretation:
+
+- Pages 1-19 have usable text layers, so they can be ingested without OCR.
+- Page 20 has very little text but contains images, so it is routed to OCR/Textract.
+- The image filter reduces noisy visual assets by about 67% while keeping useful slide images/charts.
 
 ## Files
 

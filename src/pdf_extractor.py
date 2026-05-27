@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import io
 import re
+import hashlib
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -15,6 +16,7 @@ from typing import Any
 
 MIN_TEXT_CHARS_FOR_TEXT_LAYER = 40
 MAX_IMAGE_CONTEXT_CHARS = 500
+MIN_IMAGE_BYTES_TO_KEEP = 8 * 1024
 
 
 @dataclass
@@ -101,6 +103,15 @@ def _content_type_for_filename(filename: str) -> str:
 
 
 def _extract_images(page: Any, page_number: int, output_dir: Path | None = None) -> list[ImageExtraction]:
+    return _extract_images_with_dedup(page, page_number, output_dir, set())
+
+
+def _extract_images_with_dedup(
+    page: Any,
+    page_number: int,
+    output_dir: Path | None,
+    seen_hashes: set[str],
+) -> list[ImageExtraction]:
     images: list[ImageExtraction] = []
     try:
         page_images = list(page.images)
@@ -113,6 +124,12 @@ def _extract_images(page: Any, page_number: int, output_dir: Path | None = None)
     for image_index, image in enumerate(page_images, start=1):
         filename = _safe_image_name(getattr(image, "name", None), page_number, image_index)
         data = getattr(image, "data", b"") or b""
+        if len(data) < MIN_IMAGE_BYTES_TO_KEEP:
+            continue
+        digest = hashlib.sha256(data).hexdigest()
+        if digest in seen_hashes:
+            continue
+        seen_hashes.add(digest)
         location = None
         if output_dir and data:
             path = output_dir / filename
@@ -180,14 +197,15 @@ def extract_pdf(data: bytes, image_output_dir: str | Path | None = None) -> Docu
 
     reader = PdfReader(io.BytesIO(data))
     image_dir = Path(image_output_dir) if image_output_dir else None
+    seen_image_hashes: set[str] = set()
     pages: list[PageExtraction] = []
     body_parts: list[str] = []
 
     for idx, page in enumerate(reader.pages, start=1):
         raw_text = page.extract_text() or ""
         text = _clean_text(raw_text)
-        extracted_images = _extract_images(page, idx, image_dir)
-        images = len(extracted_images) if extracted_images else _image_count(page)
+        images = _image_count(page)
+        extracted_images = _extract_images_with_dedup(page, idx, image_dir, seen_image_hashes)
         table_lines = _table_like_line_count(text)
         warnings: list[str] = []
 
