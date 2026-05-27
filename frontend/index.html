@@ -86,6 +86,9 @@
           <span data-i18n="refresh"></span>
         </button>
       </div>
+      <div class="search-box-container" style="margin: 0 0 1rem; position: relative;">
+        <input type="text" id="doc-search" placeholder="🔍 Search library..." oninput="filterDocs()" style="width: 100%; padding: 0.55rem 0.8rem; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.8rem; background: rgba(0,0,0,0.15); color: var(--text); outline: none; transition: all 0.3s ease;">
+      </div>
       <div class="doc-list" id="docs">
         <div class="empty">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 44px; height: 44px; margin-bottom: 0.5rem; opacity: 0.4;">
@@ -127,6 +130,41 @@
         <input type="file" id="file" accept=".pdf,.txt,.md">
       </label>
       <div id="upload-result"></div>
+
+      <!-- Advanced Chunking Settings Options -->
+      <div style="margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 1rem;">
+        <details>
+          <summary style="font-weight: 600; color: var(--accent); cursor: pointer; display: flex; align-items: center; gap: 0.4rem; font-size: 0.84rem; outline: none; user-select: none;">
+            <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+            Chunking Settings (Cấu hình Tách)
+          </summary>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.8rem; margin-top: 0.8rem; padding: 0.8rem; background: rgba(255,255,255,0.02); border-radius: var(--radius-sm); border: 1px solid var(--border);">
+            <div>
+              <label style="font-size: 0.78rem; font-weight: 700; display: block; margin-bottom: 0.3rem;">Chiến lược Chunking</label>
+              <select id="chunk-strategy" style="width: 100%; padding: 0.45rem; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.82rem; background: var(--card); color: var(--text);" onchange="toggleStrategyFields()">
+                <option value="fixed">Fixed-Size (Sentence-aware)</option>
+                <option value="structural">Structural (Markdown Headers)</option>
+                <option value="semantic">Local Semantic (Jaccard)</option>
+              </select>
+            </div>
+            <div id="field-size">
+              <label style="font-size: 0.78rem; font-weight: 700; display: block; margin-bottom: 0.3rem;">Kích thước Chunk (ký tự)</label>
+              <input type="number" id="chunk-size" value="500" style="width: 100%; padding: 0.4rem; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.82rem; background: var(--card); color: var(--text);">
+            </div>
+            <div id="field-overlap">
+              <label style="font-size: 0.78rem; font-weight: 700; display: block; margin-bottom: 0.3rem;">Overlap gối đầu (ký tự)</label>
+              <input type="number" id="chunk-overlap" value="100" style="width: 100%; padding: 0.4rem; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.82rem; background: var(--card); color: var(--text);">
+            </div>
+            <div id="field-threshold" style="display: none;">
+              <label style="font-size: 0.78rem; font-weight: 700; display: block; margin-bottom: 0.3rem;">Ngưỡng Semantic Distance</label>
+              <input type="number" id="chunk-threshold" value="0.3" step="0.05" min="0" max="1" style="width: 100%; padding: 0.4rem; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.82rem; background: var(--card); color: var(--text);">
+            </div>
+          </div>
+        </details>
+      </div>
     </section>
 
     <!-- Step 2: Ask Question Card -->
@@ -221,6 +259,68 @@
       </section>
     </div>
 
+    <!-- Step 4: RAG Quality Dashboard Card -->
+    <section class="card" id="benchmark-section" style="display: none;">
+      <div class="card-header">
+        <div class="card-title-group">
+          <span class="step">📊</span>
+          <h2>RAG Quality Dashboard</h2>
+        </div>
+        <span class="meta">Evaluate chunking quality</span>
+      </div>
+      
+      <div style="margin-bottom: 1.5rem;">
+        <p style="margin: 0 0 1rem; font-size: 0.88rem; color: var(--muted); line-height: 1.6;">
+          Hệ thống tự động thực thi **5 câu hỏi kiểm thử** đặc trưng về Photosynthesis, đối chiếu ranh giới ngữ cảnh tìm kiếm với các từ khóa đáp án chuẩn (ground truth) để tính toán độ chính xác. Bạn có thể thay đổi cấu hình tách ở Bước 1 và nhấn chạy lại benchmark để đo lường độ chính xác thay đổi trong thời gian thực!
+        </p>
+        <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center;">
+          <button class="primary" id="benchmark-btn" onclick="runBenchmark()" style="background: var(--success); box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);">
+            <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="5 3 19 12 5 21 5 3"></polygon>
+            </svg>
+            Chạy Bộ Đánh Giá Benchmark
+          </button>
+          <span id="benchmark-status" style="font-size: 0.82rem; color: var(--muted); font-weight: 500;"></span>
+        </div>
+      </div>
+      
+      <div id="benchmark-results" style="display: none; border-top: 1px solid var(--border); padding-top: 1.5rem;">
+        <h3 style="margin: 0 0 1rem; font-size: 0.96rem; font-weight: 700; color: var(--text);">Chỉ số Chất lượng Tìm kiếm (RAG Quality Metrics)</h3>
+        
+        <!-- Metrics Grid -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+          
+          <div style="padding: 1rem; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: var(--radius-sm); text-align: center; box-shadow: var(--shadow-sm);">
+            <div style="font-size: 0.7rem; font-weight: 700; text-transform: uppercase; color: var(--muted); margin-bottom: 0.3rem; letter-spacing: 0.05em;">Precision@1</div>
+            <div id="metric-p1" style="font-size: 1.8rem; font-weight: 800; color: var(--accent);">0%</div>
+            <div style="font-size: 0.68rem; color: var(--muted); margin-top: 0.2rem;">Độ chính xác top-1</div>
+          </div>
+
+          <div style="padding: 1rem; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: var(--radius-sm); text-align: center; box-shadow: var(--shadow-sm);">
+            <div style="font-size: 0.7rem; font-weight: 700; text-transform: uppercase; color: var(--muted); margin-bottom: 0.3rem; letter-spacing: 0.05em;">Precision@3</div>
+            <div id="metric-p3" style="font-size: 1.8rem; font-weight: 800; color: var(--accent);">0%</div>
+            <div style="font-size: 0.68rem; color: var(--muted); margin-top: 0.2rem;">Độ chính xác top-3</div>
+          </div>
+
+          <div style="padding: 1rem; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: var(--radius-sm); text-align: center; box-shadow: var(--shadow-sm);">
+            <div style="font-size: 0.7rem; font-weight: 700; text-transform: uppercase; color: var(--muted); margin-bottom: 0.3rem; letter-spacing: 0.05em;">Precision@5</div>
+            <div id="metric-p5" style="font-size: 1.8rem; font-weight: 800; color: var(--accent);">0%</div>
+            <div style="font-size: 0.68rem; color: var(--muted); margin-top: 0.2rem;">Độ chính xác top-5</div>
+          </div>
+
+          <div style="padding: 1rem; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: var(--radius-sm); text-align: center; box-shadow: var(--shadow-sm);">
+            <div style="font-size: 0.7rem; font-weight: 700; text-transform: uppercase; color: var(--muted); margin-bottom: 0.3rem; letter-spacing: 0.05em;">MRR</div>
+            <div id="metric-mrr" style="font-size: 1.8rem; font-weight: 800; color: var(--success);">0.00</div>
+            <div style="font-size: 0.68rem; color: var(--muted); margin-top: 0.2rem;">Thứ hạng trung bình</div>
+          </div>
+
+        </div>
+
+        <h3 style="margin: 1.5rem 0 1rem; font-size: 0.92rem; font-weight: 700; color: var(--text);">Chi tiết truy xuất 5 câu hỏi kiểm thử</h3>
+        <div id="benchmark-queries" style="display: grid; gap: 1.25rem;"></div>
+      </div>
+    </section>
+
     <!-- Raw Drawer (Accordion) -->
     <details>
       <summary>
@@ -240,6 +340,8 @@
 // ============================================================================
 // Multi-Tenant & Config Setup
 // ============================================================================
+const API_BASE = "https://1lse4odraj.execute-api.ap-southeast-1.amazonaws.com";
+const USER_ID = "test-user-001";
 function detectTenant() {
   const hostname = window.location.hostname;
   let tenant = 'default';
@@ -249,7 +351,6 @@ function detectTenant() {
   } else if (hostname.endsWith('.localhost')) {
     tenant = hostname.replace('.localhost', '');
   } else {
-    // Allows query override e.g. ?tenant=demo or ?tenant=admin for local testing
     tenant = new URLSearchParams(location.search).get('tenant') || 'default';
   }
   
@@ -258,12 +359,6 @@ function detectTenant() {
 }
 
 const ACTIVE_TENANT = detectTenant();
-
-const API_BASE = (window.API_BASE
-  || new URLSearchParams(location.search).get('api')
-  || '').replace(/\/$/, '');
-
-const USER_ID = (new URLSearchParams(location.search).get('user') || 'test-user-001');
 
 // ============================================================================
 // i18n
@@ -526,6 +621,23 @@ async function call(path, opts = {}) {
   return {ok: r.ok, status: r.status, body};
 }
 
+function toggleStrategyFields() {
+  const strat = $('chunk-strategy').value;
+  if (strat === 'fixed') {
+    $('field-size').style.display = 'block';
+    $('field-overlap').style.display = 'block';
+    $('field-threshold').style.display = 'none';
+  } else if (strat === 'semantic') {
+    $('field-size').style.display = 'none';
+    $('field-overlap').style.display = 'none';
+    $('field-threshold').style.display = 'block';
+  } else {
+    $('field-size').style.display = 'none';
+    $('field-overlap').style.display = 'none';
+    $('field-threshold').style.display = 'none';
+  }
+}
+
 // ============================================================================
 // Backend status
 // ============================================================================
@@ -536,7 +648,6 @@ async function loadStatus() {
     return;
   }
   
-  // Render status pills dynamically
   const statusHtml = Object.entries(res.body.backends)
     .map(([k, v]) => {
       const label = v === 'local' ? t('statusLocal') : t('statusRemote');
@@ -544,7 +655,6 @@ async function loadStatus() {
     })
     .join('');
     
-  // Append current active tenant name for visual transparency
   const tenantBadgeHtml = `<span class="pill" style="border-color: rgba(var(--accent-rgb), 0.3); background: rgba(var(--accent-rgb), 0.1); color: var(--accent);">${t('statusTenant')}: ${ACTIVE_TENANT}</span>`;
   
   $('status-pills').innerHTML = tenantBadgeHtml + statusHtml;
@@ -574,7 +684,20 @@ async function doUpload(file) {
     
   const fd = new FormData();
   fd.append('file', file);
-  const res = await call('/upload', {method: 'POST', body: fd});
+
+  const strategy = $('chunk-strategy').value;
+  const size = $('chunk-size').value;
+  const overlap = $('chunk-overlap').value;
+  const threshold = $('chunk-threshold').value;
+
+  let queryParams = `?strategy=${strategy}`;
+  if (strategy === 'fixed') {
+    queryParams += `&size=${size}&overlap=${overlap}`;
+  } else if (strategy === 'semantic') {
+    queryParams += `&threshold=${threshold}`;
+  }
+
+  const res = await call(`/upload${queryParams}`, {method: 'POST', body: fd});
   
   if (!res.ok) {
     toast(t('uploadFailed', {detail: res.body.detail || res.status}), 'error');
@@ -594,11 +717,15 @@ async function doUpload(file) {
         </svg>
         <strong>${b.filename}</strong>
       </div>
-      <div>${t('uploadSuccessChars', {chars: b.chars_extracted.toLocaleString()})}</div>
+      <div>${t('uploadSuccessChars', {chars: b.chars_extracted.toLocaleString()})} (using <code>${strategy}</code> chunking)</div>
       <div class="upload-success-meta">${t('uploadSuccessDoc', {docId: b.doc_id})}</div>
     </div>`;
     
   toast(t('uploadedToast', {filename: b.filename}), 'success');
+
+  window.lastDocId = b.doc_id;
+  window.lastDocName = b.filename;
+
   refresh();
 }
 
@@ -631,16 +758,13 @@ async function ask() {
   if (!q) { toast(t('toastAskEmpty'), 'warn'); return; }
   $('answer-card').setAttribute('data-has-messages', 'true');
   
-  // Clear the input box immediately to support chat feel
   $('question').value = '';
   
-  // 1. Remove previous response IDs to avoid duplicated query selectors in DOM
   const prevAns = $('answer-text');
   if (prevAns) prevAns.removeAttribute('id');
   const prevCit = $('citations');
   if (prevCit) prevCit.removeAttribute('id');
   
-  // 2. Append User Bubble
   const userBubbleHtml = `
     <div class="chat-bubble user">
       <div class="bubble-avatar">
@@ -657,7 +781,6 @@ async function ask() {
   `;
   $('answer-card').insertAdjacentHTML('beforeend', userBubbleHtml);
   
-  // 3. Append AI thinking bubble placeholder
   const aiBubbleHtml = `
     <div class="chat-bubble ai">
       <div class="bubble-avatar">
@@ -680,10 +803,8 @@ async function ask() {
   `;
   $('answer-card').insertAdjacentHTML('beforeend', aiBubbleHtml);
   
-  // Scroll to bottom immediately after adding the message
   $('answer-card').scrollTop = $('answer-card').scrollHeight;
   
-  // 4. Fire API Request
   $('ask-btn').disabled = true;
   const res = await call('/query', {
     method: 'POST',
@@ -692,7 +813,6 @@ async function ask() {
   });
   $('ask-btn').disabled = false;
   
-  // 5. Render Response
   if (!res.ok) {
     $('answer-text').innerHTML = `<span style="color:var(--error); font-weight: 500;">${res.body.detail || t('errorQuery')}</span>`;
     $('answer-card').scrollTop = $('answer-card').scrollHeight;
@@ -728,7 +848,6 @@ async function ask() {
     $('citations').innerHTML = `<div class="muted" style="font-size:0.82rem; margin-top:0.6rem; text-align: center;">${t('citationsNone')}</div>`;
   }
   
-  // Smooth scroll to bottom after rendering answer and citations
   setTimeout(() => {
     $('answer-card').scrollTo({
       top: $('answer-card').scrollHeight,
@@ -1041,6 +1160,89 @@ function initLanguageControls() {
 }
 
 // ============================================================================
+// RAG Quality Evaluation Benchmark
+// ============================================================================
+async function runBenchmark() {
+  const docId = window.selectedDocId || window.lastDocId;
+  if (!docId) {
+    toast("Please upload or select a document first!", "warn");
+    return;
+  }
+
+  $('benchmark-btn').disabled = true;
+  $('benchmark-status').innerHTML = '<span class="spinner"></span> Running benchmark evaluation...';
+  $('benchmark-results').style.display = 'none';
+
+  const strategy = $('chunk-strategy').value;
+  const size = $('chunk-size').value;
+  const overlap = $('chunk-overlap').value;
+  const threshold = $('chunk-threshold').value;
+
+  const payload = {
+    strategy: strategy,
+    size: parseInt(size) || 500,
+    overlap: parseInt(overlap) || 100,
+    threshold: parseFloat(threshold) || 0.3
+  };
+
+  const res = await call(`/docs/${docId}/evaluate`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(payload)
+  });
+
+  $('benchmark-btn').disabled = false;
+  $('benchmark-status').textContent = '';
+
+  if (!res.ok) {
+    toast(`Evaluation failed: ${res.body.detail || res.status}`, 'error');
+    return;
+  }
+
+  const data = res.body;
+
+  // Show benchmark results
+  $('benchmark-results').style.display = 'block';
+
+  // Update cards
+  const m = data.metrics;
+  $('metric-p1').textContent = `${(m.precision_at_1 * 100).toFixed(0)}%`;
+  $('metric-p3').textContent = `${(m.precision_at_3 * 100).toFixed(0)}%`;
+  $('metric-p5').textContent = `${(m.precision_at_5 * 100).toFixed(0)}%`;
+  $('metric-mrr').textContent = m.mrr.toFixed(2);
+
+  // Populate individual query results
+  $('benchmark-queries').innerHTML = data.queries.map((q, qidx) => {
+    return `
+      <div style="border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.9rem; background: var(--bg); margin-bottom: 0.5rem;">
+        <div style="font-weight: 700; font-size: 0.9rem; margin-bottom: 0.4rem; color: var(--text);">
+          Q${qidx + 1}: ${q.query}
+        </div>
+        <div style="font-size: 0.74rem; color: var(--muted); margin-bottom: 0.6rem; display: flex; justify-content: space-between;">
+          <span>Target Keywords: <code>${q.keywords.join(', ')}</code></span>
+          <span style="font-weight:600; color: ${q.metrics.mrr > 0 ? 'var(--success)' : 'var(--error)'}">
+            MRR: ${q.metrics.mrr.toFixed(2)} | P@3: ${(q.metrics.precision_at_3 * 100).toFixed(0)}%
+          </span>
+        </div>
+        <div style="display: grid; gap: 0.5rem;">
+          ${q.retrieved.map(r => `
+            <div style="padding: 0.6rem; background: var(--card); border-left: 3px solid ${r.relevant ? 'var(--success)' : 'var(--error)'}; font-size: 0.78rem; border-radius: 0 4px 4px 0; border-top: 1px solid var(--border); border-right: 1px solid var(--border); border-bottom: 1px solid var(--border);">
+              <div style="display:flex; justify-content: space-between; font-weight:600; font-size: 0.72rem; color: var(--muted); margin-bottom:0.25rem;">
+                <span>Chunk Index ${r.chunk} (Score: ${r.score.toFixed(2)})</span>
+                <span style="color: ${r.relevant ? 'var(--success)' : 'var(--error)'}">${r.relevant ? '✓ RELEVANT (Match)' : '✗ IRRELEVANT (No Match)'}</span>
+              </div>
+              <div style="white-space: pre-wrap; font-family: var(--font-sans); line-height:1.4; color: var(--text);">${r.text.replace(/</g, '&lt;')}</div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  toast("Evaluation completed successfully!", "success");
+}
+
+// ============================================================================
 // Doc list
 // ============================================================================
 async function refresh() {
@@ -1054,29 +1256,110 @@ async function refresh() {
         </svg>
         <div>${t('libraryEmpty')}</div>
       </div>`;
+    $('benchmark-section').style.display = 'none';
+    return;
+  }
+
+  $('benchmark-section').style.display = 'block';
+
+  if (!window.lastDocId) {
+    window.lastDocId = res.body.docs[0].doc_id;
+    window.lastDocName = res.body.docs[0].filename;
+  }
+
+  $('docs').innerHTML = res.body.docs.map(d => {
+    const isSelected = d.doc_id === (window.selectedDocId || window.lastDocId);
+    if (isSelected) {
+      window.selectedDocId = d.doc_id;
+      window.selectedDocName = d.filename;
+    }
+
+    const hint = d.filename.toLowerCase().includes('photosynthesis') 
+      ? '<span style="color: var(--success); font-weight: 700; font-size: 0.72rem; margin-left: 0.4rem;">💡 Recommended</span>' 
+      : '';
+      
+    return `
+      <div class="doc-item" style="cursor: pointer; ${isSelected ? 'border-color: var(--accent); background: rgba(var(--accent-rgb), 0.08);' : ''}" onclick="selectDoc('${d.doc_id}', '${d.filename}')">
+        <div class="doc-item-left">
+          <div class="doc-icon" style="${isSelected ? 'color: var(--accent); background: rgba(var(--accent-rgb), 0.15);' : ''}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+              <polyline points="10 9 9 9 8 9"></polyline>
+            </svg>
+          </div>
+          <div>
+            <div class="name" style="display:flex; align-items:center; gap:0.25rem;">
+              ${isSelected ? '🔹 ' : ''}${d.filename || d.doc_id} ${hint}
+            </div>
+            <div class="meta">${t('docMeta', {chars: (d.chars || 0).toLocaleString(), size: (d.size/1024).toFixed(1)})}</div>
+          </div>
+        </div>
+        <div class="doc-item-right" style="font-family: var(--font-mono); font-size: 0.72rem; text-align: right; display: flex; flex-direction: column; justify-content: space-between; align-items: flex-end;">
+          <div>${(d.doc_id || '').slice(0, 8)}</div>
+          <div style="font-size:0.65rem; font-weight:700; color:var(--accent); margin-top:0.15rem;">${isSelected ? 'Active' : 'Select'}</div>
+          <button class="ghost delete-btn" style="color: var(--error); padding: 2px 4px; margin-top: 6px; border: none; background: transparent; cursor: pointer; display: flex; align-items: center; gap: 3px; font-size: 0.7rem; font-weight: 600;" onclick="event.stopPropagation(); deleteDocument('${d.doc_id}', '${d.filename.replace(/'/g, "\\'")}')" title="Delete document">
+            <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            </svg>
+            Delete
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function selectDoc(docId, filename) {
+  window.selectedDocId = docId;
+  window.selectedDocName = filename;
+  toast(`Selected document: ${filename}`, 'info');
+  refresh();
+}
+
+async function deleteDocument(docId, filename) {
+  if (!confirm(`Are you sure you want to delete "${filename}"? This will delete the file from storage and clear its vector index.`)) {
     return;
   }
   
-  $('docs').innerHTML = res.body.docs.map(d => `
-    <div class="doc-item">
-      <div class="doc-item-left">
-        <div class="doc-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-            <polyline points="14 2 14 8 20 8"></polyline>
-            <line x1="16" y1="13" x2="8" y2="13"></line>
-            <line x1="16" y1="17" x2="8" y2="17"></line>
-            <polyline points="10 9 9 9 8 9"></polyline>
-          </svg>
-        </div>
-        <div>
-          <div class="name">${d.filename || d.doc_id}</div>
-          <div class="meta">${t('docMeta', {chars: (d.chars || 0).toLocaleString(), size: (d.size/1024).toFixed(1)})}</div>
-        </div>
-      </div>
-      <div class="doc-item-right">${(d.doc_id || '').slice(0, 8)}</div>
-    </div>
-  `).join('');
+  toast(`Deleting ${filename}...`, 'info');
+  const res = await call(`/docs/${docId}`, {method: 'DELETE'});
+  
+  if (!res.ok) {
+    toast(`Delete failed: ${res.body.detail || res.status}`, 'error');
+    return;
+  }
+  
+  toast(`Deleted ${filename}`, 'success');
+  
+  if (window.selectedDocId === docId || window.lastDocId === docId) {
+    window.selectedDocId = null;
+    window.selectedDocName = null;
+    window.lastDocId = null;
+    window.lastDocName = null;
+  }
+  
+  refresh();
+}
+
+function filterDocs() {
+  const query = $('doc-search').value.toLowerCase().trim();
+  const items = document.querySelectorAll('.doc-item');
+  items.forEach(item => {
+    // Search within the name element
+    const nameEl = item.querySelector('.name');
+    if (nameEl) {
+      const name = nameEl.textContent.toLowerCase();
+      if (name.includes(query)) {
+        item.style.display = 'flex';
+      } else {
+        item.style.display = 'none';
+      }
+    }
+  });
 }
 
 // ============================================================================
