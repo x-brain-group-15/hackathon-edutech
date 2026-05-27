@@ -397,3 +397,52 @@ def handle_evaluate(
         "queries": queries_results,
     }
 
+
+def handle_delete_doc(
+    user_id: str,
+    doc_id: str,
+    storage,
+    userstore,
+    vector_store,
+) -> dict:
+    """Delete a document from userstore, storage, and clear it from vector store."""
+    docs = userstore.list_docs(user_id)
+    doc = next((d for d in docs if d["doc_id"] == doc_id), None)
+    if not doc:
+        raise ValueError(f"Document {doc_id} not found for user {user_id}")
+
+    filename = doc.get("filename", "unknown")
+    key = f"{user_id}/{doc_id}/{filename}"
+
+    # 1. Delete from storage
+    try:
+        storage.delete(key)
+    except Exception:
+        pass
+
+    # 2. Delete from UserStore
+    userstore.delete_doc(user_id, doc_id)
+
+    # 3. Clear from Vector store
+    if hasattr(vector_store, "clear_doc"):
+        vector_store.clear_doc(doc_id)
+
+    # 4. If using Bedrock KB, trigger a sync so Bedrock deletes embeddings of the deleted S3 file
+    if hasattr(vector_store, "kb_id"):
+        try:
+            import boto3
+            client = boto3.client("bedrock-agent", region_name=vector_store.agent_runtime.meta.region_name)
+            ds_resp = client.list_data_sources(knowledgeBaseId=vector_store.kb_id)
+            ds_summaries = ds_resp.get("dataSourceSummaries", [])
+            if ds_summaries:
+                ds_id = ds_summaries[0]["dataSourceId"]
+                client.start_ingestion_job(
+                    knowledgeBaseId=vector_store.kb_id,
+                    dataSourceId=ds_id
+                )
+        except Exception:
+            pass
+
+    return {"status": "success", "message": f"Document {filename} deleted successfully"}
+
+

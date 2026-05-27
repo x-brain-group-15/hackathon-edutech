@@ -144,6 +144,24 @@ def evaluate(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.delete("/docs/{doc_id}")
+def delete_doc(doc_id: str, x_user_id: str | None = Header(default=None)) -> dict:
+    user_id = _resolve_user_id(x_user_id)
+    try:
+        return handlers.handle_delete_doc(
+            user_id=user_id,
+            doc_id=doc_id,
+            storage=storage,
+            userstore=userstore,
+            vector_store=vector_store,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
 @app.get("/docs/list")
 def list_docs(x_user_id: str | None = Header(default=None)) -> dict:
     return handlers.handle_list_docs(_resolve_user_id(x_user_id), userstore)
