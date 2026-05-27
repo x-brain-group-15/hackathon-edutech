@@ -11,7 +11,7 @@ from src.config import config
 from src.pdf_extractor import extract_pdf
 
 logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+logger.setLevel(getattr(logging, config.log_level.upper(), logging.INFO))
 
 
 def log_event(event_type: str, **kwargs):
@@ -72,26 +72,12 @@ def handle_upload(
     threshold: Optional[float] = None,
 ) -> dict:
     """Store the file, extract text, ingest into vector store, record in userstore."""
+
+    start_time = time.time()
+    doc_id = str(uuid.uuid4())
     try:
-        start_time = time.time()
-        doc_id = str(uuid.uuid4())
         key = f"{user_id}/{doc_id}/{filename}"
         location = storage.put(key, data)
-        
-        # Write companion metadata.json for Bedrock KB multi-tenant filtering
-        try:
-            import json
-            metadata_json = {
-                "metadataAttributes": {
-                    "user_id": user_id,
-                    "doc_id": doc_id,
-                    "filename": filename
-                }
-            }
-            storage.put(key + ".metadata.json", json.dumps(metadata_json).encode("utf-8"))
-        except Exception:
-            pass
-            
         text = _extract_text(filename, data)
         if text.strip():
             vector_store.ingest(
@@ -125,6 +111,7 @@ def handle_upload(
             "chars_extracted": len(text),
             "location": location,
         }
+
     except Exception as e:
         latency_ms = int((time.time() - start_time) * 1000)
 
@@ -669,6 +656,8 @@ def handle_evaluate(
             },
             "queries": queries_results,
         }
+
+
     except Exception as e:
         latency_ms = int((time.time() - start_time) * 1000)
 
@@ -683,71 +672,4 @@ def handle_evaluate(
             status="error"
         )
 
-        log_step(
-            "evaluate",
-            "evaluate_failed",
-            user_id=user_id,
-            doc_id=doc_id,
-            latency_ms=latency_ms,
-            error_type=type(e).__name__,
-            status="error"
-        )
-
         raise
-
-
-def handle_delete_doc(
-    user_id: str,
-    doc_id: str,
-    storage,
-    userstore,
-    vector_store,
-) -> dict:
-    """Delete a document from userstore, storage, and clear it from vector store."""
-    docs = userstore.list_docs(user_id)
-    doc = next((d for d in docs if d["doc_id"] == doc_id), None)
-    if not doc:
-        raise ValueError(f"Document {doc_id} not found for user {user_id}")
-
-    filename = doc.get("filename", "unknown")
-    key = f"{user_id}/{doc_id}/{filename}"
-
-    # 1. Delete from storage
-    try:
-        storage.delete(key)
-    except Exception:
-        pass
-    try:
-        storage.delete(key + ".metadata.json")
-    except Exception:
-        pass
-
-    # 2. Delete from UserStore
-    userstore.delete_doc(user_id, doc_id)
-
-    # 3. Clear from Vector store
-    if hasattr(vector_store, "clear_doc"):
-        vector_store.clear_doc(doc_id)
-
-    # 4. If using Bedrock KB, trigger a sync so Bedrock deletes embeddings of the deleted S3 file
-    if hasattr(vector_store, "kb_id"):
-        try:
-            import boto3
-            from botocore.config import Config
-            # Use a fast timeout (2.0s) so the Lambda doesn't hang if the bedrock-agent control plane endpoint
-            # is unreachable from the isolated private subnet VPC (since there is no VPC endpoint for bedrock-agent)
-            config = Config(connect_timeout=2.0, read_timeout=2.0, retries={"max_attempts": 0})
-            client = boto3.client("bedrock-agent", region_name=vector_store.agent_runtime.meta.region_name, config=config)
-            ds_resp = client.list_data_sources(knowledgeBaseId=vector_store.kb_id)
-            ds_summaries = ds_resp.get("dataSourceSummaries", [])
-            if ds_summaries:
-                ds_id = ds_summaries[0]["dataSourceId"]
-                client.start_ingestion_job(
-                    knowledgeBaseId=vector_store.kb_id,
-                    dataSourceId=ds_id
-                )
-        except Exception:
-            pass
-
-    return {"status": "success", "message": f"Document {filename} deleted successfully"}
-
