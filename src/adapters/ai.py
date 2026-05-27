@@ -8,7 +8,7 @@ from typing import Any
 
 
 class BedrockAI:
-    """Real Amazon Bedrock client. Uses Converse API for invoke; bedrock-agent-runtime for RAG."""
+    """Real Amazon Bedrock client. Uses Converse API for invoke; bedrock-agent-runtime for RAG with fallbacks."""
 
     def __init__(self, region: str, model_id: str):
         import boto3
@@ -17,36 +17,22 @@ class BedrockAI:
         self.runtime = boto3.client("bedrock-runtime", region_name=region)
         self.agent_runtime = boto3.client("bedrock-agent-runtime", region_name=region)
 
-    def invoke(self, prompt: str, **kwargs: Any) -> str:
-        max_tokens = kwargs.get("max_tokens", 1024)
-        resp = self.runtime.converse(
-            modelId=self.model_id,
-            messages=[{"role": "user", "content": [{"text": prompt}]}],
-            inferenceConfig={"maxTokens": max_tokens, "temperature": kwargs.get("temperature", 0.2)},
-        )
-        return resp["output"]["message"]["content"][0]["text"]
-
-    def _build_rag_model_arn(self) -> str:
-        """Build model ARN for RetrieveAndGenerate.
-
-        Newer models (Claude 3.5 Sonnet v2+, Claude Sonnet 4+) do NOT support
-        on-demand throughput directly. They require a cross-region inference
-        profile, whose ID is prefixed with the region group (us./eu./ap.).
-
-        Examples:
-          Old (on-demand OK):  arn:..::foundation-model/anthropic.claude-3-5-haiku-20241022-v1:0
-          New (needs profile): arn:..::foundation-model/ap.anthropic.claude-sonnet-4-5-20250929-v1:0
-        """
-        model_id = self.model_id
+    def _build_arn_for_model(self, model_id: str) -> str:
+        """Build model ARN or Inference Profile ARN dynamically based on region constraints."""
         region_group = self.region.split("-")[0]  # "us", "eu", "ap"
 
         # Models released after mid-2024 require cross-region inference profiles.
-        # If the model_id doesn't already carry a region-group prefix, add one.
         NEEDS_PROFILE_PREFIXES = (
             "claude-3-5-sonnet-20241022",
             "claude-3-7",
             "claude-sonnet-4",
-            "claude-3-5-haiku-20250307",  # haiku v2+
+            "claude-3-5-haiku-20250307",
+            "claude-sonnet-4-5",
+            "claude-haiku-4-5",
+            "claude-sonnet-4-6",
+            "nova-2-lite",
+            "nova-lite",
+            "nova-pro",
         )
         needs_prefix = any(p in model_id for p in NEEDS_PROFILE_PREFIXES)
         already_prefixed = any(model_id.startswith(f"{p}.") for p in ("us", "eu", "ap"))
@@ -62,57 +48,93 @@ class BedrockAI:
         else:
             return f"arn:aws:bedrock:{self.region}::foundation-model/{model_id}"
 
+    def invoke(self, prompt: str, **kwargs: Any) -> str:
+        max_tokens = kwargs.get("max_tokens", 1024)
+        
+        # Fallback list in user-specified priority order
+        models_to_try = [
+            self.model_id,
+            "anthropic.claude-sonnet-4-5-20250929-v1:0",
+            "amazon.nova-2-lite-v1:0",
+            "amazon.nova-lite-v1:0",
+            "anthropic.claude-haiku-4-5-20251001-v1:0",
+            "anthropic.claude-sonnet-4-6",
+            "amazon.nova-pro-v1:0",
+            "anthropic.claude-3-haiku-20240307-v1:0"
+        ]
+
+        import logging
+        logger = logging.getLogger("StudyBot")
+
+        last_error = None
+        for model_id in models_to_try:
+            model_arn = self._build_arn_for_model(model_id)
+            logger.info(f"Attempting invoke with model: {model_id} (ARN: {model_arn})")
+            try:
+                resp = self.runtime.converse(
+                    modelId=model_arn,
+                    messages=[{"role": "user", "content": [{"text": prompt}]}],
+                    inferenceConfig={"maxTokens": max_tokens, "temperature": kwargs.get("temperature", 0.2)},
+                )
+                logger.info(f"Successfully invoked Converse API using model: {model_id}")
+                return resp["output"]["message"]["content"][0]["text"]
+            except Exception as e:
+                logger.warning(f"invoke failed with model {model_id}: {e}")
+                last_error = e
+
+        raise last_error
+
     def retrieve_and_generate(self, query: str, kb_id: str = "") -> dict:
         if not kb_id:
             raise ValueError("VECTOR_BEDROCK_KB_ID must be set for Bedrock KB retrieve_and_generate")
 
-        model_arn = self._build_rag_model_arn()
-        try:
-            resp = self.agent_runtime.retrieve_and_generate(
-                input={"text": query},
-                retrieveAndGenerateConfiguration={
-                    "type": "KNOWLEDGE_BASE",
-                    "knowledgeBaseConfiguration": {
-                        "knowledgeBaseId": kb_id,
-                        "modelArn": model_arn,
-                    },
-                },
-            )
-        except Exception as first_err:
-            # Fallback: if the configured model fails (e.g. on-demand not supported or invalid),
-            # retry once with Claude 3 Haiku which is universally supported in ap-southeast-1
-            # and other regions, and always supports on-demand throughput.
-            import logging
-            logging.getLogger("StudyBot").warning(
-                f"retrieve_and_generate failed with model {model_arn}: {first_err}. "
-                "Retrying with claude-3-haiku fallback."
-            )
-            fallback_arn = (
-                f"arn:aws:bedrock:{self.region}::foundation-model/"
-                f"anthropic.claude-3-haiku-20240307-v1:0"
-            )
-            resp = self.agent_runtime.retrieve_and_generate(
-                input={"text": query},
-                retrieveAndGenerateConfiguration={
-                    "type": "KNOWLEDGE_BASE",
-                    "knowledgeBaseConfiguration": {
-                        "knowledgeBaseId": kb_id,
-                        "modelArn": fallback_arn,
-                    },
-                },
-            )
+        # Fallback list in user-specified priority order
+        models_to_try = [
+            self.model_id,
+            "anthropic.claude-sonnet-4-5-20250929-v1:0",
+            "amazon.nova-2-lite-v1:0",
+            "amazon.nova-lite-v1:0",
+            "anthropic.claude-haiku-4-5-20251001-v1:0",
+            "anthropic.claude-sonnet-4-6",
+            "amazon.nova-pro-v1:0",
+            "anthropic.claude-3-haiku-20240307-v1:0"
+        ]
 
-        return {
-            "answer": resp["output"]["text"],
-            "citations": [
-                {
-                    "text": ref.get("content", {}).get("text", ""),
-                    "source": ref.get("location", {}),
+        import logging
+        logger = logging.getLogger("StudyBot")
+
+        last_error = None
+        for model_id in models_to_try:
+            model_arn = self._build_arn_for_model(model_id)
+            logger.info(f"Attempting retrieve_and_generate with model: {model_id} (ARN: {model_arn})")
+            try:
+                resp = self.agent_runtime.retrieve_and_generate(
+                    input={"text": query},
+                    retrieveAndGenerateConfiguration={
+                        "type": "KNOWLEDGE_BASE",
+                        "knowledgeBaseConfiguration": {
+                            "knowledgeBaseId": kb_id,
+                            "modelArn": model_arn,
+                        },
+                    },
+                )
+                logger.info(f"Successfully generated answer using model: {model_id}")
+                return {
+                    "answer": resp["output"]["text"],
+                    "citations": [
+                        {
+                            "text": ref.get("content", {}).get("text", ""),
+                            "source": ref.get("location", {}),
+                        }
+                        for citation in resp.get("citations", [])
+                        for ref in citation.get("retrievedReferences", [])
+                    ],
                 }
-                for citation in resp.get("citations", [])
-                for ref in citation.get("retrievedReferences", [])
-            ],
-        }
+            except Exception as e:
+                logger.warning(f"retrieve_and_generate failed with model {model_id}: {e}")
+                last_error = e
+
+        raise last_error
 
 
 
