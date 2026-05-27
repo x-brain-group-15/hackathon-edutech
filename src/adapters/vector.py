@@ -150,6 +150,15 @@ class LocalVector:
         for chunk_id, text, md in self.docs:
             if filter and not all(md.get(k) == v for k, v in filter.items()):
                 continue
+            if not q_tokens:
+                # Empty query: return all matching chunks (used as fallback in quiz)
+                results.append({
+                    "text": text,
+                    "doc_id": md.get("doc_id", chunk_id),
+                    "score": 1.0,
+                    "metadata": md,
+                })
+                continue
             d_tokens = Counter(self._tokens(text))
             score = sum(d_tokens[t] for t in q_tokens)
             if score > 0:

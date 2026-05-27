@@ -1139,7 +1139,7 @@ button.ghost:hover {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 0.75rem;
-  align-items: start;
+  align-items: center;
   padding: 0.85rem 1rem;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -1160,14 +1160,9 @@ button.ghost:hover {
 
 .doc-item-left {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 0.75rem;
   min-width: 0;
-}
-
-.doc-item-info {
-  min-width: 0;
-  flex: 1;
 }
 
 .doc-icon {
@@ -1202,26 +1197,9 @@ button.ghost:hover {
   font-weight: 600;
   color: var(--text);
   font-size: 0.88rem;
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  min-width: 0;
-  flex-wrap: wrap;
-}
-
-.doc-item .name-text {
-  min-width: 0;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.doc-hint {
-  flex-shrink: 0;
-  flex-basis: 100%;
-  font-size: 0.72rem;
-  font-weight: 700;
-  color: var(--success);
 }
 
 .doc-item .meta {
@@ -1236,7 +1214,6 @@ button.ghost:hover {
   gap: 0.3rem;
   min-width: 90px;
   flex-shrink: 0;
-  align-self: start;
 }
 
 .doc-id {

@@ -1,16 +1,18 @@
-﻿"""Endpoint handlers. Pure business logic — knows nothing about FastAPI or AWS specifics."""
+"""Endpoint handlers. Pure business logic — knows nothing about FastAPI or AWS specifics."""
+import re
 import uuid
 import json
 import time
 import logging
 import traceback
+from pathlib import Path
 from typing import Optional
 
 from src.config import config
 from src.pdf_extractor import extract_pdf
 
 logger = logging.getLogger()
-logger.setLevel(getattr(logging, config.log_level.upper(), logging.INFO))
+logger.setLevel(logging.INFO)
 
 
 def log_event(event_type: str, **kwargs):
@@ -42,37 +44,39 @@ QUESTION: {question}
 ANSWER:"""
 
 
-FLASHCARD_PROMPT = """You are a study assistant. Generate {limit} flashcards for the topic: "{topic}".
-Base the flashcards ONLY on the provided context if available. 
-Return the output STRICTLY as a JSON array of objects, where each object has "front" (the question) and "back" (the answer). Do NOT include any markdown code blocks, text, or explanation before or after the JSON array.
+QUIZ_PROMPT_TEMPLATE = """You are an expert educator. Generate {num_questions} multiple-choice quiz questions
+based ONLY on the content below. Difficulty level: {difficulty}.
 
-CONTEXT:
+Difficulty guidelines:
+- easy: factual recall, definitions, straightforward concepts
+- medium: application of concepts, cause-and-effect, comparisons
+- hard: analysis, synthesis, edge cases, nuanced understanding
+
+CONTENT:
 {context}
+
+Return ONLY a valid JSON array (no markdown, no extra text) with this exact structure:
+[
+  {{
+    "question": "Question text here?",
+    "options": {{
+      "A": "First option",
+      "B": "Second option",
+      "C": "Third option",
+      "D": "Fourth option"
+    }},
+    "answer": "A",
+    "explanation": "Brief explanation of why this answer is correct."
+  }}
+]
+
+Rules:
+- Each question must have exactly 4 options (A, B, C, D)
+- The "answer" field must be one of: A, B, C, D
+- Questions must be grounded in the provided content only
+- Do not repeat questions
+- Output ONLY the JSON array, nothing else
 """
-
-def _put_cloudwatch_metric(metric_name: str, value: float, unit: str, aws_region: str, status: str = "Success"):
-    """Real-world scenario: Put custom metrics to CloudWatch to monitor AI operations."""
-    try:
-        import boto3
-        cw = boto3.client("cloudwatch", region_name=aws_region)
-        cw.put_metric_data(
-            Namespace="StudyBot",
-            MetricData=[
-                {
-                    "MetricName": metric_name,
-                    "Value": value,
-                    "Unit": unit,
-                    "Dimensions": [
-                        {"Name": "Feature", "Value": "FlashcardGeneration"},
-                        {"Name": "Status", "Value": status}
-                    ]
-                }
-            ]
-        )
-    except Exception as e:
-        # Never fail the user request just because metrics failed to publish
-        print(f"Failed to put CloudWatch metric: {e}")
-
 
 
 def _extract_text(filename: str, data: bytes) -> str:
@@ -82,10 +86,12 @@ def _extract_text(filename: str, data: bytes) -> str:
             return extract_pdf(data).text
         except RuntimeError as exc:
             return f"({exc})"
+    # Default: assume UTF-8 text
     try:
         return data.decode("utf-8", errors="replace")
     except Exception:
         return ""
+
 
 def handle_upload(
     user_id: str,
@@ -99,17 +105,13 @@ def handle_upload(
     overlap: Optional[int] = None,
     threshold: Optional[float] = None,
 ) -> dict:
-    start_time = time.time()
-    doc_id = str(uuid.uuid4())
-    key = f"{user_id}/{doc_id}/{filename}"
-
-    log_step("upload", "upload_start", user_id=user_id, doc_id=doc_id, filename=filename, size=len(data))
-
+    """Store the file, extract text, ingest into vector store, record in userstore."""
     try:
-        log_step("upload", "store_file_start", user_id=user_id, doc_id=doc_id, filename=filename)
+        start_time = time.time()
+        doc_id = str(uuid.uuid4())
+        key = f"{user_id}/{doc_id}/{filename}"
         location = storage.put(key, data)
-        log_step("upload", "store_file_done", user_id=user_id, doc_id=doc_id, filename=filename, location=location)
-
+        
         # Write companion metadata.json for Bedrock KB multi-tenant filtering
         try:
             import json
@@ -117,65 +119,29 @@ def handle_upload(
                 "metadataAttributes": {
                     "user_id": user_id,
                     "doc_id": doc_id,
-                    "filename": filename,
+                    "filename": filename
                 }
             }
             storage.put(key + ".metadata.json", json.dumps(metadata_json).encode("utf-8"))
         except Exception:
             pass
-
-        extraction_metadata = {}
-        log_step("upload", "extract_text_start", user_id=user_id, doc_id=doc_id, filename=filename)
-        if filename.lower().endswith(".pdf"):
-            asset_prefix = f"{user_id}/{doc_id}/extracted-assets"
-
-            def write_image_asset(asset_filename: str, asset_data: bytes) -> str:
-                return storage.put(f"{asset_prefix}/{asset_filename}", asset_data)
-
-            extracted = extract_pdf(data, image_writer=write_image_asset)
-            text = extracted.text
-            extraction_metadata = extracted.metadata
-            extraction_metadata["asset_prefix"] = asset_prefix
-        else:
-            text = _extract_text(filename, data)
-        log_step("upload", "extract_text_done", user_id=user_id, doc_id=doc_id, filename=filename, chars_extracted=len(text))
-
+            
+        text = _extract_text(filename, data)
         if text.strip():
-            log_step("upload", "vector_ingest_start", user_id=user_id, doc_id=doc_id, filename=filename, strategy=strategy or "default")
             vector_store.ingest(
                 doc_id=doc_id,
                 text=text,
-                metadata={
-                    "user_id": user_id,
-                    "filename": filename,
-                    "extraction_strategy": extraction_metadata.get("strategy", "plain_text"),
-                    "asset_prefix": extraction_metadata.get("asset_prefix", ""),
-                },
+                metadata={"user_id": user_id, "filename": filename},
                 strategy=strategy,
                 size=size,
                 overlap=overlap,
                 threshold=threshold,
             )
-            log_step("upload", "vector_ingest_done", user_id=user_id, doc_id=doc_id, filename=filename, strategy=strategy or "default")
-        else:
-            log_step("upload", "vector_ingest_skipped", user_id=user_id, doc_id=doc_id, filename=filename, message="No text extracted from document")
-
-        log_step("upload", "save_metadata_start", user_id=user_id, doc_id=doc_id, filename=filename)
         userstore.add_doc(
             user_id=user_id,
             doc_id=doc_id,
-            metadata={
-                "filename": filename,
-                "size": len(data),
-                "location": location,
-                "chars": len(text),
-                "extraction": extraction_metadata,
-            },
+            metadata={"filename": filename, "size": len(data), "location": location, "chars": len(text)},
         )
-        log_step("upload", "save_metadata_done", user_id=user_id, doc_id=doc_id, filename=filename)
-
-        latency_ms = int((time.time() - start_time) * 1000)
-
         log_event(
             "DOCUMENT_UPLOAD",
             user_id=user_id,
@@ -183,23 +149,16 @@ def handle_upload(
             filename=filename,
             size=len(data),
             chars_extracted=len(text),
-            images_extracted=extraction_metadata.get("images_extracted", 0),
-            pages_requiring_ocr=extraction_metadata.get("pages_requiring_ocr", []),
             location=location,
-            status="success",
+            status="success"
         )
-
-        log_step("upload", "upload_completed", user_id=user_id, doc_id=doc_id, filename=filename, latency_ms=latency_ms, status="success")
-
         return {
             "doc_id": doc_id,
             "filename": filename,
             "size": len(data),
             "chars_extracted": len(text),
             "location": location,
-            "extraction": extraction_metadata,
         }
-
     except Exception as e:
         latency_ms = int((time.time() - start_time) * 1000)
 
@@ -212,19 +171,7 @@ def handle_upload(
             error_type=type(e).__name__,
             error_message=str(e),
             stack_trace=traceback.format_exc(),
-            status="error",
-        )
-
-        log_step(
-            "upload",
-            "upload_failed",
-            user_id=user_id,
-            doc_id=doc_id,
-            filename=filename,
-            latency_ms=latency_ms,
-            error_type=type(e).__name__,
-            message=str(e),
-            status="error",
+            status="error"
         )
 
         raise
@@ -473,99 +420,7 @@ def handle_recent_queries(user_id: str, userstore, limit: int = 10) -> dict:
     return {"user_id": user_id, "queries": queries}
 
 
-def handle_delete_doc(
-    user_id: str,
-    doc_id: str,
-    storage,
-    userstore,
-    vector_store,
-) -> dict:
-    """Delete a document: remove from storage, vector store, and userstore."""
-
-    start_time = time.time()
-
-    log_step(
-        "delete_doc",
-        "delete_doc_start",
-        user_id=user_id,
-        doc_id=doc_id,
-    )
-
-    try:
-        # 1. Find the document metadata to get the filename / S3 key
-        docs = userstore.list_docs(user_id)
-        doc = next((d for d in docs if d["doc_id"] == doc_id), None)
-
-        if not doc:
-            raise ValueError(f"Document {doc_id} not found for user {user_id}")
-
-        filename = doc.get("filename", "unknown")
-        key = f"{user_id}/{doc_id}/{filename}"
-
-        log_step(
-            "delete_doc",
-            "found_document",
-            user_id=user_id,
-            doc_id=doc_id,
-            filename=filename,
-        )
-
-        # 2. Delete from object storage (best-effort — don't crash if missing)
-        try:
-            storage.delete(key)
-            log_step("delete_doc", "storage_deleted", user_id=user_id, doc_id=doc_id, key=key)
-        except Exception as e:
-            logger.warning(f"Storage delete failed for {key}: {e}")
-
-        # 3. Delete chunks from vector store (best-effort)
-        try:
-            if hasattr(vector_store, "clear_doc"):
-                vector_store.clear_doc(doc_id)
-                log_step("delete_doc", "vector_cleared", user_id=user_id, doc_id=doc_id)
-        except Exception as e:
-            logger.warning(f"Vector store clear_doc failed for {doc_id}: {e}")
-
-        # 4. Remove from userstore
-        userstore.delete_doc(user_id=user_id, doc_id=doc_id)
-
-        latency_ms = int((time.time() - start_time) * 1000)
-
-        log_event(
-            "DOCUMENT_DELETE",
-            user_id=user_id,
-            doc_id=doc_id,
-            filename=filename,
-            latency_ms=latency_ms,
-            status="success",
-        )
-
-        log_step(
-            "delete_doc",
-            "delete_doc_done",
-            user_id=user_id,
-            doc_id=doc_id,
-            latency_ms=latency_ms,
-            status="success",
-        )
-
-        return {"doc_id": doc_id, "deleted": True}
-
-    except Exception as e:
-        latency_ms = int((time.time() - start_time) * 1000)
-
-        log_event(
-            "DELETE_ERROR",
-            user_id=user_id,
-            doc_id=doc_id,
-            latency_ms=latency_ms,
-            error_type=type(e).__name__,
-            error_message=str(e),
-            stack_trace=traceback.format_exc(),
-            status="error",
-        )
-
-        raise
-
+# ── Teammate feature: chunking strategy evaluation ────────────────────────
 
 def handle_evaluate(
     user_id: str,
@@ -721,21 +576,10 @@ def handle_evaluate(
                 query=q
             )
 
-            # Filter by BOTH user_id AND doc_id so we only evaluate chunks
-            # from the specific document — not all documents of this user.
-            chunks = vector_store.search(q, top_k=5, filter={"user_id": user_id, "doc_id": doc_id})
-            if not chunks:
-                # Fallback 1: filter by user_id only (covers cases where doc_id metadata is missing)
-                chunks = vector_store.search(q, top_k=5, filter={"user_id": user_id})
+            chunks = vector_store.search(q, top_k=5, filter={"user_id": user_id})
             if not chunks and hasattr(vector_store, "kb_id"):
-                # Fallback 2: Bedrock KB — metadata sidecars may not have been written yet
+                # Fallback for legacy Bedrock KB files that don't have metadata sidecars
                 chunks = vector_store.search(q, top_k=5, filter=None)
-            # Post-filter: if we got chunks from multiple docs, keep only those belonging to this doc
-            if chunks and doc_id:
-                doc_chunks = [c for c in chunks if c.get("doc_id") == doc_id or c.get("metadata", {}).get("doc_id") == doc_id]
-                if doc_chunks:
-                    chunks = doc_chunks
-
 
             log_step(
                 "evaluate",
@@ -861,8 +705,6 @@ def handle_evaluate(
             },
             "queries": queries_results,
         }
-
-
     except Exception as e:
         latency_ms = int((time.time() - start_time) * 1000)
 
@@ -877,40 +719,276 @@ def handle_evaluate(
             status="error"
         )
 
+        log_step(
+            "evaluate",
+            "evaluate_failed",
+            user_id=user_id,
+            doc_id=doc_id,
+            latency_ms=latency_ms,
+            error_type=type(e).__name__,
+            status="error"
+        )
+
         raise
 
 
-def handle_generate_flashcards(user_id: str, topic: str, limit: int, doc_id: Optional[str], vector_store, llm_backend) -> dict:
-    start_time = time.time()
+def handle_delete_doc(
+    user_id: str,
+    doc_id: str,
+    storage,
+    userstore,
+    vector_store,
+) -> dict:
+    """Delete a document from userstore, storage, and clear it from vector store."""
+    docs = userstore.list_docs(user_id)
+    doc = next((d for d in docs if d["doc_id"] == doc_id), None)
+    if not doc:
+        raise ValueError(f"Document {doc_id} not found for user {user_id}")
+
+    filename = doc.get("filename", "unknown")
+    key = f"{user_id}/{doc_id}/{filename}"
+
+    # 1. Delete from storage
     try:
-        context = ""
+        storage.delete(key)
+    except Exception:
+        pass
+    try:
+        storage.delete(key + ".metadata.json")
+    except Exception:
+        pass
+
+    # 2. Delete from UserStore
+    userstore.delete_doc(user_id, doc_id)
+
+    # 3. Clear from Vector store
+    if hasattr(vector_store, "clear_doc"):
+        vector_store.clear_doc(doc_id)
+
+    # 4. If using Bedrock KB, trigger a sync so Bedrock deletes embeddings of the deleted S3 file
+    if hasattr(vector_store, "kb_id"):
+        try:
+            import boto3
+            from botocore.config import Config
+            # Use a fast timeout (2.0s) so the Lambda doesn't hang if the bedrock-agent control plane endpoint
+            # is unreachable from the isolated private subnet VPC (since there is no VPC endpoint for bedrock-agent)
+            config = Config(connect_timeout=2.0, read_timeout=2.0, retries={"max_attempts": 0})
+            client = boto3.client("bedrock-agent", region_name=vector_store.agent_runtime.meta.region_name, config=config)
+            ds_resp = client.list_data_sources(knowledgeBaseId=vector_store.kb_id)
+            ds_summaries = ds_resp.get("dataSourceSummaries", [])
+            if ds_summaries:
+                ds_id = ds_summaries[0]["dataSourceId"]
+                client.start_ingestion_job(
+                    knowledgeBaseId=vector_store.kb_id,
+                    dataSourceId=ds_id
+                )
+        except Exception:
+            pass
+
+    return {"status": "success", "message": f"Document {filename} deleted successfully"}
+
+
+# ── Quiz feature ───────────────────────────────────────────────────────────
+
+_VALID_DIFFICULTIES = {"easy", "medium", "hard"}
+
+
+def handle_quiz(
+    user_id: str,
+    doc_id: Optional[str],
+    difficulty: str,
+    num_questions: int,
+    ai_client,
+    userstore,
+    vector_store,
+    vector_backend: str,
+    bedrock_kb_id: str,
+    storage=None,
+) -> dict:
+    """Generate a multiple-choice quiz from the user's uploaded documents.
+
+    Flow:
+      1. If doc_id given → fetch full text from storage for that source (precise).
+         If no doc_id → retrieve chunks from vector store across all user docs.
+      2. Build a quiz-generation prompt with the retrieved context.
+      3. Call AI to produce a JSON array of questions.
+      4. Parse + validate the response.
+      5. Persist the quiz in userstore and return it.
+    """
+    start_time = time.time()
+
+    difficulty = difficulty.lower()
+    if difficulty not in _VALID_DIFFICULTIES:
+        difficulty = "medium"
+    num_questions = max(1, min(num_questions, 20))  # clamp 1-20
+
+    log_step("quiz", "quiz_start", user_id=user_id, doc_id=doc_id,
+             difficulty=difficulty, num_questions=num_questions)
+
+    # --- 1. Retrieve context ---
+    context = ""
+    resolved_doc_id = doc_id or "all"
+
+    if doc_id and storage:
+        # Scoped to a specific doc: pull full text directly from storage
+        # so the quiz covers the entire source, not just indexed chunks.
+        docs = userstore.list_docs(user_id)
+        doc_meta = next((d for d in docs if d["doc_id"] == doc_id), None)
+
+        if not doc_meta:
+            return {
+                "quiz_id": None,
+                "doc_id": doc_id,
+                "difficulty": difficulty,
+                "num_questions": 0,
+                "questions": [],
+                "error": f"Document {doc_id} not found.",
+            }
+
+        filename = doc_meta.get("filename", "unknown")
+        key = f"{user_id}/{doc_id}/{filename}"
+        try:
+            data = storage.get(key)
+            text = _extract_text(filename, data)
+            if text.strip():
+                # Chunk the text to stay within token limits
+                from src import chunker as _chunker
+                chunks_text = _chunker.chunk_fixed(text, size=500, overlap=100)
+                # Take up to 10 chunks for context
+                context = "\n\n".join(
+                    f"[chunk {i+1}] {c}" for i, c in enumerate(chunks_text[:10])
+                )
+        except Exception as e:
+            log_event("QUIZ_STORAGE_FALLBACK", user_id=user_id, doc_id=doc_id,
+                      error=str(e))
+            # Fall through to vector search fallback below
+
+    if not context:
+        # Fallback: vector search (used when no doc_id, or storage fetch failed)
+        search_filter: dict = {"user_id": user_id}
         if doc_id:
-            results = vector_store.search(doc_id=doc_id, query=topic, limit=10)
-            context = "\n\n".join(r["text"] for r in results)
-        
-        prompt = FLASHCARD_PROMPT.format(limit=limit, topic=topic, context=context)
-        response = llm_backend.generate(prompt)
-        
-        # Clean JSON markdown
-        clean_json = response.strip()
-        if clean_json.startswith("```json"):
-            clean_json = clean_json[7:]
-        elif clean_json.startswith("```"):
-            clean_json = clean_json[3:]
-        if clean_json.endswith("```"):
-            clean_json = clean_json[:-3]
-        clean_json = clean_json.strip()
-        
-        flashcards = json.loads(clean_json)
-        
-        latency_ms = int((time.time() - start_time) * 1000)
-        _put_cloudwatch_metric("FlashcardGenerationLatency", latency_ms, "Milliseconds", "ap-southeast-1", "Success")
-        _put_cloudwatch_metric("FlashcardGenerationSuccess", 1, "Count", "ap-southeast-1", "Success")
-        
-        return {"flashcards": flashcards}
-    except Exception as e:
-        latency_ms = int((time.time() - start_time) * 1000)
-        _put_cloudwatch_metric("FlashcardGenerationFailure", 1, "Count", "ap-southeast-1", "Failed")
-        print(f"Error generating flashcards: {e}")
-        traceback.print_exc()
-        raise
+            search_filter["doc_id"] = doc_id
+
+        if vector_backend == "bedrock_kb":
+            chunks = vector_store.search(
+                query="key concepts definitions important facts",
+                top_k=10,
+                filter=search_filter,
+            )
+        else:
+            chunks = vector_store.search(
+                query="key concepts definitions important facts",
+                top_k=10,
+                filter=search_filter,
+            )
+            if not chunks:
+                chunks = vector_store.search(query="", top_k=10, filter=search_filter)
+
+        if not chunks:
+            return {
+                "quiz_id": None,
+                "doc_id": resolved_doc_id,
+                "difficulty": difficulty,
+                "num_questions": 0,
+                "questions": [],
+                "error": "No content found. Upload a document first.",
+            }
+
+        context = "\n\n".join(f"[chunk {i+1}] {c['text']}" for i, c in enumerate(chunks))
+
+    log_step("quiz", "context_ready", user_id=user_id, doc_id=resolved_doc_id,
+             context_chars=len(context))
+
+    # --- 2. Build prompt ---
+    prompt = QUIZ_PROMPT_TEMPLATE.format(
+        num_questions=num_questions,
+        difficulty=difficulty,
+        context=context,
+    )
+
+    # --- 3. Call AI ---
+    log_step("quiz", "ai_invoke_start", user_id=user_id)
+    raw = ai_client.generate_quiz(prompt, max_tokens=2048, temperature=0.4)
+    log_step("quiz", "ai_invoke_done", user_id=user_id, raw_chars=len(raw))
+
+    # --- 4. Parse JSON ---
+    questions = _parse_quiz_json(raw)
+
+    # --- 5. Persist + return ---
+    quiz_id = str(uuid.uuid4())
+    userstore.save_quiz(
+        user_id=user_id,
+        quiz_id=quiz_id,
+        doc_id=resolved_doc_id,
+        difficulty=difficulty,
+        questions=questions,
+    )
+
+    latency_ms = int((time.time() - start_time) * 1000)
+    log_event("QUIZ_GENERATED", user_id=user_id, quiz_id=quiz_id,
+              doc_id=resolved_doc_id, difficulty=difficulty,
+              num_questions=len(questions), latency_ms=latency_ms, status="success")
+
+    return {
+        "quiz_id": quiz_id,
+        "doc_id": resolved_doc_id,
+        "difficulty": difficulty,
+        "num_questions": len(questions),
+        "questions": questions,
+    }
+
+
+def handle_list_quizzes(user_id: str, userstore, limit: int = 20) -> dict:
+    return {"user_id": user_id, "quizzes": userstore.list_quizzes(user_id, limit=limit)}
+
+
+def _parse_quiz_json(raw: str) -> list:
+    """Extract and validate a JSON array of quiz questions from the AI response.
+
+    Handles cases where the model wraps the JSON in markdown code fences.
+    Returns an empty list if parsing fails rather than raising.
+    """
+    # Strip markdown code fences if present
+    text = raw.strip()
+    fence_match = re.search(r"```(?:json)?\s*([\s\S]*?)```", text)
+    if fence_match:
+        text = fence_match.group(1).strip()
+
+    # Find the first '[' ... ']' block in case there's preamble text
+    bracket_match = re.search(r"\[[\s\S]*\]", text)
+    if bracket_match:
+        text = bracket_match.group(0)
+
+    try:
+        data = json.loads(text)
+    except (json.JSONDecodeError, ValueError):
+        return []
+
+    if not isinstance(data, list):
+        return []
+
+    validated = []
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+        question = item.get("question", "").strip()
+        options = item.get("options", {})
+        answer = str(item.get("answer", "")).strip().upper()
+        explanation = item.get("explanation", "").strip()
+
+        # Basic validation
+        if not question:
+            continue
+        if not isinstance(options, dict) or not all(k in options for k in ("A", "B", "C", "D")):
+            continue
+        if answer not in ("A", "B", "C", "D"):
+            continue
+
+        validated.append({
+            "question": question,
+            "options": {k: str(v) for k, v in options.items() if k in ("A", "B", "C", "D")},
+            "answer": answer,
+            "explanation": explanation,
+        })
+
+    return validated

@@ -52,6 +52,16 @@ class BedrockAI:
             ],
         }
 
+    def generate_quiz(self, prompt: str, **kwargs: Any) -> str:
+        """Call Bedrock Converse with a quiz-generation prompt. Returns raw text (JSON string)."""
+        max_tokens = kwargs.get("max_tokens", 2048)
+        resp = self.runtime.converse(
+            modelId=self.model_id,
+            messages=[{"role": "user", "content": [{"text": prompt}]}],
+            inferenceConfig={"maxTokens": max_tokens, "temperature": kwargs.get("temperature", 0.4)},
+        )
+        return resp["output"]["message"]["content"][0]["text"]
+
 
 class LocalAI:
     """Local stub. Returns canned responses. Use for development without AWS credentials."""
@@ -71,3 +81,21 @@ class LocalAI:
             ),
             "citations": [],
         }
+
+    def generate_quiz(self, prompt: str, **kwargs: Any) -> str:
+        import json as _json
+        stub_questions = [
+            {
+                "question": "[LOCAL_AI_STUB] Sample question 1 — set AI_BACKEND=bedrock for real questions.",
+                "options": {"A": "Option A", "B": "Option B", "C": "Option C", "D": "Option D"},
+                "answer": "A",
+                "explanation": "This is a stub explanation.",
+            },
+            {
+                "question": "[LOCAL_AI_STUB] Sample question 2.",
+                "options": {"A": "Option A", "B": "Option B", "C": "Option C", "D": "Option D"},
+                "answer": "B",
+                "explanation": "This is a stub explanation.",
+            },
+        ]
+        return _json.dumps(stub_questions, ensure_ascii=False)
