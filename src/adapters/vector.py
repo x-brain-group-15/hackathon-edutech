@@ -73,24 +73,50 @@ class LocalVector:
         return [t.lower() for t in re.findall(r"\w+", text) if len(t) > 2]
 
     @staticmethod
-    def _chunk(text: str, size: int = 500) -> list:
-        # Naive chunking by sentence-ish boundaries
-        sentences = re.split(r"(?<=[.!?])\s+", text)
-        chunks, current = [], ""
-        for s in sentences:
-            if len(current) + len(s) < size:
-                current += " " + s
-            else:
-                if current.strip():
-                    chunks.append(current.strip())
-                current = s
-        if current.strip():
-            chunks.append(current.strip())
-        return chunks or [text]
+    def _chunk(
+        text: str,
+        strategy: Optional[str] = None,
+        size: Optional[int] = None,
+        overlap: Optional[int] = None,
+        threshold: Optional[float] = None,
+    ) -> list:
+        from src import chunker
+        from src.config import config
 
-    def ingest(self, doc_id: str, text: str, metadata: Optional[dict] = None) -> None:
+        strat = strategy or config.chunking_strategy
+        sz = size or config.chunk_size
+        ov = overlap or config.chunk_overlap
+        th = threshold or config.semantic_threshold
+
+        if strat == "structural":
+            return chunker.chunk_structural(text)
+        elif strat == "semantic":
+            return chunker.chunk_semantic(text, threshold=th)
+        else:  # fixed_size
+            return chunker.chunk_fixed(text, size=sz, overlap=ov)
+
+    def clear_doc(self, doc_id: str) -> None:
+        self.docs = [d for d in self.docs if d[2].get("doc_id") != doc_id]
+
+    def ingest(
+        self,
+        doc_id: str,
+        text: str,
+        metadata: Optional[dict] = None,
+        strategy: Optional[str] = None,
+        size: Optional[int] = None,
+        overlap: Optional[int] = None,
+        threshold: Optional[float] = None,
+    ) -> None:
         md = metadata or {}
-        for i, chunk in enumerate(self._chunk(text)):
+        chunks = self._chunk(
+            text,
+            strategy=strategy,
+            size=size,
+            overlap=overlap,
+            threshold=threshold,
+        )
+        for i, chunk in enumerate(chunks):
             self.docs.append((f"{doc_id}#{i}", chunk, {**md, "doc_id": doc_id, "chunk_idx": i}))
 
     def search(self, query: str, top_k: int = 5, filter: Optional[dict] = None) -> list:
