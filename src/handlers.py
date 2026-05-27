@@ -431,7 +431,11 @@ def handle_delete_doc(
     if hasattr(vector_store, "kb_id"):
         try:
             import boto3
-            client = boto3.client("bedrock-agent", region_name=vector_store.agent_runtime.meta.region_name)
+            from botocore.config import Config
+            # Use a fast timeout (2.0s) so the Lambda doesn't hang if the bedrock-agent control plane endpoint
+            # is unreachable from the isolated private subnet VPC (since there is no VPC endpoint for bedrock-agent)
+            config = Config(connect_timeout=2.0, read_timeout=2.0, retries={"max_attempts": 0})
+            client = boto3.client("bedrock-agent", region_name=vector_store.agent_runtime.meta.region_name, config=config)
             ds_resp = client.list_data_sources(knowledgeBaseId=vector_store.kb_id)
             ds_summaries = ds_resp.get("dataSourceSummaries", [])
             if ds_summaries:
