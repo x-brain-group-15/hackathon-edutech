@@ -409,6 +409,7 @@ const I18N = {
     themeLight: 'light',
     themeDark: 'dark',
     toastAskEmpty: 'Type a question first',
+    fileTooLarge: 'File is too large ({size} MB). Maximum size allowed is {max}MB.',
     uploading: 'Uploading {filename} ({size} KB)...',
     uploadFailed: 'Upload failed: {detail}',
     uploadFailedShort: 'Upload failed',
@@ -527,6 +528,7 @@ const I18N = {
     themeLight: 'sáng',
     themeDark: 'tối',
     toastAskEmpty: 'Hãy nhập câu hỏi trước',
+    fileTooLarge: 'File vượt quá dung lượng cho phép ({size} MB). Dung lượng tối đa là {max}MB.',
     uploading: 'Đang tải {filename} ({size} KB)...',
     uploadFailed: 'Tải lên thất bại: {detail}',
     uploadFailedShort: 'Tải lên thất bại',
@@ -766,6 +768,19 @@ drop.addEventListener('drop', e => {
 fileInput.addEventListener('change', e => { if (e.target.files[0]) doUpload(e.target.files[0]); });
 
 async function doUpload(file) {
+  const MAX_SIZE_MB = 10;
+  const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024;
+  if (file.size > MAX_SIZE_BYTES) {
+    const sizeInMB = (file.size / (1024 * 1024)).toFixed(1);
+    const errorMsg = t('fileTooLarge', {size: sizeInMB, max: MAX_SIZE_MB});
+    toast(errorMsg, 'error');
+    $('upload-result').innerHTML = `
+      <p style="color:var(--error); margin:0.8rem 0 0; font-size: 0.88rem; font-weight: 500;">
+        ${errorMsg}
+      </p>`;
+    return;
+  }
+
   $('upload-result').innerHTML = `
     <p class="muted" style="margin:0.8rem 0 0; font-size: 0.88rem; display: flex; align-items: center; gap: 0.5rem;">
       <span class="spinner"></span> 
@@ -1364,8 +1379,8 @@ async function refresh() {
       window.selectedDocName = d.filename;
     }
 
-    const hint = d.filename.toLowerCase().includes('photosynthesis') 
-      ? `<span style="color: var(--success); font-weight: 700; font-size: 0.72rem; margin-left: 0.4rem;">💡 ${t('docRecommended')}</span>` 
+    const hint = d.filename.toLowerCase().includes('photosynthesis')
+      ? `<span class="doc-hint">💡 ${t('docRecommended')}</span>`
       : '';
       
     return `
@@ -1380,9 +1395,10 @@ async function refresh() {
               <polyline points="10 9 9 9 8 9"></polyline>
             </svg>
           </div>
-          <div>
-            <div class="name" style="display:flex; align-items:center; gap:0.25rem;">
-              ${isSelected ? '🔹 ' : ''}${d.filename || d.doc_id} ${hint}
+          <div class="doc-item-info">
+            <div class="name">
+              <span class="name-text">${isSelected ? '🔹 ' : ''}${d.filename || d.doc_id}</span>
+              ${hint}
             </div>
             <div class="meta">${t('docMeta', {chars: (d.chars || 0).toLocaleString(), size: (d.size/1024).toFixed(1)})}</div>
           </div>
