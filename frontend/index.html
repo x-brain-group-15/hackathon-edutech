@@ -4,341 +4,197 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>StudyBot — AI Study Buddy</title>
-<style>
-  /* ---------- Design tokens ---------- */
-  :root {
-    --accent: #4f46e5;          /* StudyBot = indigo */
-    --accent-light: #eef2ff;
-    --accent-dark: #3730a3;
-    --bg: #f8fafc;
-    --card: #ffffff;
-    --text: #0f172a;
-    --muted: #64748b;
-    --border: #e2e8f0;
-    --shadow-sm: 0 1px 2px rgba(15, 23, 42, .06);
-    --shadow: 0 1px 3px rgba(15, 23, 42, .08), 0 1px 2px rgba(15, 23, 42, .04);
-    --shadow-lg: 0 10px 30px -10px rgba(15, 23, 42, .15);
-    --radius: 12px;
-    --radius-sm: 8px;
-    --success: #059669;
-    --warn: #b45309;
-    --error: #dc2626;
-  }
-  /* ---------- Reset ---------- */
-  *, *::before, *::after { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; }
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, "Helvetica Neue", Arial, sans-serif;
-    font-size: 15px;
-    line-height: 1.55;
-    color: var(--text);
-    background: var(--bg);
-    min-height: 100vh;
-  }
-  /* ---------- Topbar ---------- */
-  .topbar {
-    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
-    color: white;
-    padding: 1.25rem 2rem;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 2rem;
-    flex-wrap: wrap;
-    box-shadow: var(--shadow-lg);
-  }
-  .brand { display: flex; align-items: center; gap: 0.9rem; }
-  .brand .logo {
-    width: 44px; height: 44px;
-    background: rgba(255, 255, 255, .18);
-    border-radius: 10px;
-    display: grid; place-items: center;
-    font-size: 22px;
-    backdrop-filter: blur(8px);
-  }
-  .brand h1 { margin: 0; font-size: 1.15rem; font-weight: 600; letter-spacing: -.01em; }
-  .brand p { margin: 0; opacity: .85; font-size: 0.82rem; }
-  .status-pills { display: flex; gap: 0.4rem; flex-wrap: wrap; }
-  .pill {
-    background: rgba(255, 255, 255, .15);
-    padding: 0.25rem 0.6rem;
-    border-radius: 100px;
-    font-size: 0.72rem;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    backdrop-filter: blur(8px);
-  }
-  .pill.local { background: rgba(255, 191, 36, .25); }
-  .pill.remote { background: rgba(34, 197, 94, .35); }
-
-  /* ---------- Layout ---------- */
-  .container {
-    max-width: 880px;
-    margin: 0 auto;
-    padding: 2rem 1.5rem 4rem;
-    display: grid;
-    gap: 1.25rem;
-  }
-  .card {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 1.5rem;
-    box-shadow: var(--shadow);
-  }
-  .card-header {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    margin-bottom: 1rem;
-    gap: 1rem;
-  }
-  .card-header h2 { margin: 0; font-size: 1.05rem; font-weight: 600; letter-spacing: -.01em; }
-  .card-header .step {
-    background: var(--accent-light);
-    color: var(--accent-dark);
-    width: 26px; height: 26px;
-    border-radius: 100px;
-    display: inline-grid; place-items: center;
-    font-size: 0.78rem; font-weight: 600;
-    margin-right: 0.6rem;
-    flex-shrink: 0;
-  }
-  .card-header .meta { color: var(--muted); font-size: 0.82rem; }
-
-  /* ---------- Drop zone ---------- */
-  .drop {
-    border: 2px dashed var(--border);
-    border-radius: var(--radius-sm);
-    padding: 1.75rem 1rem;
-    text-align: center;
-    transition: all .15s ease;
-    cursor: pointer;
-  }
-  .drop:hover { border-color: var(--accent); background: var(--accent-light); }
-  .drop.dragover { border-color: var(--accent); background: var(--accent-light); transform: scale(1.01); }
-  .drop svg { width: 38px; height: 38px; color: var(--muted); margin-bottom: 0.5rem; }
-  .drop p { margin: 0.2rem 0; color: var(--muted); font-size: 0.92rem; }
-  .drop .browse { color: var(--accent); font-weight: 500; text-decoration: underline; cursor: pointer; }
-  .drop input[type=file] { display: none; }
-
-  /* ---------- Inputs / buttons ---------- */
-  .input-row { display: flex; gap: 0.6rem; }
-  input[type=text] {
-    flex: 1;
-    padding: 0.65rem 0.85rem;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    font: inherit;
-    color: var(--text);
-    background: white;
-    transition: border-color .15s, box-shadow .15s;
-  }
-  input[type=text]:focus {
-    outline: none;
-    border-color: var(--accent);
-    box-shadow: 0 0 0 3px rgba(79, 70, 229, .12);
-  }
-  button {
-    font: inherit;
-    border: 0;
-    border-radius: var(--radius-sm);
-    padding: 0.65rem 1.2rem;
-    cursor: pointer;
-    transition: background .15s, transform .05s;
-    font-weight: 500;
-  }
-  button.primary {
-    background: var(--accent);
-    color: white;
-  }
-  button.primary:hover { background: var(--accent-dark); }
-  button.primary:active { transform: translateY(1px); }
-  button.primary:disabled { background: var(--muted); cursor: not-allowed; }
-  button.ghost {
-    background: transparent;
-    color: var(--accent);
-    border: 1px solid var(--border);
-  }
-  button.ghost:hover { background: var(--accent-light); border-color: var(--accent); }
-
-  /* ---------- Result blocks ---------- */
-  .answer-card {
-    margin-top: 1rem;
-    padding: 1.1rem;
-    background: linear-gradient(180deg, var(--accent-light) 0%, white 100%);
-    border-radius: var(--radius-sm);
-    border-left: 3px solid var(--accent);
-    display: none;
-  }
-  .answer-card.visible { display: block; }
-  .answer-text { white-space: pre-wrap; font-size: 0.94rem; color: var(--text); }
-  .citations { margin-top: 1rem; }
-  .citation {
-    background: white;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    padding: 0.7rem 0.9rem;
-    margin-top: 0.5rem;
-    font-size: 0.82rem;
-  }
-  .citation .head {
-    display: flex; justify-content: space-between; align-items: center;
-    margin-bottom: 0.3rem;
-    color: var(--muted); font-family: ui-monospace, Menlo, monospace; font-size: 0.74rem;
-  }
-  .citation .score {
-    background: var(--accent-light); color: var(--accent-dark);
-    padding: 0.1rem 0.45rem; border-radius: 100px; font-weight: 500;
-  }
-  .citation .body { color: var(--text); line-height: 1.5; }
-
-  /* ---------- Doc list ---------- */
-  .doc-list { display: grid; gap: 0.5rem; }
-  .doc-item {
-    display: flex; justify-content: space-between; align-items: center;
-    padding: 0.65rem 0.9rem;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    background: white;
-    font-size: 0.88rem;
-    transition: border-color .15s;
-  }
-  .doc-item:hover { border-color: var(--accent); }
-  .doc-item .name { font-weight: 500; }
-  .doc-item .meta { color: var(--muted); font-size: 0.76rem; font-family: ui-monospace, Menlo, monospace; }
-
-  /* ---------- Spinner ---------- */
-  .spinner {
-    display: inline-block;
-    width: 14px; height: 14px;
-    border: 2px solid var(--accent-light);
-    border-top-color: var(--accent);
-    border-radius: 50%;
-    animation: spin .8s linear infinite;
-    vertical-align: middle;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  /* ---------- Toast ---------- */
-  .toasts {
-    position: fixed;
-    top: 1rem; right: 1rem;
-    z-index: 1000;
-    display: grid; gap: 0.5rem;
-  }
-  .toast {
-    background: white;
-    border: 1px solid var(--border);
-    border-left: 3px solid var(--accent);
-    border-radius: var(--radius-sm);
-    padding: 0.7rem 1rem;
-    box-shadow: var(--shadow-lg);
-    min-width: 220px; max-width: 340px;
-    font-size: 0.88rem;
-    animation: slidein .25s ease-out;
-  }
-  .toast.success { border-left-color: var(--success); }
-  .toast.error { border-left-color: var(--error); }
-  .toast.warn { border-left-color: var(--warn); }
-  @keyframes slidein { from { transform: translateX(120%); } to { transform: translateX(0); } }
-
-  /* ---------- Misc ---------- */
-  .muted { color: var(--muted); }
-  .empty {
-    text-align: center;
-    color: var(--muted);
-    padding: 1.5rem;
-    font-size: 0.9rem;
-  }
-  details { font-size: 0.85rem; }
-  details > summary { cursor: pointer; color: var(--muted); padding: 0.3rem 0; }
-  details pre {
-    background: #0f172a; color: #e2e8f0;
-    padding: 0.8rem; border-radius: var(--radius-sm);
-    font-size: 0.78rem; overflow: auto; max-height: 240px;
-    font-family: ui-monospace, Menlo, monospace;
-  }
-  @media (max-width: 640px) {
-    .topbar { padding: 1rem; }
-    .container { padding: 1rem; }
-    .input-row { flex-direction: column; }
-  }
-</style>
+<link rel="stylesheet" href="global.css">
+<script>
+  // ---------- Early Theme Initialization ----------
+  (function() {
+    const savedTheme = localStorage.getItem('studybot-theme') || 'dark';
+    document.documentElement.setAttribute('data-theme', savedTheme);
+  })();
+</script>
 </head>
 <body>
 
-<header class="topbar">
-  <div class="brand">
-    <span class="logo">📚</span>
-    <div>
-      <h1>StudyBot</h1>
-      <p>AI Study Buddy — upload notes, ask questions, get cited answers</p>
+<header class="header-glass">
+  <div class="topbar">
+    <div class="brand">
+      <div class="brand-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+          <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+        </svg>
+      </div>
+      <div class="brand-info">
+        <h1>StudyBot</h1>
+        <p>AI Study Buddy — upload notes, ask questions, get cited answers</p>
+      </div>
     </div>
-  </div>
-  <div class="status-pills" id="status-pills">
-    <span class="pill"><span class="spinner" style="border-color:rgba(255,255,255,.3);border-top-color:white;"></span> loading…</span>
+    
+    <div class="header-actions">
+      <div class="status-pills" id="status-pills">
+        <span class="pill">
+          <span class="spinner"></span> 
+          Loading system status...
+        </span>
+      </div>
+      
+      <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()" title="Toggle Light/Dark Theme">
+        <!-- Sun Icon (visible in Light theme) -->
+        <svg class="sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="5"></circle>
+          <line x1="12" y1="1" x2="12" y2="3"></line>
+          <line x1="12" y1="21" x2="12" y2="23"></line>
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+          <line x1="1" y1="12" x2="3" y2="12"></line>
+          <line x1="21" y1="12" x2="23" y2="12"></line>
+          <line x1="4.22" y1="19.78" x2="5.64" y2="19.78"></line>
+          <line x1="18.36" y1="5.64" x2="19.78" y2="5.64"></line>
+        </svg>
+        <!-- Moon Icon (visible in Dark theme) -->
+        <svg class="moon-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+        </svg>
+      </button>
+    </div>
   </div>
 </header>
 
-<main class="container">
+<main class="dashboard-grid">
+  <!-- Left Column: Sidebar Document Manager -->
+  <aside class="sidebar">
+    <section class="card">
+      <div class="card-header">
+        <div class="card-title-group">
+          <span class="step">3</span>
+          <h2>Your Library</h2>
+        </div>
+        <button class="ghost" onclick="refresh()" style="padding: 0.4rem 0.75rem; font-size: 0.78rem;">
+          <svg style="width:14px;height:14px;margin-right:2px;vertical-align:middle;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+          </svg>
+          Refresh
+        </button>
+      </div>
+      <div class="doc-list" id="docs">
+        <div class="empty">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 44px; height: 44px; margin-bottom: 0.5rem; opacity: 0.4;">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+          </svg>
+          <div>No documents yet — upload one above.</div>
+        </div>
+      </div>
+    </section>
+  </aside>
 
-  <section class="card">
-    <div class="card-header">
-      <h2><span class="step">1</span>Upload a lecture</h2>
-      <span class="meta">PDF, TXT, or Markdown</span>
-    </div>
-    <label class="drop" id="drop">
-      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 7.5m0 0L7.5 12M12 7.5v9"/>
-      </svg>
-      <p><strong>Drag a file here</strong> or <span class="browse">click to browse</span></p>
-      <p style="font-size:0.78rem;">Max ~10MB. Try a Wikipedia article from <code>sample_data/</code>.</p>
-      <input type="file" id="file" accept=".pdf,.txt,.md">
-    </label>
-    <div id="upload-result"></div>
-  </section>
+  <!-- Right Column: Main Working Canvas -->
+  <div class="main-content">
+    <!-- Step 1: Upload Card -->
+    <section class="card">
+      <div class="card-header">
+        <div class="card-title-group">
+          <span class="step">1</span>
+          <h2>Upload a lecture</h2>
+        </div>
+        <span class="meta">PDF, TXT, or Markdown</span>
+      </div>
+      <label class="drop" id="drop">
+        <div class="drop-icon-container">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z" />
+          </svg>
+        </div>
+        <p><strong>Drag a file here</strong> or <span class="browse">click to browse</span></p>
+        <p class="muted" style="font-size:0.78rem; margin-top: 0.5rem;">Max ~10MB. Try a Wikipedia article from <code>sample_data/</code>.</p>
+        <input type="file" id="file" accept=".pdf,.txt,.md">
+      </label>
+      <div id="upload-result"></div>
+    </section>
 
-  <section class="card">
-    <div class="card-header">
-      <h2><span class="step">2</span>Ask a question</h2>
-      <span class="meta">Grounded in your uploaded notes</span>
-    </div>
-    <div class="input-row">
-      <input type="text" id="question" placeholder="e.g. What is photosynthesis?" autocomplete="off">
-      <button class="primary" id="ask-btn" onclick="ask()">Ask</button>
-    </div>
-    <div class="answer-card" id="answer-card">
-      <div class="answer-text" id="answer-text"></div>
-      <div class="citations" id="citations"></div>
-    </div>
-  </section>
+    <!-- Step 2: Ask Question Card -->
+    <section class="card">
+      <div class="card-header">
+        <div class="card-title-group">
+          <span class="step">2</span>
+          <h2>Ask a question</h2>
+        </div>
+        <span class="meta">Grounded in your uploaded notes</span>
+      </div>
+      
+      <div class="chat-container">
+        <!-- AI Premium Chat bubbles stream -->
+        <div class="answer-card" id="answer-card">
+          <!-- Messages will be dynamically rendered here -->
+        </div>
+        
+        <div class="input-row">
+          <input type="text" id="question" placeholder="Ask your AI buddy about the uploaded notes..." autocomplete="off">
+          <button class="primary" id="ask-btn" onclick="ask()">
+            Ask
+            <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="22" y1="2" x2="11" y2="13"></line>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </section>
 
-  <section class="card">
-    <div class="card-header">
-      <h2><span class="step">3</span>Your documents</h2>
-      <button class="ghost" onclick="refresh()">Refresh</button>
-    </div>
-    <div class="doc-list" id="docs"><div class="empty">No documents yet — upload one above.</div></div>
-  </section>
-
-  <details>
-    <summary>Raw API responses (debug)</summary>
-    <pre id="debug-log">No requests yet.</pre>
-  </details>
-
+    <!-- Raw Drawer (Accordion) -->
+    <details>
+      <summary>
+        <svg style="width:14px;height:14px;vertical-align:middle;" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M12.316 3.051a1 1 0 01.633 1.265l-4 12a1 1 0 11-1.898-.632l4-12a1 1 0 011.265-.633zM5.707 6.293a1 1 0 010 1.414L3.414 10l2.293 2.293a1 1 0 11-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0zm8.586 0a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 11-1.414-1.414L16.586 10l-2.293-2.293a1 1 0 010-1.414z" clip-rule="evenodd"/>
+        </svg>
+        Raw API responses (debug)
+      </summary>
+      <pre id="debug-log">No requests yet.</pre>
+    </details>
+  </div>
 </main>
 
 <div class="toasts" id="toasts"></div>
 
 <script>
 // ============================================================================
-// Config
+// Multi-Tenant & Config Setup
 // ============================================================================
+function detectTenant() {
+  const hostname = window.location.hostname;
+  let tenant = 'default';
+  
+  if (hostname.endsWith('.restx.food')) {
+    tenant = hostname.replace('.restx.food', '');
+  } else if (hostname.endsWith('.localhost')) {
+    tenant = hostname.replace('.localhost', '');
+  } else {
+    // Allows query override e.g. ?tenant=demo or ?tenant=admin for local testing
+    tenant = new URLSearchParams(location.search).get('tenant') || 'default';
+  }
+  
+  document.documentElement.setAttribute('data-tenant', tenant);
+  return tenant;
+}
+
+const ACTIVE_TENANT = detectTenant();
+
 const API_BASE = (window.API_BASE
   || new URLSearchParams(location.search).get('api')
   || '').replace(/\/$/, '');
 
 const USER_ID = (new URLSearchParams(location.search).get('user') || 'test-user-001');
+
+// ============================================================================
+// Light/Dark Theme Switcher
+// ============================================================================
+function toggleTheme() {
+  const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
+  const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', newTheme);
+  localStorage.setItem('studybot-theme', newTheme);
+  toast(`Switched to ${newTheme} mode`, 'success');
+}
 
 // ============================================================================
 // Helpers
@@ -379,9 +235,16 @@ async function loadStatus() {
     $('status-pills').innerHTML = '<span class="pill error">backend offline</span>';
     return;
   }
-  $('status-pills').innerHTML = Object.entries(res.body.backends)
+  
+  // Render status pills dynamically
+  const statusHtml = Object.entries(res.body.backends)
     .map(([k, v]) => `<span class="pill ${v === 'local' ? 'local' : 'remote'}">${k}: ${v}</span>`)
     .join('');
+    
+  // Append current active tenant name for visual transparency
+  const tenantBadgeHtml = `<span class="pill" style="border-color: rgba(var(--accent-rgb), 0.3); background: rgba(var(--accent-rgb), 0.1); color: var(--accent);">tenant: ${ACTIVE_TENANT}</span>`;
+  
+  $('status-pills').innerHTML = tenantBadgeHtml + statusHtml;
 }
 
 // ============================================================================
@@ -400,61 +263,171 @@ drop.addEventListener('drop', e => {
 fileInput.addEventListener('change', e => { if (e.target.files[0]) doUpload(e.target.files[0]); });
 
 async function doUpload(file) {
-  $('upload-result').innerHTML = `<p class="muted" style="margin:0.8rem 0 0;"><span class="spinner"></span> Uploading ${file.name} (${(file.size/1024).toFixed(1)} KB)…</p>`;
+  $('upload-result').innerHTML = `
+    <p class="muted" style="margin:0.8rem 0 0; font-size: 0.88rem; display: flex; align-items: center; gap: 0.5rem;">
+      <span class="spinner"></span> 
+      Uploading ${file.name} (${(file.size/1024).toFixed(1)} KB)…
+    </p>`;
+    
   const fd = new FormData();
   fd.append('file', file);
   const res = await call('/upload', {method: 'POST', body: fd});
+  
   if (!res.ok) {
     toast(`Upload failed: ${res.body.detail || res.status}`, 'error');
-    $('upload-result').innerHTML = `<p style="color:var(--error); margin:0.8rem 0 0;">${res.body.detail || 'Upload failed'}</p>`;
+    $('upload-result').innerHTML = `
+      <p style="color:var(--error); margin:0.8rem 0 0; font-size: 0.88rem; font-weight: 500;">
+        ${res.body.detail || 'Upload failed'}
+      </p>`;
     return;
   }
+  
   const b = res.body;
   $('upload-result').innerHTML = `
-    <div style="margin-top:0.8rem; padding:0.8rem; background:#f0fdf4; border-radius:var(--radius-sm); border-left:3px solid var(--success); font-size:0.88rem;">
-      ✓ <strong>${b.filename}</strong> — ${b.chars_extracted.toLocaleString()} chars extracted &amp; indexed
-      <div style="font-family:ui-monospace,Menlo,monospace; color:var(--muted); font-size:0.74rem; margin-top:0.25rem;">doc_id: ${b.doc_id}</div>
+    <div class="upload-success-alert">
+      <div class="upload-success-title">
+        <svg style="width:16px;height:16px;" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+        </svg>
+        <strong>${b.filename}</strong>
+      </div>
+      <div>${b.chars_extracted.toLocaleString()} chars extracted &amp; indexed</div>
+      <div class="upload-success-meta">doc_id: ${b.doc_id}</div>
     </div>`;
+    
   toast(`Uploaded ${b.filename}`, 'success');
   refresh();
 }
 
 // ============================================================================
-// Ask
+// AI Chat Premium Messenger logic
 // ============================================================================
+function renderWelcomeMessage() {
+  const card = $('answer-card');
+  card.classList.add('visible');
+  card.innerHTML = `
+    <div class="chat-bubble ai">
+      <div class="bubble-avatar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 18px; height: 18px;">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+        </svg>
+      </div>
+      <div class="bubble-content">
+        <div class="bubble-sender">StudyBot</div>
+        <div class="bubble-text">Hello! I am your AI Study Buddy. Upload your lecture notes on the left, then ask me anything about them. I will research the content and give you answers with detailed citations.</div>
+      </div>
+    </div>
+  `;
+}
+
 async function ask() {
   const q = $('question').value.trim();
   if (!q) { toast('Type a question first', 'warn'); return; }
+  
+  // Clear the input box immediately to support chat feel
+  $('question').value = '';
+  
+  // 1. Remove previous response IDs to avoid duplicated query selectors in DOM
+  const prevAns = $('answer-text');
+  if (prevAns) prevAns.removeAttribute('id');
+  const prevCit = $('citations');
+  if (prevCit) prevCit.removeAttribute('id');
+  
+  // 2. Append User Bubble
+  const userBubbleHtml = `
+    <div class="chat-bubble user">
+      <div class="bubble-avatar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+          <circle cx="12" cy="7" r="4"></circle>
+        </svg>
+      </div>
+      <div class="bubble-content">
+        <div class="bubble-sender">You</div>
+        <div class="bubble-text">${q.replace(/</g, '&lt;')}</div>
+      </div>
+    </div>
+  `;
+  $('answer-card').insertAdjacentHTML('beforeend', userBubbleHtml);
+  
+  // 3. Append AI thinking bubble placeholder
+  const aiBubbleHtml = `
+    <div class="chat-bubble ai">
+      <div class="bubble-avatar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 18px; height: 18px;">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+        </svg>
+      </div>
+      <div class="bubble-content">
+        <div class="bubble-sender">StudyBot</div>
+        <div class="bubble-text" id="answer-text">
+          <div class="typing-indicator">
+            <div class="typing-dot"></div>
+            <div class="typing-dot"></div>
+            <div class="typing-dot"></div>
+          </div>
+        </div>
+        <div id="citations"></div>
+      </div>
+    </div>
+  `;
+  $('answer-card').insertAdjacentHTML('beforeend', aiBubbleHtml);
+  
+  // Scroll to bottom immediately after adding the message
+  $('answer-card').scrollTop = $('answer-card').scrollHeight;
+  
+  // 4. Fire API Request
   $('ask-btn').disabled = true;
-  $('answer-card').classList.add('visible');
-  $('answer-text').innerHTML = '<span class="spinner"></span> Thinking…';
-  $('citations').innerHTML = '';
   const res = await call('/query', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({question: q}),
   });
   $('ask-btn').disabled = false;
+  
+  // 5. Render Response
   if (!res.ok) {
-    $('answer-text').innerHTML = `<span style="color:var(--error);">${res.body.detail || 'Error'}</span>`;
+    $('answer-text').innerHTML = `<span style="color:var(--error); font-weight: 500;">${res.body.detail || 'Error occurred while querying the notes.'}</span>`;
+    $('answer-card').scrollTop = $('answer-card').scrollHeight;
     return;
   }
+  
   $('answer-text').textContent = res.body.answer;
   const c = res.body.citations || [];
   if (c.length) {
-    $('citations').innerHTML = '<div class="muted" style="font-size:0.78rem; margin-top:0.6rem;">📎 Citations from your documents:</div>' +
+    $('citations').innerHTML = `
+      <div class="citations-title">
+        <svg style="width:12px;height:12px;vertical-align:middle;" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M12.586 4.586a2 2 0 112.828 2.828l-3 3a2 2 0 01-2.828 0 1 1 0 00-1.414 1.414 4 4 0 005.656 0l3-3a4 4 0 00-5.656-5.656l-1.5 1.5a1 1 0 101.414 1.414l1.5-1.5zm-5 5a2 2 0 012.828 0 1 1 0 101.414-1.414 4 4 0 00-5.656 0l-3 3a4 4 0 105.656 5.656l1.5-1.5a1 1 0 10-1.414-1.414l-1.5 1.5a2 2 0 11-2.828-2.828l3-3z" clip-rule="evenodd"/>
+        </svg>
+        Citations from your documents
+      </div>` +
       c.map(x => `
         <div class="citation">
           <div class="head">
-            <span>chunk ${x.chunk}</span>
+            <span>
+              <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+              </svg>
+              chunk ${x.chunk}
+            </span>
             <span class="score">score ${(x.score || 0).toFixed(1)}</span>
           </div>
           <div class="body">${(x.text || '').replace(/</g, '&lt;')}</div>
         </div>
       `).join('');
   } else {
-    $('citations').innerHTML = '<div class="muted" style="font-size:0.82rem; margin-top:0.6rem;">No citations matched. Try a question closer to your uploaded content.</div>';
+    $('citations').innerHTML = '<div class="muted" style="font-size:0.82rem; margin-top:0.6rem; text-align: center;">No citations matched.</div>';
   }
+  
+  // Smooth scroll to bottom after rendering answer and citations
+  setTimeout(() => {
+    $('answer-card').scrollTo({
+      top: $('answer-card').scrollHeight,
+      behavior: 'smooth'
+    });
+  }, 50);
 }
 
 $('question').addEventListener('keydown', e => { if (e.key === 'Enter') ask(); });
@@ -465,16 +438,35 @@ $('question').addEventListener('keydown', e => { if (e.key === 'Enter') ask(); }
 async function refresh() {
   const res = await call('/docs/list');
   if (!res.ok || !res.body.docs || !res.body.docs.length) {
-    $('docs').innerHTML = '<div class="empty">No documents yet — upload one above.</div>';
+    $('docs').innerHTML = `
+      <div class="empty">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 44px; height: 44px; margin-bottom: 0.5rem; opacity: 0.4;">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+          <polyline points="14 2 14 8 20 8"></polyline>
+        </svg>
+        <div>No documents yet — upload one above.</div>
+      </div>`;
     return;
   }
+  
   $('docs').innerHTML = res.body.docs.map(d => `
     <div class="doc-item">
-      <div>
-        <div class="name">${d.filename || d.doc_id}</div>
-        <div class="meta">${(d.chars || 0).toLocaleString()} chars · ${(d.size || 0).toLocaleString()} bytes</div>
+      <div class="doc-item-left">
+        <div class="doc-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="16" y1="13" x2="8" y2="13"></line>
+            <line x1="16" y1="17" x2="8" y2="17"></line>
+            <polyline points="10 9 9 9 8 9"></polyline>
+          </svg>
+        </div>
+        <div>
+          <div class="name">${d.filename || d.doc_id}</div>
+          <div class="meta">${(d.chars || 0).toLocaleString()} chars &middot; ${(d.size/1024).toFixed(1)} KB</div>
+        </div>
       </div>
-      <div class="meta">${(d.doc_id || '').slice(0, 8)}…</div>
+      <div class="doc-item-right">${(d.doc_id || '').slice(0, 8)}</div>
     </div>
   `).join('');
 }
@@ -484,6 +476,7 @@ async function refresh() {
 // ============================================================================
 loadStatus();
 refresh();
+renderWelcomeMessage();
 </script>
 </body>
 </html>
