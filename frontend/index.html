@@ -257,6 +257,8 @@
 // ============================================================================
 // Multi-Tenant & Config Setup
 // ============================================================================
+const API_BASE = "https://1lse4odraj.execute-api.ap-southeast-1.amazonaws.com";
+const USER_ID = "test-user-001";
 function detectTenant() {
   const hostname = window.location.hostname;
   let tenant = 'default';
@@ -274,12 +276,6 @@ function detectTenant() {
 }
 
 const ACTIVE_TENANT = detectTenant();
-
-const API_BASE = (window.API_BASE
-  || new URLSearchParams(location.search).get('api')
-  || '').replace(/\/$/, '');
-
-const USER_ID = (new URLSearchParams(location.search).get('user') || 'test-user-001');
 
 // ============================================================================
 // Light/Dark Theme Switcher
