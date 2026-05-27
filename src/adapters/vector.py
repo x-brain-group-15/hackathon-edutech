@@ -28,7 +28,7 @@ class BedrockKBVector:
         self.kb_id = kb_id
         self.agent_runtime = boto3.client("bedrock-agent-runtime", region_name=region)
 
-    def ingest(self, doc_id: str, text: str, metadata: Optional[dict] = None) -> None:
+    def ingest(self, doc_id: str, text: str, metadata: Optional[dict] = None, **kwargs) -> None:
         # Ingestion is typically S3-event driven. Trigger a manual sync if needed
         # via StartIngestionJob — but the doc must already be in the KB's S3 source.
         # This adapter assumes upstream code uploaded to S3 already.
