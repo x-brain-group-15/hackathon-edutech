@@ -7,7 +7,7 @@ on:
       - master
 
 permissions:
-  content: read
+  contents: read
 
 jobs:
   test-and-deploy:
