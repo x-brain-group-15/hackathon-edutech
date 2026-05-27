@@ -61,6 +61,24 @@ Parameters:
     Default: ""
     Description: "Bedrock Knowledge Base ID — get from AWS Console after creating KB"
 
+  # ---- Chunking ----
+  ChunkingStrategy:
+    Type: String
+    Default: "fixed"
+    AllowedValues: [fixed, structural, semantic]
+
+  ChunkSize:
+    Type: String
+    Default: "500"
+
+  ChunkOverlap:
+    Type: String
+    Default: "100"
+
+  SemanticThreshold:
+    Type: String
+    Default: "0.3"
+
   # ---- VPC ----
   # (VPC, PrivateSubnet, and LambdaSecurityGroup are now created dynamically as resources below)
 
@@ -87,6 +105,10 @@ Globals:
           - !Ref UserstoreTable
         VECTOR_BACKEND: !Ref VectorBackend
         VECTOR_BEDROCK_KB_ID: !Ref VectorBedrockKbId
+        CHUNKING_STRATEGY: !Ref ChunkingStrategy
+        CHUNK_SIZE: !Ref ChunkSize
+        CHUNK_OVERLAP: !Ref ChunkOverlap
+        SEMANTIC_THRESHOLD: !Ref SemanticThreshold
         SERVE_FRONTEND: "false"    # frontend served by CloudFront+S3, not Lambda
         CORS_ORIGINS: "*"
         LOG_LEVEL: INFO
@@ -509,6 +531,58 @@ Resources:
         From: 1024
         To: 65535
 
+  PrivateNaclOutboundAllowDnsUdp:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref PrivateNacl
+      RuleNumber: 120
+      Protocol: 17 # UDP
+      RuleAction: allow
+      Egress: true
+      CidrBlock: 0.0.0.0/0
+      PortRange:
+        From: 53
+        To: 53
+
+  PrivateNaclOutboundAllowDnsTcp:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref PrivateNacl
+      RuleNumber: 130
+      Protocol: 6 # TCP
+      RuleAction: allow
+      Egress: true
+      CidrBlock: 0.0.0.0/0
+      PortRange:
+        From: 53
+        To: 53
+
+  PrivateNaclInboundAllowDnsUdpEphemeral:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref PrivateNacl
+      RuleNumber: 120
+      Protocol: 17 # UDP
+      RuleAction: allow
+      Egress: false
+      CidrBlock: 0.0.0.0/0
+      PortRange:
+        From: 1024
+        To: 65535
+
+  PrivateNaclInboundAllowDnsUdp53:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref PrivateNacl
+      RuleNumber: 130
+      Protocol: 17 # UDP
+      RuleAction: allow
+      Egress: false
+      CidrBlock: 0.0.0.0/0
+      PortRange:
+        From: 53
+        To: 53
+
   PrivateSubnetNaclAssociation:
     Type: AWS::EC2::SubnetNetworkAclAssociation
     Properties:
@@ -596,6 +670,16 @@ Resources:
           ToPort: 443
           CidrIp: 0.0.0.0/0
           Description: "Allow HTTPS traffic out to VPC Endpoints and AWS services"
+        - IpProtocol: udp
+          FromPort: 53
+          ToPort: 53
+          CidrIp: 0.0.0.0/0
+          Description: "Allow DNS queries via UDP"
+        - IpProtocol: tcp
+          FromPort: 53
+          ToPort: 53
+          CidrIp: 0.0.0.0/0
+          Description: "Allow DNS queries via TCP"
       Tags:
         - Key: Name
           Value: !Sub "studybot-lambda-sg-${TeamName}"
@@ -674,6 +758,148 @@ Resources:
       SecurityGroupIds:
         - !Ref VpcEndpointsSecurityGroup
 
+  # --------------------------------------------------------------------------
+  # 12. Cost Control & Budgets (Monitoring Section)
+  # --------------------------------------------------------------------------
+  StudyBotCostDenyPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: !Sub "studybot-cost-deny-${TeamName}"
+      Description: "Deny Bedrock and S3 Put when budget is exceeded"
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: DenyBedrockAndS3Put
+            Effect: Deny
+            Action:
+              - bedrock:*
+              - s3:PutObject
+              - aoss:*
+            Resource: "*"
+
+  BudgetAlertSnsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub "studybot-budget-alerts-${TeamName}"
+
+  BudgetAlertSnsTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics:
+        - !Ref BudgetAlertSnsTopic
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowBudgetsToPublish
+            Effect: Allow
+            Principal:
+              Service: budgets.amazonaws.com
+            Action: sns:Publish
+            Resource: !Ref BudgetAlertSnsTopic
+
+  MonthlyCostBudget:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        BudgetName: !Sub "studybot-monthly-budget-${TeamName}"
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit:
+          Amount: 70.0
+          Unit: USD
+      NotificationsWithSubscribers:
+        - Notification:
+            ComparisonOperator: GREATER_THAN
+            NotificationType: ACTUAL
+            Threshold: 30
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: SNS
+              Address: !Ref BudgetAlertSnsTopic
+        - Notification:
+            ComparisonOperator: GREATER_THAN
+            NotificationType: ACTUAL
+            Threshold: 50
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: SNS
+              Address: !Ref BudgetAlertSnsTopic
+        - Notification:
+            ComparisonOperator: GREATER_THAN
+            NotificationType: ACTUAL
+            Threshold: 80
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: SNS
+              Address: !Ref BudgetAlertSnsTopic
+
+  CostGuardFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "studybot-cost-guard-${TeamName}"
+      Handler: cost_guard.lambda_handler
+      CodeUri: ./aws
+      Description: "Cost Guard Lambda to freeze backend (reserved concurrency=0) and IAM role on budget thresholds (30%, 50%, 80%)"
+      Timeout: 30
+      Policies:
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action:
+                - lambda:PutFunctionConcurrency
+                - iam:AttachRolePolicy
+                - aoss:DeleteCollection
+                - aoss:ListCollections
+              Resource: "*"
+      Environment:
+        Variables:
+          STUDYBOT_BACKEND_LAMBDA: !Ref StudyBotFunction
+          APP_IAM_ROLE_NAME: !Sub "studybot-lambda-role-${TeamName}"
+          DENY_POLICY_ARN: !Ref StudyBotCostDenyPolicy
+      Events:
+        BudgetAlertSns:
+          Type: SNS
+          Properties:
+            Topic: !Ref BudgetAlertSnsTopic
+
+  AutoFixInfraFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "studybot-auto-fix-infra-${TeamName}"
+      Handler: auto_fix_infra.lambda_handler
+      CodeUri: ./aws
+      Description: "Auto Fix Infra Lambda to terminate unauthorized EC2, RDS or OpenSearch Serverless instances"
+      Timeout: 30
+      Policies:
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action:
+                - ec2:TerminateInstances
+                - rds:DeleteDBInstance
+                - aoss:DeleteCollection
+              Resource: "*"
+      Events:
+        CloudTrailEvent:
+          Type: EventBridgeRule
+          Properties:
+            Pattern:
+              source:
+                - aws.rds
+                - aws.ec2
+                - aws.aoss
+              detail-type:
+                - AWS API Call via CloudTrail
+              detail:
+                eventSource:
+                  - rds.amazonaws.com
+                  - ec2.amazonaws.com
+                  - aoss.amazonaws.com
+                eventName:
+                  - CreateDBInstance
+                  - RunInstances
+                  - CreateCollection
+
 # ============================================================================
 # Outputs — printed after `sam deploy`, paste into Evidence Pack
 # ============================================================================
@@ -714,3 +940,15 @@ Outputs:
   LambdaSecurityGroupId:
     Description: "Lambda Security Group ID"
     Value: !Ref LambdaSecurityGroup
+
+  CostGuardFunctionArn:
+    Description: "Cost Guard Lambda Function ARN"
+    Value: !GetAtt CostGuardFunction.Arn
+
+  AutoFixInfraFunctionArn:
+    Description: "Auto Fix Infra Lambda Function ARN"
+    Value: !GetAtt AutoFixInfraFunction.Arn
+
+  BudgetAlertSnsTopicArn:
+    Description: "Budget Alerts SNS Topic ARN"
+    Value: !Ref BudgetAlertSnsTopic

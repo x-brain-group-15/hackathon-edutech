@@ -1,9 +1,10 @@
 fastapi>=0.110
-uvicorn[standard]>=0.27
+uvicorn[standard]>=0.27 # local dev only (Lambda uses Mangum, not uvicorn)
 python-dotenv>=1.0
 python-multipart>=0.0.9
 pydantic>=2.6
 pypdf>=4.0
 boto3>=1.34
+mangum>=0.17 # Lambda ASGI adapter — required by lambda_handler.py
 pytest>=8.0
 httpx>=0.27

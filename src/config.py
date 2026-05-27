@@ -35,6 +35,12 @@ class Config:
     vector_backend: str = _env("VECTOR_BACKEND", "local")
     vector_bedrock_kb_id: str = _env("VECTOR_BEDROCK_KB_ID", "")
 
+    # Chunking
+    chunking_strategy: str = _env("CHUNKING_STRATEGY", "fixed")
+    chunk_size: int = int(_env("CHUNK_SIZE", "500"))
+    chunk_overlap: int = int(_env("CHUNK_OVERLAP", "100"))
+    semantic_threshold: float = float(_env("SEMANTIC_THRESHOLD", "0.3"))
+
     # Identity
     default_user_id: str = _env("DEFAULT_USER_ID", "test-user-001")
 
