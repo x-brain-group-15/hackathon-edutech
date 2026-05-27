@@ -76,6 +76,9 @@
           Refresh
         </button>
       </div>
+      <div class="search-box-container" style="margin: 0 0 1rem; position: relative;">
+        <input type="text" id="doc-search" placeholder="🔍 Search library..." oninput="filterDocs()" style="width: 100%; padding: 0.55rem 0.8rem; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.8rem; background: rgba(0,0,0,0.15); color: var(--text); outline: none; transition: all 0.3s ease;">
+      </div>
       <div class="doc-list" id="docs">
         <div class="empty">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 44px; height: 44px; margin-bottom: 0.5rem; opacity: 0.4;">
@@ -686,9 +689,16 @@ async function refresh() {
             <div class="meta">${(d.chars || 0).toLocaleString()} chars &middot; ${(d.size/1024).toFixed(1)} KB</div>
           </div>
         </div>
-        <div class="doc-item-right" style="font-family: var(--font-mono); font-size: 0.72rem; text-align: right;">
+        <div class="doc-item-right" style="font-family: var(--font-mono); font-size: 0.72rem; text-align: right; display: flex; flex-direction: column; justify-content: space-between; align-items: flex-end;">
           <div>${(d.doc_id || '').slice(0, 8)}</div>
           <div style="font-size:0.65rem; font-weight:700; color:var(--accent); margin-top:0.15rem;">${isSelected ? 'Active' : 'Select'}</div>
+          <button class="ghost delete-btn" style="color: var(--error); padding: 2px 4px; margin-top: 6px; border: none; background: transparent; cursor: pointer; display: flex; align-items: center; gap: 3px; font-size: 0.7rem; font-weight: 600;" onclick="event.stopPropagation(); deleteDocument('${d.doc_id}', '${d.filename.replace(/'/g, "\\'")}')" title="Delete document">
+            <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            </svg>
+            Delete
+          </button>
         </div>
       </div>
     `;
@@ -700,6 +710,48 @@ function selectDoc(docId, filename) {
   window.selectedDocName = filename;
   toast(`Selected document: ${filename}`, 'info');
   refresh();
+}
+
+async function deleteDocument(docId, filename) {
+  if (!confirm(`Are you sure you want to delete "${filename}"? This will delete the file from storage and clear its vector index.`)) {
+    return;
+  }
+  
+  toast(`Deleting ${filename}...`, 'info');
+  const res = await call(`/docs/${docId}`, {method: 'DELETE'});
+  
+  if (!res.ok) {
+    toast(`Delete failed: ${res.body.detail || res.status}`, 'error');
+    return;
+  }
+  
+  toast(`Deleted ${filename}`, 'success');
+  
+  if (window.selectedDocId === docId || window.lastDocId === docId) {
+    window.selectedDocId = null;
+    window.selectedDocName = null;
+    window.lastDocId = null;
+    window.lastDocName = null;
+  }
+  
+  refresh();
+}
+
+function filterDocs() {
+  const query = $('doc-search').value.toLowerCase().trim();
+  const items = document.querySelectorAll('.doc-item');
+  items.forEach(item => {
+    // Search within the name element
+    const nameEl = item.querySelector('.name');
+    if (nameEl) {
+      const name = nameEl.textContent.toLowerCase();
+      if (name.includes(query)) {
+        item.style.display = 'flex';
+      } else {
+        item.style.display = 'none';
+      }
+    }
+  });
 }
 
 // ============================================================================

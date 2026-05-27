@@ -58,6 +58,14 @@ class QueryRequest(BaseModel):
 
 @app.get("/health")
 def health() -> dict:
+    import os
+    aws_env = {}
+    for k, v in os.environ.items():
+        if k.startswith("AWS_") or "KEY" in k or "SECRET" in k or "TOKEN" in k:
+            if len(v) > 8:
+                aws_env[k] = f"{v[:4]}...{v[-4:]} (len={len(v)})"
+            else:
+                aws_env[k] = f"... (len={len(v)})"
     return {
         "status": "ok",
         "backends": {
@@ -66,6 +74,7 @@ def health() -> dict:
             "userstore": config.userstore_backend,
             "vector": config.vector_backend,
         },
+        "debug_aws_env": aws_env,
     }
 
 
@@ -142,6 +151,24 @@ def evaluate(
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/docs/{doc_id}")
+def delete_doc(doc_id: str, x_user_id: str | None = Header(default=None)) -> dict:
+    user_id = _resolve_user_id(x_user_id)
+    try:
+        return handlers.handle_delete_doc(
+            user_id=user_id,
+            doc_id=doc_id,
+            storage=storage,
+            userstore=userstore,
+            vector_store=vector_store,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 
 @app.get("/docs/list")

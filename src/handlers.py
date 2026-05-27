@@ -1,11 +1,14 @@
 """Endpoint handlers. Pure business logic — knows nothing about FastAPI or AWS specifics."""
-import io
 import uuid
 import json
 import time
 import logging
 import traceback
+from pathlib import Path
 from typing import Optional
+
+from src.config import config
+from src.pdf_extractor import extract_pdf
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -42,15 +45,14 @@ ANSWER:"""
 
 def _extract_text(filename: str, data: bytes) -> str:
     """Extract plain text from PDF or .txt upload."""
-    name = filename.lower()
-    if name.endswith(".pdf"):
+    if filename.lower().endswith(".pdf"):
         try:
             from pypdf import PdfReader
         except ImportError:
             return "(pypdf not installed — install requirements.txt)"
         reader = PdfReader(io.BytesIO(data))
         return "\n\n".join(page.extract_text() or "" for page in reader.pages)
-
+    # Default: assume UTF-8 text
     try:
         return data.decode("utf-8", errors="replace")
     except Exception:
@@ -74,136 +76,40 @@ def handle_upload(
     start_time = time.time()
     doc_id = str(uuid.uuid4())
     key = f"{user_id}/{doc_id}/{filename}"
-
-    log_step(
-        "upload",
-        "create_doc_id",
+    location = storage.put(key, data)
+    text = _extract_text(filename, data)
+    if text.strip():
+        vector_store.ingest(
+            doc_id=doc_id,
+            text=text,
+            metadata={"user_id": user_id, "filename": filename},
+            strategy=strategy,
+            size=size,
+            overlap=overlap,
+            threshold=threshold,
+        )
+    userstore.add_doc(
         user_id=user_id,
         doc_id=doc_id,
-        filename=filename
+        metadata={"filename": filename, "size": len(data), "location": location, "chars": len(text)},
     )
-
-    try:
-        log_step(
-            "upload",
-            "store_file_start",
-            user_id=user_id,
-            doc_id=doc_id,
-            filename=filename,
-            size=len(data)
-        )
-
-        location = storage.put(key, data)
-
-        log_step(
-            "upload",
-            "store_file_done",
-            user_id=user_id,
-            doc_id=doc_id,
-            location=location
-        )
-
-        log_step(
-            "upload",
-            "extract_text_start",
-            user_id=user_id,
-            doc_id=doc_id,
-            filename=filename
-        )
-
-        text = _extract_text(filename, data)
-
-        log_step(
-            "upload",
-            "extract_text_done",
-            user_id=user_id,
-            doc_id=doc_id,
-            chars_extracted=len(text)
-        )
-
-        if text.strip():
-            log_step(
-                "upload",
-                "vector_ingest_start",
-                user_id=user_id,
-                doc_id=doc_id,
-                strategy=strategy or "default",
-                size=size,
-                overlap=overlap,
-                threshold=threshold
-            )
-
-            vector_store.ingest(
-                doc_id=doc_id,
-                text=text,
-                metadata={"user_id": user_id, "filename": filename},
-                strategy=strategy,
-                size=size,
-                overlap=overlap,
-                threshold=threshold,
-            )
-
-            log_step(
-                "upload",
-                "vector_ingest_done",
-                user_id=user_id,
-                doc_id=doc_id
-            )
-        else:
-            log_step(
-                "upload",
-                "vector_ingest_skipped",
-                user_id=user_id,
-                doc_id=doc_id,
-                reason="empty_text"
-            )
-
-        log_step(
-            "upload",
-            "save_metadata_start",
-            user_id=user_id,
-            doc_id=doc_id
-        )
-
-        userstore.add_doc(
-            user_id=user_id,
-            doc_id=doc_id,
-            metadata={
-                "filename": filename,
-                "size": len(data),
-                "location": location,
-                "chars": len(text)
-            },
-        )
-
-        log_step(
-            "upload",
-            "save_metadata_done",
-            user_id=user_id,
-            doc_id=doc_id
-        )
-
-        latency_ms = int((time.time() - start_time) * 1000)
-
-        log_event(
-            "DOCUMENT_UPLOAD",
-            user_id=user_id,
-            doc_id=doc_id,
-            filename=filename,
-            size=len(data),
-            chars_extracted=len(text),
-            location=location,
-            latency_ms=latency_ms,
-            status="success"
-        )
-
-        return {
-            "doc_id": doc_id,
-            "filename": filename,
-            "size": len(data),
-            "chars_extracted": len(text),
-            "location": location,
-        }
+    log_event(
+        "DOCUMENT_UPLOAD",
+        user_id=user_id,
+        doc_id=doc_id,
+        filename=filename,
+        size=len(data),
+        chars_extracted=len(text),
+        location=location,
+        status="success"
+    )
+    return {
+        "doc_id": doc_id,
+        "filename": filename,
+        "size": len(data),
+        "chars_extracted": len(text),
+        "location": location,
+    }
 
     except Exception as e:
         latency_ms = int((time.time() - start_time) * 1000)
@@ -747,28 +653,3 @@ def handle_evaluate(
             "queries": queries_results,
         }
 
-    except Exception as e:
-        latency_ms = int((time.time() - start_time) * 1000)
-
-        log_event(
-            "EVALUATE_ERROR",
-            user_id=user_id,
-            doc_id=doc_id,
-            latency_ms=latency_ms,
-            error_type=type(e).__name__,
-            error_message=str(e),
-            stack_trace=traceback.format_exc(),
-            status="error"
-        )
-
-        log_step(
-            "evaluate",
-            "evaluate_failed",
-            user_id=user_id,
-            doc_id=doc_id,
-            latency_ms=latency_ms,
-            error_type=type(e).__name__,
-            status="error"
-        )
-
-        raise
