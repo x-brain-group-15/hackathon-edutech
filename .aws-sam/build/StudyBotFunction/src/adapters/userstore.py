@@ -35,6 +35,9 @@ class DynamoDBUserStore:
             }
         )
 
+    def delete_doc(self, user_id: str, doc_id: str) -> None:
+        self.table.delete_item(Key={"user_id": user_id, "sk": f"DOC#{doc_id}"})
+
     def list_docs(self, user_id: str) -> list:
         resp = self.table.query(
             KeyConditionExpression="user_id = :u AND begins_with(sk, :p)",
@@ -106,6 +109,10 @@ class PostgresUserStore:
                 (user_id, doc_id, json.dumps(metadata)),
             )
 
+    def delete_doc(self, user_id, doc_id):
+        with self.conn.cursor() as cur:
+            cur.execute("DELETE FROM user_docs WHERE user_id = %s AND doc_id = %s", (user_id, doc_id))
+
     def list_docs(self, user_id):
         with self.conn.cursor() as cur:
             cur.execute(
@@ -173,6 +180,10 @@ class SQLiteUserStore:
         )
         self.conn.commit()
 
+    def delete_doc(self, user_id, doc_id):
+        self.conn.execute("DELETE FROM user_docs WHERE user_id = ? AND doc_id = ?", (user_id, doc_id))
+        self.conn.commit()
+
     def list_docs(self, user_id):
         cur = self.conn.execute(
             "SELECT doc_id, metadata, created_at FROM user_docs WHERE user_id = ? ORDER BY created_at DESC",
@@ -236,6 +247,9 @@ class DocumentDBUserStore:
             {"$set": {**metadata, "user_id": user_id, "doc_id": doc_id, "created_at": _now()}},
             upsert=True,
         )
+
+    def delete_doc(self, user_id: str, doc_id: str) -> None:
+        self.docs.delete_one({"user_id": user_id, "doc_id": doc_id})
 
     def list_docs(self, user_id: str) -> list:
         return [
@@ -306,6 +320,10 @@ class MySQLUserStore:
                 "REPLACE INTO user_docs (user_id, doc_id, metadata) VALUES (%s, %s, %s)",
                 (user_id, doc_id, json.dumps(metadata)),
             )
+
+    def delete_doc(self, user_id, doc_id):
+        with self.conn.cursor() as cur:
+            cur.execute("DELETE FROM user_docs WHERE user_id = %s AND doc_id = %s", (user_id, doc_id))
 
     def list_docs(self, user_id):
         with self.conn.cursor() as cur:

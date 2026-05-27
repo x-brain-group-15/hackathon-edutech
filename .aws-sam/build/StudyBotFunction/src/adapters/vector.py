@@ -28,11 +28,32 @@ class BedrockKBVector:
         self.kb_id = kb_id
         self.agent_runtime = boto3.client("bedrock-agent-runtime", region_name=region)
 
-    def ingest(self, doc_id: str, text: str, metadata: Optional[dict] = None) -> None:
+    def ingest(self, doc_id: str, text: str, metadata: Optional[dict] = None, **kwargs) -> None:
         # Ingestion is typically S3-event driven. Trigger a manual sync if needed
         # via StartIngestionJob — but the doc must already be in the KB's S3 source.
         # This adapter assumes upstream code uploaded to S3 already.
-        pass
+        try:
+            import boto3
+            import logging
+            from botocore.config import Config
+            logger = logging.getLogger("StudyBot")
+            
+            # Use a fast timeout (2.0s) so the Lambda doesn't hang if the bedrock-agent control plane endpoint
+            # is unreachable from the isolated private subnet VPC (since there is no VPC endpoint for bedrock-agent)
+            config = Config(connect_timeout=2.0, read_timeout=2.0, retries={"max_attempts": 0})
+            client = boto3.client("bedrock-agent", region_name=self.agent_runtime.meta.region_name, config=config)
+            ds_resp = client.list_data_sources(knowledgeBaseId=self.kb_id)
+            ds_summaries = ds_resp.get("dataSourceSummaries", [])
+            if ds_summaries:
+                ds_id = ds_summaries[0]["dataSourceId"]
+                client.start_ingestion_job(
+                    knowledgeBaseId=self.kb_id,
+                    dataSourceId=ds_id
+                )
+                logger.info(f"Triggered automatic Bedrock KB ingestion sync job for data source: {ds_id}")
+        except Exception as e:
+            import logging
+            logging.getLogger("StudyBot").warning(f"Failed to auto-sync Bedrock KB data source (normal if IAM permissions not granted or network isolated): {str(e)}")
 
     def search(self, query: str, top_k: int = 5, filter: Optional[dict] = None) -> list:
         kwargs = {
@@ -43,9 +64,13 @@ class BedrockKBVector:
             },
         }
         if filter:
-            kwargs["retrievalConfiguration"]["vectorSearchConfiguration"]["filter"] = {
-                "andAll": [{"equals": {"key": k, "value": v}} for k, v in filter.items()]
-            }
+            filter_list = [{"equals": {"key": k, "value": v}} for k, v in filter.items()]
+            if len(filter_list) == 1:
+                kwargs["retrievalConfiguration"]["vectorSearchConfiguration"]["filter"] = filter_list[0]
+            elif len(filter_list) > 1:
+                kwargs["retrievalConfiguration"]["vectorSearchConfiguration"]["filter"] = {
+                    "andAll": filter_list
+                }
         resp = self.agent_runtime.retrieve(**kwargs)
         return [
             {
@@ -73,24 +98,50 @@ class LocalVector:
         return [t.lower() for t in re.findall(r"\w+", text) if len(t) > 2]
 
     @staticmethod
-    def _chunk(text: str, size: int = 500) -> list:
-        # Naive chunking by sentence-ish boundaries
-        sentences = re.split(r"(?<=[.!?])\s+", text)
-        chunks, current = [], ""
-        for s in sentences:
-            if len(current) + len(s) < size:
-                current += " " + s
-            else:
-                if current.strip():
-                    chunks.append(current.strip())
-                current = s
-        if current.strip():
-            chunks.append(current.strip())
-        return chunks or [text]
+    def _chunk(
+        text: str,
+        strategy: Optional[str] = None,
+        size: Optional[int] = None,
+        overlap: Optional[int] = None,
+        threshold: Optional[float] = None,
+    ) -> list:
+        from src import chunker
+        from src.config import config
 
-    def ingest(self, doc_id: str, text: str, metadata: Optional[dict] = None) -> None:
+        strat = strategy or config.chunking_strategy
+        sz = size or config.chunk_size
+        ov = overlap or config.chunk_overlap
+        th = threshold or config.semantic_threshold
+
+        if strat == "structural":
+            return chunker.chunk_structural(text)
+        elif strat == "semantic":
+            return chunker.chunk_semantic(text, threshold=th)
+        else:  # fixed_size
+            return chunker.chunk_fixed(text, size=sz, overlap=ov)
+
+    def clear_doc(self, doc_id: str) -> None:
+        self.docs = [d for d in self.docs if d[2].get("doc_id") != doc_id]
+
+    def ingest(
+        self,
+        doc_id: str,
+        text: str,
+        metadata: Optional[dict] = None,
+        strategy: Optional[str] = None,
+        size: Optional[int] = None,
+        overlap: Optional[int] = None,
+        threshold: Optional[float] = None,
+    ) -> None:
         md = metadata or {}
-        for i, chunk in enumerate(self._chunk(text)):
+        chunks = self._chunk(
+            text,
+            strategy=strategy,
+            size=size,
+            overlap=overlap,
+            threshold=threshold,
+        )
+        for i, chunk in enumerate(chunks):
             self.docs.append((f"{doc_id}#{i}", chunk, {**md, "doc_id": doc_id, "chunk_idx": i}))
 
     def search(self, query: str, top_k: int = 5, filter: Optional[dict] = None) -> list:
