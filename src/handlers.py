@@ -54,6 +54,10 @@ def handle_upload(
     storage,
     userstore,
     vector_store,
+    strategy: Optional[str] = None,
+    size: Optional[int] = None,
+    overlap: Optional[int] = None,
+    threshold: Optional[float] = None,
 ) -> dict:
     """Store the file, extract text, ingest into vector store, record in userstore."""
     doc_id = str(uuid.uuid4())
@@ -61,7 +65,15 @@ def handle_upload(
     location = storage.put(key, data)
     text = _extract_text(filename, data)
     if text.strip():
-        vector_store.ingest(doc_id=doc_id, text=text, metadata={"user_id": user_id, "filename": filename})
+        vector_store.ingest(
+            doc_id=doc_id,
+            text=text,
+            metadata={"user_id": user_id, "filename": filename},
+            strategy=strategy,
+            size=size,
+            overlap=overlap,
+            threshold=threshold,
+        )
     userstore.add_doc(
         user_id=user_id,
         doc_id=doc_id,
@@ -198,3 +210,173 @@ def handle_list_docs(user_id: str, userstore) -> dict:
 
 def handle_recent_queries(user_id: str, userstore, limit: int = 10) -> dict:
     return {"user_id": user_id, "queries": userstore.recent_queries(user_id, limit=limit)}
+
+
+def handle_evaluate(
+    user_id: str,
+    doc_id: str,
+    storage,
+    userstore,
+    vector_store,
+    strategy: Optional[str] = None,
+    size: Optional[int] = None,
+    overlap: Optional[int] = None,
+    threshold: Optional[float] = None,
+) -> dict:
+    # 1. Find document in userstore
+    docs = userstore.list_docs(user_id)
+    doc = next((d for d in docs if d["doc_id"] == doc_id), None)
+    if not doc:
+        raise ValueError(f"Document {doc_id} not found for user {user_id}")
+
+    filename = doc.get("filename", "unknown")
+
+    # 2. Retrieve original text from storage
+    key = f"{user_id}/{doc_id}/{filename}"
+    try:
+        data = storage.get(key)
+        text = _extract_text(filename, data)
+    except Exception as e:
+        raise ValueError(f"Failed to retrieve document content: {str(e)}")
+
+    # 3. Dynamic Re-ingestion: Clear vector index and re-ingest if custom strategy parameters are specified
+    if strategy:
+        if hasattr(vector_store, "clear_doc"):
+            vector_store.clear_doc(doc_id)
+        if text.strip():
+            vector_store.ingest(
+                doc_id=doc_id,
+                text=text,
+                metadata={"user_id": user_id, "filename": filename},
+                strategy=strategy,
+                size=size,
+                overlap=overlap,
+                threshold=threshold,
+            )
+
+    # 4. Run the 5 probe questions
+    probe_questions = [
+        {
+            "query": "What is the chemical equation for photosynthesis?",
+            "keywords": ["6 co2", "6 h2o", "c6h12o6", "light energy"],
+        },
+        {
+            "query": "Where does photosynthesis occur in leaves?",
+            "keywords": ["chloroplasts", "chlorophyll", "pigment", "palisade"],
+        },
+        {
+            "query": "What happens during the light-dependent phase?",
+            "keywords": ["split water", "photolysis", "nadp", "nadph", "grana"],
+        },
+        {
+            "query": "What are the three main factors affecting photosynthesis?",
+            "keywords": ["light intensity", "carbon dioxide", "temperature"],
+        },
+        {
+            "query": "What is the global average rate of energy capture by photosynthesis today?",
+            "keywords": ["130 terawatts", "six times", "human civilization", "civilisation"],
+        },
+    ]
+
+    queries_results = []
+    rr_scores = []
+
+    p_at_1_list = []
+    p_at_3_list = []
+    p_at_5_list = []
+
+    r_at_1_list = []
+    r_at_3_list = []
+    r_at_5_list = []
+
+    for item in probe_questions:
+        q = item["query"]
+        keywords = item["keywords"]
+
+        # Search up to top 5 chunks
+        chunks = vector_store.search(q, top_k=5, filter={"user_id": user_id})
+
+        retrieved_items = []
+        rr = 0.0
+
+        for idx, c in enumerate(chunks):
+            text_lower = c["text"].lower()
+            is_relevant = any(kw in text_lower for kw in keywords)
+
+            retrieved_items.append({
+                "chunk": idx + 1,
+                "text": c["text"],
+                "score": c["score"],
+                "relevant": is_relevant,
+            })
+
+            if is_relevant and rr == 0.0:
+                rr = 1.0 / (idx + 1)
+
+        rr_scores.append(rr)
+
+        def calc_metrics(k: int):
+            sub = retrieved_items[:k]
+            relevant_count = sum(1 for x in sub if x["relevant"])
+            precision = relevant_count / k
+            recall = 1.0 if relevant_count > 0 else 0.0
+            return precision, recall
+
+        p1, r1 = calc_metrics(1)
+        p3, r3 = calc_metrics(3)
+        p5, r5 = calc_metrics(5)
+
+        p_at_1_list.append(p1)
+        p_at_3_list.append(p3)
+        p_at_5_list.append(p5)
+
+        r_at_1_list.append(r1)
+        r_at_3_list.append(r3)
+        r_at_5_list.append(r5)
+
+        queries_results.append({
+            "query": q,
+            "keywords": keywords,
+            "retrieved": retrieved_items,
+            "metrics": {
+                "precision_at_1": p1,
+                "precision_at_3": p3,
+                "precision_at_5": p5,
+                "recall_at_1": r1,
+                "recall_at_3": r3,
+                "recall_at_5": r5,
+                "mrr": rr,
+            },
+        })
+
+    avg_p_at_1 = sum(p_at_1_list) / len(p_at_1_list)
+    avg_p_at_3 = sum(p_at_3_list) / len(p_at_3_list)
+    avg_p_at_5 = sum(p_at_5_list) / len(p_at_5_list)
+
+    avg_r_at_1 = sum(r_at_1_list) / len(r_at_1_list)
+    avg_r_at_3 = sum(r_at_3_list) / len(r_at_3_list)
+    avg_r_at_5 = sum(r_at_5_list) / len(r_at_5_list)
+
+    avg_mrr = sum(rr_scores) / len(rr_scores)
+
+    total_chunks = -1
+    if hasattr(vector_store, "docs"):
+        total_chunks = len([d for d in vector_store.docs if d[2].get("doc_id") == doc_id])
+
+    return {
+        "doc_id": doc_id,
+        "filename": filename,
+        "strategy_used": strategy or "default",
+        "num_chunks_total": total_chunks,
+        "metrics": {
+            "precision_at_1": avg_p_at_1,
+            "precision_at_3": avg_p_at_3,
+            "precision_at_5": avg_p_at_5,
+            "recall_at_1": avg_r_at_1,
+            "recall_at_3": avg_r_at_3,
+            "recall_at_5": avg_r_at_5,
+            "mrr": avg_mrr,
+        },
+        "queries": queries_results,
+    }
+
