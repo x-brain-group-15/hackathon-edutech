@@ -54,7 +54,13 @@ class BedrockAI:
         if needs_prefix and not already_prefixed:
             model_id = f"{region_group}.{model_id}"
 
-        return f"arn:aws:bedrock:{self.region}::foundation-model/{model_id}"
+        # If it is a cross-region inference profile (prefixed with us., eu., ap.),
+        # use the ::inference-profile/ ARN format instead of ::foundation-model/
+        is_profile = any(model_id.startswith(f"{p}.") for p in ("us", "eu", "ap"))
+        if is_profile:
+            return f"arn:aws:bedrock:{self.region}::inference-profile/{model_id}"
+        else:
+            return f"arn:aws:bedrock:{self.region}::foundation-model/{model_id}"
 
     def retrieve_and_generate(self, query: str, kb_id: str = "") -> dict:
         if not kb_id:
