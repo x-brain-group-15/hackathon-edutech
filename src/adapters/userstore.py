@@ -5,6 +5,8 @@ Interface:
     list_docs(user_id) -> list[dict]
     log_query(user_id, query, answer) -> None
     recent_queries(user_id, limit=10) -> list[dict]
+    save_quiz(user_id, quiz_id, doc_id, difficulty, questions: list) -> None
+    list_quizzes(user_id, limit=20) -> list[dict]
 """
 import json
 from datetime import datetime, timezone
@@ -63,6 +65,29 @@ class DynamoDBUserStore:
         )
         return resp.get("Items", [])
 
+    def save_quiz(self, user_id: str, quiz_id: str, doc_id: str, difficulty: str, questions: list) -> None:
+        ts = _now()
+        self.table.put_item(
+            Item={
+                "user_id": user_id,
+                "sk": f"QUIZ#{ts}#{quiz_id}",
+                "quiz_id": quiz_id,
+                "doc_id": doc_id,
+                "difficulty": difficulty,
+                "questions": questions,
+                "created_at": ts,
+            }
+        )
+
+    def list_quizzes(self, user_id: str, limit: int = 20) -> list:
+        resp = self.table.query(
+            KeyConditionExpression="user_id = :u AND begins_with(sk, :p)",
+            ExpressionAttributeValues={":u": user_id, ":p": "QUIZ#"},
+            ScanIndexForward=False,
+            Limit=limit,
+        )
+        return resp.get("Items", [])
+
 
 class PostgresUserStore:
     def __init__(self, url: str):
@@ -96,6 +121,16 @@ class PostgresUserStore:
                     created_at TIMESTAMPTZ DEFAULT NOW()
                 );
                 CREATE INDEX IF NOT EXISTS user_queries_user_idx ON user_queries(user_id, created_at DESC);
+                CREATE TABLE IF NOT EXISTS user_quizzes (
+                    id SERIAL PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    quiz_id TEXT NOT NULL UNIQUE,
+                    doc_id TEXT,
+                    difficulty TEXT,
+                    questions JSONB,
+                    created_at TIMESTAMPTZ DEFAULT NOW()
+                );
+                CREATE INDEX IF NOT EXISTS user_quizzes_user_idx ON user_quizzes(user_id, created_at DESC);
             """)
 
     def add_doc(self, user_id, doc_id, metadata):
@@ -136,6 +171,31 @@ class PostgresUserStore:
                 for r in cur.fetchall()
             ]
 
+    def save_quiz(self, user_id: str, quiz_id: str, doc_id: str, difficulty: str, questions: list) -> None:
+        with self.conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO user_quizzes (user_id, quiz_id, doc_id, difficulty, questions) "
+                "VALUES (%s, %s, %s, %s, %s) "
+                "ON CONFLICT (quiz_id) DO UPDATE SET questions = EXCLUDED.questions",
+                (user_id, quiz_id, doc_id, difficulty, json.dumps(questions)),
+            )
+
+    def list_quizzes(self, user_id: str, limit: int = 20) -> list:
+        with self.conn.cursor() as cur:
+            cur.execute(
+                "SELECT quiz_id, doc_id, difficulty, questions, created_at FROM user_quizzes "
+                "WHERE user_id = %s ORDER BY created_at DESC LIMIT %s",
+                (user_id, limit),
+            )
+            return [
+                {
+                    "quiz_id": r[0], "doc_id": r[1], "difficulty": r[2],
+                    "questions": r[3] if isinstance(r[3], list) else json.loads(r[3] or "[]"),
+                    "created_at": r[4].isoformat(),
+                }
+                for r in cur.fetchall()
+            ]
+
 
 class SQLiteUserStore:
     """Local dev store. NOT for production — single-file, no concurrency, no scaling."""
@@ -163,6 +223,16 @@ class SQLiteUserStore:
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             );
             CREATE INDEX IF NOT EXISTS user_queries_user_idx ON user_queries(user_id, created_at DESC);
+            CREATE TABLE IF NOT EXISTS user_quizzes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT NOT NULL,
+                quiz_id TEXT NOT NULL UNIQUE,
+                doc_id TEXT,
+                difficulty TEXT,
+                questions TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE INDEX IF NOT EXISTS user_quizzes_user_idx ON user_quizzes(user_id, created_at DESC);
         """)
         self.conn.commit()
 
@@ -198,6 +268,29 @@ class SQLiteUserStore:
         )
         return [
             {"query": r[0], "answer": r[1], "created_at": r[2]}
+            for r in cur.fetchall()
+        ]
+
+    def save_quiz(self, user_id: str, quiz_id: str, doc_id: str, difficulty: str, questions: list) -> None:
+        self.conn.execute(
+            "INSERT OR REPLACE INTO user_quizzes (user_id, quiz_id, doc_id, difficulty, questions) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (user_id, quiz_id, doc_id, difficulty, json.dumps(questions)),
+        )
+        self.conn.commit()
+
+    def list_quizzes(self, user_id: str, limit: int = 20) -> list:
+        cur = self.conn.execute(
+            "SELECT quiz_id, doc_id, difficulty, questions, created_at FROM user_quizzes "
+            "WHERE user_id = ? ORDER BY created_at DESC LIMIT ?",
+            (user_id, limit),
+        )
+        return [
+            {
+                "quiz_id": r[0], "doc_id": r[1], "difficulty": r[2],
+                "questions": json.loads(r[3] or "[]"),
+                "created_at": r[4],
+            }
             for r in cur.fetchall()
         ]
 
@@ -254,6 +347,22 @@ class DocumentDBUserStore:
             for q in self.queries.find({"user_id": user_id}).sort("created_at", -1).limit(limit)
         ]
 
+    def save_quiz(self, user_id: str, quiz_id: str, doc_id: str, difficulty: str, questions: list) -> None:
+        self.db["user_quizzes"].update_one(
+            {"quiz_id": quiz_id},
+            {"$set": {
+                "user_id": user_id, "quiz_id": quiz_id, "doc_id": doc_id,
+                "difficulty": difficulty, "questions": questions, "created_at": _now(),
+            }},
+            upsert=True,
+        )
+
+    def list_quizzes(self, user_id: str, limit: int = 20) -> list:
+        return [
+            {**{k: v for k, v in q.items() if k != "_id"}}
+            for q in self.db["user_quizzes"].find({"user_id": user_id}).sort("created_at", -1).limit(limit)
+        ]
+
 
 class MySQLUserStore:
     """RDS MySQL / Aurora MySQL adapter via pymysql. Schema mirrors PostgresUserStore."""
@@ -299,6 +408,18 @@ class MySQLUserStore:
                     INDEX idx_user_created (user_id, created_at)
                 ) CHARACTER SET utf8mb4
             """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS user_quizzes (
+                    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                    user_id VARCHAR(255) NOT NULL,
+                    quiz_id VARCHAR(255) NOT NULL UNIQUE,
+                    doc_id VARCHAR(255),
+                    difficulty VARCHAR(50),
+                    questions JSON,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    INDEX idx_quiz_user_created (user_id, created_at)
+                ) CHARACTER SET utf8mb4
+            """)
 
     def add_doc(self, user_id, doc_id, metadata):
         with self.conn.cursor() as cur:
@@ -334,5 +455,30 @@ class MySQLUserStore:
             )
             return [
                 {"query": r[0], "answer": r[1], "created_at": str(r[2])}
+                for r in cur.fetchall()
+            ]
+
+    def save_quiz(self, user_id: str, quiz_id: str, doc_id: str, difficulty: str, questions: list) -> None:
+        with self.conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO user_quizzes (user_id, quiz_id, doc_id, difficulty, questions) "
+                "VALUES (%s, %s, %s, %s, %s) "
+                "ON DUPLICATE KEY UPDATE questions = VALUES(questions)",
+                (user_id, quiz_id, doc_id, difficulty, json.dumps(questions)),
+            )
+
+    def list_quizzes(self, user_id: str, limit: int = 20) -> list:
+        with self.conn.cursor() as cur:
+            cur.execute(
+                "SELECT quiz_id, doc_id, difficulty, questions, created_at FROM user_quizzes "
+                "WHERE user_id = %s ORDER BY created_at DESC LIMIT %s",
+                (user_id, limit),
+            )
+            return [
+                {
+                    "quiz_id": r[0], "doc_id": r[1], "difficulty": r[2],
+                    "questions": json.loads(r[3]) if isinstance(r[3], str) else (r[3] or []),
+                    "created_at": str(r[4]),
+                }
                 for r in cur.fetchall()
             ]

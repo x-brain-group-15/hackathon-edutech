@@ -56,6 +56,12 @@ class QueryRequest(BaseModel):
     question: str
 
 
+class QuizRequest(BaseModel):
+    doc_id: str | None = None       # optional: scope quiz to a specific document
+    difficulty: str = "medium"      # easy | medium | hard
+    num_questions: int = 5          # 1-20
+
+
 @app.get("/health")
 def health() -> dict:
     return {
@@ -112,6 +118,34 @@ def list_docs(x_user_id: str | None = Header(default=None)) -> dict:
 @app.get("/queries/recent")
 def recent(x_user_id: str | None = Header(default=None), limit: int = 10) -> dict:
     return handlers.handle_recent_queries(_resolve_user_id(x_user_id), userstore, limit=limit)
+
+
+@app.post("/quiz")
+def generate_quiz(req: QuizRequest, x_user_id: str | None = Header(default=None)) -> dict:
+    """Generate a multiple-choice quiz from the user's uploaded documents.
+
+    - `doc_id` (optional): scope to a specific document; omit to use all user docs.
+    - `difficulty`: easy | medium | hard (default: medium).
+    - `num_questions`: how many questions to generate, 1-20 (default: 5).
+    """
+    user_id = _resolve_user_id(x_user_id)
+    return handlers.handle_quiz(
+        user_id=user_id,
+        doc_id=req.doc_id,
+        difficulty=req.difficulty,
+        num_questions=req.num_questions,
+        ai_client=ai_client,
+        userstore=userstore,
+        vector_store=vector_store,
+        vector_backend=config.vector_backend,
+        bedrock_kb_id=config.vector_bedrock_kb_id,
+    )
+
+
+@app.get("/quiz/list")
+def list_quizzes(x_user_id: str | None = Header(default=None), limit: int = 20) -> dict:
+    """List previously generated quizzes for the current user."""
+    return handlers.handle_list_quizzes(_resolve_user_id(x_user_id), userstore, limit=limit)
 
 
 # ---- Static frontend ----
