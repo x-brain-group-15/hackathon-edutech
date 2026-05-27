@@ -96,3 +96,52 @@ def test_list_docs_per_user_isolation():
     assert any(d["filename"] == "a.txt" for d in a_docs)
     assert all(d["filename"] != "b.txt" for d in a_docs)
     assert any(d["filename"] == "b.txt" for d in b_docs)
+
+
+def test_creative_features_endpoints():
+    # 1. Upload a document first
+    upload_res = client.post(
+        "/upload",
+        files={"file": ("creative_lec.txt", b"Photosynthesis occurs in chloroplasts. The light reactions split water to release oxygen.", "text/plain")},
+        headers={"X-User-Id": "creative-user"},
+    )
+    assert upload_res.status_code == 200
+    doc_id = upload_res.json()["doc_id"]
+
+    # 2. Test Socratic query
+    query_res = client.post(
+        "/query",
+        json={"question": "Where does photosynthesis occur?", "socratic": True},
+        headers={"X-User-Id": "creative-user"},
+    )
+    assert query_res.status_code == 200
+    assert "answer" in query_res.json()
+
+    # 3. Test Mind-map generation
+    mindmap_res = client.post(
+        f"/docs/{doc_id}/mindmap",
+        headers={"X-User-Id": "creative-user"},
+    )
+    assert mindmap_res.status_code == 200
+    assert "mindmap" in mindmap_res.json()
+
+    # 4. Test Cornell notes generation
+    cornell_res = client.post(
+        f"/docs/{doc_id}/cornell",
+        headers={"X-User-Id": "creative-user"},
+    )
+    assert cornell_res.status_code == 200
+    c_data = cornell_res.json()["cornell"]
+    assert "cues" in c_data
+    assert "notes" in c_data
+    assert "summary" in c_data
+
+    # 5. Test Flashcards generation
+    flashcards_res = client.post(
+        "/flashcards",
+        json={"topic": "Photosynthesis", "limit": 2, "doc_id": doc_id},
+        headers={"X-User-Id": "creative-user"},
+    )
+    assert flashcards_res.status_code == 200
+    assert "flashcards" in flashcards_res.json()
+    assert len(flashcards_res.json()["flashcards"]) > 0

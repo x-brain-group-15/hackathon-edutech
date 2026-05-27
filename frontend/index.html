@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title id="page-title">StudyBot — AI Study Buddy</title>
   <link rel="stylesheet" href="global.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
   <script>
     // ---------- Early Theme & Language Initialization ----------
     (function () {
@@ -204,51 +205,224 @@
         </div>
       </section>
 
-      <!-- Step 2: Ask Question Card -->
-      <section class="card">
-        <div class="card-header">
-          <div class="card-title-group">
-            <span class="step">2</span>
-            <h2 data-i18n="askTitle"></h2>
-          </div>
-          <span class="meta" data-i18n="askMeta"></span>
-        </div>
-
-        <div class="chat-container">
-          <!-- AI Premium Chat bubbles stream -->
-          <div class="answer-card" id="answer-card">
-            <!-- Messages will be dynamically rendered here -->
-          </div>
-
-          <div class="input-row">
-            <input type="text" id="question" placeholder="Ask your AI buddy about the uploaded notes..."
-              data-i18n-placeholder="questionPlaceholder" autocomplete="off">
-            <button class="primary" id="ask-btn" onclick="ask()">
-              <span data-i18n="askButton"></span>
-              <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="22" y1="2" x2="11" y2="13"></line>
-                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-              </svg>
-              Refresh
-            </button>
-          </div>
-        </div>
-      </section>
-
-      <div class="section-title">
-        <div>
-          <h2 data-i18n="practiceTitle"></h2>
-          <p data-i18n="practiceSubtitle"></p>
-        </div>
-        <span class="section-pill" data-i18n="practicePill"></span>
+      <!-- Navigation Tabs for Premium Study Suite -->
+      <div class="nav-tabs">
+        <button class="tab-btn active" id="btn-tab-chat" onclick="switchTab('tab-chat')">
+          💬 Chat & Socratic
+        </button>
+        <button class="tab-btn" id="btn-tab-cornell" onclick="switchTab('tab-cornell')">
+          📝 Cornell Guide
+        </button>
+        <button class="tab-btn" id="btn-tab-mindmap" onclick="switchTab('tab-mindmap')">
+          📊 Mind-Map
+        </button>
+        <button class="tab-btn" id="btn-tab-leitner" onclick="switchTab('tab-leitner')">
+          🎮 Leitner Arena
+        </button>
+        <button class="tab-btn" id="btn-tab-quiz" onclick="switchTab('tab-quiz')">
+          ✍️ Practice Quiz
+        </button>
       </div>
 
-      <div class="practice-grid">
+      <!-- Tab: Chat & Socratic Tutor -->
+      <div class="tab-content active" id="tab-chat">
+        <section class="card">
+          <div class="card-header">
+            <div class="card-title-group">
+              <span class="step">💬</span>
+              <h2 data-i18n="askTitle"></h2>
+            </div>
+            <span class="meta" data-i18n="askMeta"></span>
+          </div>
+
+          <!-- Socratic Tutor Switcher -->
+          <div class="socratic-wrapper">
+            <div class="socratic-info">
+              <span style="font-size: 1.25rem;">🧠</span>
+              <div>
+                <div class="socratic-title">Socratic Tutor Mode</div>
+                <div class="socratic-subtitle">Guides you to answers instead of spoonfeeding them</div>
+              </div>
+            </div>
+            <label class="socratic-toggle-container">
+              <input type="checkbox" id="socratic-toggle" class="socratic-checkbox">
+              <span class="socratic-slider"></span>
+            </label>
+          </div>
+
+          <div class="chat-container">
+            <!-- AI Premium Chat bubbles stream -->
+            <div class="answer-card" id="answer-card">
+              <!-- Messages will be dynamically rendered here -->
+            </div>
+
+            <div class="input-row">
+              <input type="text" id="question" placeholder="Ask your AI buddy about the uploaded notes..."
+                data-i18n-placeholder="questionPlaceholder" autocomplete="off">
+              <button class="primary" id="ask-btn" onclick="ask()">
+                <span data-i18n="askButton"></span>
+                <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="22" y1="2" x2="11" y2="13"></line>
+                  <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- Tab: Cornell Study Guide -->
+      <div class="tab-content" id="tab-cornell">
+        <section class="card">
+          <div class="card-header">
+            <div class="card-title-group">
+              <span class="step">📝</span>
+              <h2>Cornell Notes Study Guide</h2>
+            </div>
+            <button class="primary" onclick="generateCornell()" id="btn-generate-cornell">Generate Cornell Guide</button>
+          </div>
+
+          <div id="cornell-view" style="display: none;" class="cornell-notes">
+            <div class="cornell-body">
+              <div class="cornell-column-left" id="cornell-cues">
+                <!-- Cues / Keywords go here -->
+              </div>
+              <div class="cornell-column-right" id="cornell-notes-points">
+                <!-- Note taking points go here -->
+              </div>
+            </div>
+            <div class="cornell-summary" id="cornell-summary-text">
+              <!-- Summary goes here -->
+            </div>
+          </div>
+          <div id="cornell-empty" class="empty" style="padding: 3rem 1.5rem; text-align: center;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 44px; height: 44px; margin-bottom: 0.5rem; opacity: 0.4;">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+            </svg>
+            <div class="muted">Upload a document first, then click "Generate Cornell Guide" to create a premium structured study guide.</div>
+          </div>
+        </section>
+      </div>
+
+      <!-- Tab: Mind-Map -->
+      <div class="tab-content" id="tab-mindmap">
+        <section class="card">
+          <div class="card-header">
+            <div class="card-title-group">
+              <span class="step">📊</span>
+              <h2>Interactive Mind-Map</h2>
+            </div>
+            <button class="primary" onclick="generateMindmap()" id="btn-generate-mindmap">Generate Mind-Map</button>
+          </div>
+
+          <div id="mindmap-container" style="display: none; padding: 1rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: rgba(255, 255, 255, 0.02); overflow: auto; text-align: center; min-height: 400px; display: flex; align-items: center; justify-content: center;">
+            <div class="mermaid" id="mindmap-mermaid"></div>
+          </div>
+          <div id="mindmap-empty" class="empty" style="padding: 3rem 1.5rem; text-align: center;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 44px; height: 44px; margin-bottom: 0.5rem; opacity: 0.4;">
+              <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+              <polyline points="2 17 12 22 22 17"></polyline>
+              <polyline points="2 12 12 17 22 12"></polyline>
+            </svg>
+            <div class="muted">Upload a document first, then click "Generate Mind-Map" to visually inspect connections between ideas.</div>
+          </div>
+        </section>
+      </div>
+
+      <!-- Tab: Leitner SRS Arena -->
+      <div class="tab-content" id="tab-leitner">
+        <section class="card">
+          <div class="card-header">
+            <div class="card-title-group">
+              <span class="step">🎮</span>
+              <h2>Leitner active Recall Arena</h2>
+            </div>
+            <div style="display: flex; gap: 0.5rem;">
+              <input type="text" id="flashcard-topic" data-i18n-placeholder="flashcardTopicPlaceholder" placeholder="Topic to generate cards..." style="padding: 0.4rem 0.6rem; font-size: 0.82rem; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--bg); color: var(--text); width: 180px;">
+              <button class="primary" onclick="generateFlashcards()" id="btn-generate-flashcards" style="font-size: 0.82rem;">Generate AI</button>
+            </div>
+          </div>
+
+          <div class="leitner-arena">
+            <!-- XP Dashboard -->
+            <div class="xp-dashboard">
+              <div class="xp-level-badge" id="xp-level">1</div>
+              <div class="xp-bar-wrapper">
+                <div class="xp-bar-info">
+                  <span style="color: var(--muted);">Experience Points (XP)</span>
+                  <span id="xp-text" style="color: var(--accent); font-weight: 700;">0 / 100 XP</span>
+                </div>
+                <div class="xp-bar-bg">
+                  <div class="xp-bar-fill" id="xp-fill"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Leitner Box distribution bar -->
+            <div class="leitner-boxes-bar">
+              <div class="leitner-box-pill">
+                <span class="box-num">Box 1</span>
+                <span class="box-count" id="box-1-count">0</span>
+              </div>
+              <div class="leitner-box-pill">
+                <span class="box-num">Box 2</span>
+                <span class="box-count" id="box-2-count">0</span>
+              </div>
+              <div class="leitner-box-pill">
+                <span class="box-num">Box 3</span>
+                <span class="box-count" id="box-3-count">0</span>
+              </div>
+              <div class="leitner-box-pill">
+                <span class="box-num">Box 4</span>
+                <span class="box-count" id="box-4-count">0</span>
+              </div>
+              <div class="leitner-box-pill">
+                <span class="box-num">Box 5</span>
+                <span class="box-count" id="box-5-count">0</span>
+              </div>
+            </div>
+
+            <!-- Swiper Card -->
+            <div class="flashcard-shell" id="leitner-deck-view" style="display: none;">
+              <div class="flashcard-status">
+                <span class="badge" id="flashcard-progress">Card 0 of 0</span>
+                <span class="badge subtle">Box: <span id="flashcard-box-num">1</span></span>
+              </div>
+              <button class="flashcard" id="flashcard-element" type="button" onclick="flipCard()">
+                <div class="flashcard-inner" id="flashcard-inner">
+                  <div class="flashcard-face front" id="flashcard-front">Click to Flip</div>
+                  <div class="flashcard-face back" id="flashcard-back">Definition</div>
+                </div>
+              </button>
+
+              <div class="flashcard-action-bar">
+                <button class="btn-leitner wrong" onclick="handleLeitnerAnswer(false)">
+                  ❌ Forgot (Box 1)
+                </button>
+                <button class="btn-leitner correct" onclick="handleLeitnerAnswer(true)">
+                  ✓ Remembered (+1 Box)
+                </button>
+              </div>
+            </div>
+
+            <div id="leitner-empty" class="empty" style="padding: 3rem 1.5rem; text-align: center;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 44px; height: 44px; margin-bottom: 0.5rem; opacity: 0.4;">
+                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+              </svg>
+              <div class="muted">Enter a topic and click "Generate AI" to populate active recall flashcards in the Leitner Arena.</div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- Tab: Practice Quiz -->
+      <div class="tab-content" id="tab-quiz">
         <section class="card practice-card quiz-card">
           <div class="card-header">
             <div class="card-title-group">
-              <span class="step">4</span>
+              <span class="step">✍️</span>
               <h2 data-i18n="quizTitle"></h2>
             </div>
             <span class="meta" data-i18n="quizMeta"></span>
@@ -269,39 +443,16 @@
             </div>
           </div>
         </section>
+      </div>
 
-        <section class="card practice-card flashcard-card">
-          <div class="card-header">
-            <div class="card-title-group">
-              <span class="step">5</span>
-              <h2 data-i18n="flashcardTitle"></h2>
-            </div>
-            <span class="meta" data-i18n="flashcardMeta"></span>
-          </div>
-          <div class="flashcard-shell">
-            
-            <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
-              <input type="text" id="flashcard-topic" data-i18n-placeholder="flashcardTopicPlaceholder" placeholder="Enter topic for AI..." style="flex: 1; padding: 0.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--bg); color: var(--text);">
-              <button class="primary" onclick="generateFlashcards()" id="btn-generate-flashcards">Generate AI</button>
-            </div>
-            <div class="flashcard-deck" data-i18n="flashcardDeck"></div>
-            <div class="flashcard-status">
-              <span class="badge" id="flashcard-progress"></span>
-              <span class="badge subtle" data-i18n="flashcardTip"></span>
-            </div>
-            <button class="flashcard" id="flashcard" type="button" data-i18n-aria="flashcardAria">
-              <div class="flashcard-inner">
-                <div class="flashcard-face front" id="flashcard-front"></div>
-                <div class="flashcard-face back" id="flashcard-back"></div>
-              </div>
-            </button>
-            <div class="flashcard-actions">
-              <button class="ghost" id="flashcard-prev" type="button" data-i18n="flashcardPrev"></button>
-              <button class="ghost" id="flashcard-flip" type="button" data-i18n="flashcardFlip"></button>
-              <button class="primary" id="flashcard-next" type="button" data-i18n="flashcardNext"></button>
-            </div>
-          </div>
-        </section>
+      <!-- Level Up Dialog Overlay -->
+      <div id="level-up-overlay">
+        <div class="level-up-dialog">
+          <div style="font-size: 4rem; margin-bottom: 1rem;">🎉</div>
+          <h2 style="font-family: var(--font-display); font-weight: 800; color: var(--accent); margin: 0 0 0.5rem;">LEVEL UP!</h2>
+          <p style="font-size: 1.1rem; font-weight: 500; margin: 0 0 1.5rem;">You reached Level <span id="level-up-num" style="font-weight: 800; color: var(--accent-2);">2</span>!</p>
+          <button class="primary" onclick="closeLevelUp()" style="margin: 0 auto;">Awesome! Keep Learning</button>
+        </div>
       </div>
 
       <!-- Step 4: RAG Quality Dashboard Card -->
@@ -433,8 +584,196 @@
       return 'https://1lse4odraj.execute-api.ap-southeast-1.amazonaws.com';
     };
     const API_BASE = getApiDefault().replace(/\/$/, '');
-
     const USER_ID = (new URLSearchParams(location.search).get('user') || 'test-user-001');
+
+    // ============================================================================
+    // I18N & Translation & Gamification
+    // ============================================================================
+    const I18N = {
+      en: {
+        pageTitle: 'StudyBot — AI Study Buddy',
+        tagline: 'AI Study Buddy — Socratic Tutor, Cornell Notes, Mermaid Mind-Maps',
+        statusLoading: 'Loading system status...',
+        statusOffline: 'backend offline',
+        statusTenant: 'tenant',
+        statusLocal: 'local',
+        statusRemote: 'remote',
+        libraryTitle: 'Your Library',
+        refresh: 'Refresh',
+        libraryEmpty: 'No documents yet.',
+        uploadTitle: 'Upload Documents',
+        uploadMeta: 'PDF, TXT, MD for RAG',
+        askTitle: 'Socratic Tutor',
+        askMeta: 'Ask anything, I will guide you',
+        questionPlaceholder: 'Ask a Socratic question...',
+        askButton: 'Query',
+        cornellTitle: 'Cornell Study Guide',
+        cornellMeta: 'Structured summary',
+        mindmapTitle: 'Interactive Mind-Map',
+        mindmapMeta: 'Visual knowledge graph',
+        leitnerTitle: 'Leitner Arena',
+        leitnerMeta: 'Level {level} (XP: {xp})',
+        leitnerEmpty: 'No cards in this box.',
+        benchmarkTitle: 'RAG Quality Dashboard',
+        benchmarkMrrLabel: 'MRR',
+        benchmarkP3Label: 'P@3',
+        benchmarkChunkLabel: 'Chunk {chunk} (Score: {score})',
+        benchmarkRelevant: '✓ Relevant',
+        benchmarkIrrelevant: '✗ Irrelevant',
+        docRecommended: 'Recommended',
+        docActive: 'Active',
+        docSelect: 'Select',
+        docDelete: 'Delete',
+        docSelectedToast: 'Selected: {filename}',
+        docDeleteConfirm: 'Delete "{filename}"?',
+        docDeleteProgress: 'Deleting...',
+        docDeleteFailed: 'Delete failed',
+        docDeleteSuccess: 'Deleted {filename}'
+      },
+      vi: {
+        pageTitle: 'StudyBot — Trợ lý học tập AI',
+        tagline: 'Trợ lý học tập AI — Gia sư Socratic, Ghi chú Cornell, Mind-Map',
+        statusLoading: 'Đang tải...',
+        statusOffline: 'backend ngoại tuyến',
+        statusTenant: 'tenant',
+        statusLocal: 'cục bộ',
+        statusRemote: 'từ xa',
+        libraryTitle: 'Thư viện',
+        refresh: 'Làm mới',
+        libraryEmpty: 'Chưa có tài liệu.',
+        uploadTitle: 'Tải tài liệu',
+        uploadMeta: 'PDF, TXT, MD',
+        askTitle: 'Gia sư Socratic',
+        askMeta: 'Tôi sẽ dẫn dắt tư duy của bạn',
+        questionPlaceholder: 'Hỏi bất cứ điều gì...',
+        askButton: 'Hỏi',
+        cornellTitle: 'Ghi chú Cornell',
+        cornellMeta: 'Tóm tắt có cấu trúc',
+        mindmapTitle: 'Sơ đồ tư duy',
+        mindmapMeta: 'Đồ thị kiến thức',
+        leitnerTitle: 'Đấu trường Leitner',
+        leitnerMeta: 'Cấp {level} (XP: {xp})',
+        leitnerEmpty: 'Hộp này trống.',
+        benchmarkTitle: 'Bảng chất lượng RAG',
+        benchmarkMrrLabel: 'MRR',
+        benchmarkP3Label: 'P@3',
+        benchmarkChunkLabel: 'Chunk {chunk} (Điểm: {score})',
+        benchmarkRelevant: '✓ Phù hợp',
+        benchmarkIrrelevant: '✗ Không phù hợp',
+        docRecommended: 'Nên dùng',
+        docActive: 'Đang chọn',
+        docSelect: 'Chọn',
+        docDelete: 'Xóa',
+        docDeleteTitle: 'Xóa tài liệu',
+        docSelectedToast: 'Đã chọn tài liệu: {filename}',
+        docDeleteConfirm: 'Bạn chắc chắn muốn xóa "{filename}"? Thao tác này sẽ xóa file khỏi bộ nhớ và làm sạch chỉ mục vector.',
+        docDeleteProgress: 'Đang xóa {filename}...',
+        docDeleteFailed: 'Xóa thất bại: {detail}',
+        docDeleteSuccess: 'Đã xóa {filename}'
+      }
+    };
+
+    let currentLang = document.documentElement.getAttribute('data-lang') || 'en';
+
+    function t(key, vars = {}) {
+      const dict = I18N[currentLang] || I18N.en;
+      let str = dict[key] || I18N.en[key] || key;
+      Object.keys(vars).forEach(k => {
+        str = str.replace(new RegExp(`\\{${k}\\}`, 'g'), vars[k]);
+      });
+      return str;
+    }
+
+    function applyI18n() {
+      document.documentElement.lang = currentLang;
+      document.documentElement.setAttribute('data-lang', currentLang);
+      document.title = t('pageTitle');
+
+      document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        el.textContent = t(key);
+      });
+
+      document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+        const key = el.getAttribute('data-i18n-placeholder');
+        el.setAttribute('placeholder', t(key));
+      });
+
+      document.querySelectorAll('[data-i18n-title]').forEach(el => {
+        const key = el.getAttribute('data-i18n-title');
+        el.setAttribute('title', t(key));
+      });
+
+      document.querySelectorAll('[data-i18n-aria]').forEach(el => {
+        const key = el.getAttribute('data-i18n-aria');
+        el.setAttribute('aria-label', t(key));
+      });
+
+      const debugLog = $('debug-log');
+      if (debugLog && debugLog.getAttribute('data-empty') === 'true') {
+        debugLog.textContent = t('debugEmpty');
+      }
+    }
+
+    function setLanguage(lang) {
+      currentLang = I18N[lang] ? lang : 'en';
+      localStorage.setItem('studybot-lang', currentLang);
+      applyI18n();
+      updateLangButtons();
+      renderWelcomeMessage();
+      loadStatus();
+      refresh();
+      initQuiz();
+      
+      // Reload Leitner State with new language default cards if they have not added custom cards yet
+      const saved = localStorage.getItem('studybot-leitner');
+      if (!saved) {
+        leitnerState.cards = DEFAULT_LEITNER_CARDS[currentLang] || DEFAULT_LEITNER_CARDS.en;
+        leitnerState.xp = 0;
+        leitnerState.level = 1;
+        updateLeitnerStats();
+        renderLeitnerCard();
+      }
+    }
+
+    function updateLangButtons() {
+      document.querySelectorAll('.lang-btn').forEach(btn => {
+        const isActive = btn.getAttribute('data-lang') === currentLang;
+        btn.classList.toggle('active', isActive);
+        btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+      });
+    }
+
+    function initLanguageControls() {
+      document.querySelectorAll('.lang-btn').forEach(btn => {
+        btn.addEventListener('click', () => setLanguage(btn.getAttribute('data-lang')));
+      });
+    }
+
+    function toast(message, type = 'info') {
+      const container = $('toasts');
+      if (!container) return;
+      
+      const toastEl = document.createElement('div');
+      toastEl.className = `toast ${type}`;
+      
+      let icon = 'ℹ️';
+      if (type === 'success') icon = '✓';
+      else if (type === 'error') icon = '❌';
+      else if (type === 'warn') icon = '⚠️';
+      
+      toastEl.innerHTML = `
+        <span style="font-weight: 700; font-size: 1rem;">${icon}</span>
+        <div style="flex-grow: 1;">${message}</div>
+      `;
+      
+      container.appendChild(toastEl);
+      
+      setTimeout(() => {
+        toastEl.style.opacity = '0';
+        setTimeout(() => toastEl.remove(), 300);
+      }, 4000);
+    }
 
     // ============================================================================
     // Helpers
@@ -640,10 +979,11 @@ async function ask() {
   $('answer-card').scrollTop = $('answer-card').scrollHeight;
   
   $('ask-btn').disabled = true;
+  const socratic = $('socratic-toggle').checked;
   const res = await call('/query', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({question: q}),
+    body: JSON.stringify({question: q, socratic: socratic}),
   });
   $('ask-btn').disabled = false;
   
@@ -900,89 +1240,276 @@ $('quiz-reset').addEventListener('click', () => {
 });
 
 // ============================================================================
-// Flashcards
+// Creative Features: Tabs, Cornell Notes, Mermaid Mind-Map, Leitner SRS Arena
 // ============================================================================
-const FLASHCARDS = {
+
+function switchTab(tabId) {
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+  
+  const tabBtn = $(`btn-${tabId}`);
+  const tabContent = $(tabId);
+  if (tabBtn) tabBtn.classList.add('active');
+  if (tabContent) tabContent.classList.add('active');
+  
+  if (tabId === 'tab-leitner') {
+    updateLeitnerStats();
+  }
+}
+
+// --- Cornell Study Guide ---
+async function generateCornell() {
+  const docId = window.selectedDocId || window.lastDocId;
+  if (!docId) {
+    toast(t('benchmarkNeedDoc'), 'warn');
+    return;
+  }
+  
+  const btn = $('btn-generate-cornell');
+  btn.disabled = true;
+  const oldText = btn.textContent;
+  btn.innerHTML = '<span class="spinner"></span> Generating...';
+  
+  try {
+    const res = await call(`/docs/${docId}/cornell`, { method: 'POST' });
+    if (!res.ok) {
+      throw new Error(res.body.detail || 'Failed to generate Cornell study guide');
+    }
+    
+    const data = res.body.cornell;
+    
+    // Render Cues
+    const cuesHtml = data.cues.map(c => `
+      <div class="cornell-cue-card" onclick="scrollToCornellNote('${c.association.replace(/'/g, "\\'")}')">
+        <div style="color: var(--accent); margin-bottom: 0.25rem;">❓ ${c.keyword}</div>
+        <div style="font-size: 0.72rem; color: var(--muted); font-weight: 500;">Points to: ${c.association}</div>
+      </div>
+    `).join('');
+    $('cornell-cues').innerHTML = `<h3 style="font-size: 0.85rem; font-weight: 700; text-transform: uppercase; color: var(--muted); letter-spacing: 0.05em; margin: 0 0 0.5rem;">Cues & Keywords</h3>` + cuesHtml;
+    
+    // Render Notes
+    const notesHtml = data.notes.map(n => `
+      <div class="cornell-note-point">
+        ${n}
+      </div>
+    `).join('');
+    $('cornell-notes-points').innerHTML = `<h3 style="font-size: 0.85rem; font-weight: 700; text-transform: uppercase; color: var(--muted); letter-spacing: 0.05em; margin: 0 0 0.5rem;">Detailed Class Notes</h3>` + notesHtml;
+    
+    // Render Summary
+    $('cornell-summary-text').innerHTML = `
+      <h3 style="font-size: 0.85rem; font-weight: 700; text-transform: uppercase; color: var(--accent-2); letter-spacing: 0.05em; margin: 0 0 0.5rem;">Summary (Takeaway)</h3>
+      <p style="margin: 0; font-size: 0.95rem; line-height: 1.5; font-weight: 500;">${data.summary}</p>
+    `;
+    
+    $('cornell-empty').style.display = 'none';
+    $('cornell-view').style.display = 'flex';
+    toast('Cornell Study Guide successfully generated!', 'success');
+  } catch (err) {
+    toast(err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = oldText;
+  }
+}
+
+function scrollToCornellNote(association) {
+  const notesContainer = $('cornell-notes-points');
+  const notes = notesContainer.querySelectorAll('.cornell-note-point');
+  for (let note of notes) {
+    if (note.textContent.toLowerCase().includes(association.toLowerCase())) {
+      note.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      note.style.borderColor = 'var(--accent)';
+      note.style.background = 'rgba(var(--accent-rgb), 0.05)';
+      setTimeout(() => {
+        note.style.borderColor = 'var(--border)';
+        note.style.background = 'var(--card)';
+      }, 2000);
+      break;
+    }
+  }
+}
+
+// --- Interactive Mind-Map ---
+async function generateMindmap() {
+  const docId = window.selectedDocId || window.lastDocId;
+  if (!docId) {
+    toast(t('benchmarkNeedDoc'), 'warn');
+    return;
+  }
+  
+  const btn = $('btn-generate-mindmap');
+  btn.disabled = true;
+  const oldText = btn.textContent;
+  btn.innerHTML = '<span class="spinner"></span> Generating...';
+  
+  try {
+    const res = await call(`/docs/${docId}/mindmap`, { method: 'POST' });
+    if (!res.ok) {
+      throw new Error(res.body.detail || 'Failed to generate Mind-Map');
+    }
+    
+    const code = res.body.mindmap;
+    window.lastMindmapCode = code; // Cache for theme changes
+    const container = $('mindmap-container');
+    container.style.display = 'flex';
+    $('mindmap-empty').style.display = 'none';
+    
+    container.innerHTML = `<div class="mermaid" id="mindmap-mermaid">${code}</div>`;
+    
+    if (window.mermaid) {
+      mermaid.init(undefined, document.querySelectorAll('.mermaid'));
+    }
+    toast('Mind-Map successfully generated!', 'success');
+  } catch (err) {
+    toast(err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = oldText;
+  }
+}
+
+// --- Leitner Active Recall Arena SRS ---
+const DEFAULT_LEITNER_CARDS = {
   en: [
-    {term: 'Photosynthesis', definition: 'Process where plants convert light into chemical energy.'},
-    {term: 'CPU cache', definition: 'Small, fast memory that stores frequently used data.'},
-    {term: 'Derivative', definition: 'Measures the rate of change of a function.'},
-    {term: 'Internet Protocol (IP)', definition: 'Addressing and routing protocol for data packets.'},
-    {term: 'Energy conservation', definition: 'Total energy remains constant in a closed system.'}
+    { term: 'Photosynthesis', definition: 'Process where plants convert light into chemical energy.', box: 1 },
+    { term: 'CPU cache', definition: 'Small, fast memory that stores frequently used data.', box: 1 },
+    { term: 'Derivative', definition: 'Measures the rate of change of a function.', box: 1 },
+    { term: 'Internet Protocol (IP)', definition: 'Addressing and routing protocol for data packets.', box: 1 },
+    { term: 'Energy conservation', definition: 'Total energy remains constant in a closed system.', box: 1 }
   ],
   vi: [
-    {term: 'Quang hợp', definition: 'Quá trình thực vật biến đổi ánh sáng thành năng lượng hóa học.'},
-    {term: 'Bộ nhớ cache CPU', definition: 'Bộ nhớ nhỏ, nhanh, lưu dữ liệu dùng thường xuyên.'},
-    {term: 'Đạo hàm', definition: 'Đo tốc độ thay đổi của hàm số tại một điểm.'},
-    {term: 'Internet Protocol (IP)', definition: 'Giao thức địa chỉ và định tuyến gói dữ liệu.'},
-    {term: 'Bảo toàn năng lượng', definition: 'Tổng năng lượng trong hệ kín không đổi.'}
+    { term: 'Quang hợp', definition: 'Quá trình thực vật biến đổi ánh sáng thành năng lượng hóa học.', box: 1 },
+    { term: 'Bộ nhớ cache CPU', definition: 'Bộ nhớ nhỏ, nhanh, lưu dữ liệu dùng thường xuyên.', box: 1 },
+    { term: 'Đạo hàm', definition: 'Đo tốc độ thay đổi của hàm số tại một điểm.', box: 1 },
+    { term: 'Internet Protocol (IP)', definition: 'Giao thức địa chỉ và định tuyến gói dữ liệu.', box: 1 },
+    { term: 'Bảo toàn năng lượng', definition: 'Tổng năng lượng trong hệ kín không đổi.', box: 1 }
   ]
 };
 
-const flashState = {
+const leitnerState = {
+  cards: [],
   index: 0,
-  flipped: false
+  flipped: false,
+  xp: 0,
+  level: 1,
 };
 
-function getFlashcardDeck() {
-  return FLASHCARDS[currentLang] || FLASHCARDS.en;
+function loadLeitnerState() {
+  const saved = localStorage.getItem('studybot-leitner');
+  if (saved) {
+    try {
+      const parsed = JSON.parse(saved);
+      leitnerState.cards = parsed.cards || [];
+      leitnerState.xp = parsed.xp || 0;
+      leitnerState.level = parsed.level || 1;
+    } catch (e) {
+      console.error('Failed to load Leitner state', e);
+    }
+  }
+  
+  if (!leitnerState.cards || leitnerState.cards.length === 0) {
+    leitnerState.cards = DEFAULT_LEITNER_CARDS[currentLang] || DEFAULT_LEITNER_CARDS.en;
+    leitnerState.xp = 0;
+    leitnerState.level = 1;
+  }
 }
 
-function renderFlashcard() {
-  const deck = getFlashcardDeck();
-  const progressEl = $('flashcard-progress');
-  const cardEl = $('flashcard');
-  const frontEl = $('flashcard-front');
-  const backEl = $('flashcard-back');
-  const prevBtn = $('flashcard-prev');
-  const nextBtn = $('flashcard-next');
-  const flipBtn = $('flashcard-flip');
+function saveLeitnerState() {
+  localStorage.setItem('studybot-leitner', JSON.stringify({
+    cards: leitnerState.cards,
+    xp: leitnerState.xp,
+    level: leitnerState.level
+  }));
+}
 
+function updateLeitnerStats() {
+  const counts = {1:0, 2:0, 3:0, 4:0, 5:0};
+  leitnerState.cards.forEach(c => {
+    counts[c.box] = (counts[c.box] || 0) + 1;
+  });
+  
+  for (let i = 1; i <= 5; i++) {
+    const el = $(`box-${i}-count`);
+    if (el) el.textContent = counts[i];
+  }
+  
+  const currentLevel = Math.floor(leitnerState.xp / 100) + 1;
+  if (currentLevel > leitnerState.level) {
+    leitnerState.level = currentLevel;
+    showLevelUp(currentLevel);
+  }
+  
+  const xpLvlEl = $('xp-level');
+  if (xpLvlEl) xpLvlEl.textContent = leitnerState.level;
+  
+  const progress = leitnerState.xp % 100;
+  const xpTextEl = $('xp-text');
+  if (xpTextEl) xpTextEl.textContent = `${progress} / 100 XP (Level ${leitnerState.level})`;
+  
+  const xpFillEl = $('xp-fill');
+  if (xpFillEl) xpFillEl.style.width = `${progress}%`;
+}
+
+function renderLeitnerCard() {
+  const deck = leitnerState.cards;
   if (!deck.length) {
-    progressEl.textContent = '';
-    frontEl.innerHTML = `<span class="flash-label">${t('flashcardFrontLabel')}</span><span class="flash-text muted">${t('flashcardEmptyFront')}</span>`;
-    backEl.innerHTML = `<span class="flash-label">${t('flashcardBackLabel')}</span><span class="flash-text muted">${t('flashcardEmptyBack')}</span>`;
-    cardEl.classList.remove('flipped');
-    cardEl.disabled = true;
-    prevBtn.disabled = true;
-    nextBtn.disabled = true;
-    flipBtn.disabled = true;
+    $('leitner-deck-view').style.display = 'none';
+    $('leitner-empty').style.display = 'block';
     return;
   }
-
-  if (flashState.index >= deck.length) {
-    flashState.index = 0;
+  
+  if (leitnerState.index >= deck.length) {
+    leitnerState.index = 0;
   }
-  const current = deck[flashState.index];
-  progressEl.textContent = t('flashcardProgress', {index: flashState.index + 1, total: deck.length});
-  frontEl.innerHTML = `<span class="flash-label">${t('flashcardFrontLabel')}</span><span class="flash-text">${current.term}</span>`;
-  backEl.innerHTML = `<span class="flash-label">${t('flashcardBackLabel')}</span><span class="flash-text">${current.definition}</span>`;
-  cardEl.classList.toggle('flipped', flashState.flipped);
-  cardEl.disabled = false;
-  prevBtn.disabled = flashState.index === 0;
-  nextBtn.disabled = flashState.index >= deck.length - 1;
-  flipBtn.disabled = false;
+  
+  const current = deck[leitnerState.index];
+  $('flashcard-progress').textContent = `Card ${leitnerState.index + 1} of ${deck.length}`;
+  $('flashcard-box-num').textContent = current.box;
+  
+  $('flashcard-front').innerHTML = `<span class="flash-label">Term</span><span class="flash-text">${current.term}</span>`;
+  $('flashcard-back').innerHTML = `<span class="flash-label">Definition</span><span class="flash-text">${current.definition}</span>`;
+  
+  $('flashcard-inner').style.transform = leitnerState.flipped ? 'rotateY(180deg)' : 'rotateY(0deg)';
 }
 
-function flipFlashcard() {
-  flashState.flipped = !flashState.flipped;
-  renderFlashcard();
+function flipCard() {
+  leitnerState.flipped = !leitnerState.flipped;
+  renderLeitnerCard();
 }
 
-function moveFlashcard(step) {
-  const deck = getFlashcardDeck();
-  const nextIndex = flashState.index + step;
-  if (nextIndex >= 0 && nextIndex < deck.length) {
-    flashState.index = nextIndex;
-    flashState.flipped = false;
-    renderFlashcard();
+function handleLeitnerAnswer(remembered) {
+  const deck = leitnerState.cards;
+  if (!deck.length) return;
+  
+  const current = deck[leitnerState.index];
+  
+  if (remembered) {
+    current.box = Math.min(5, current.box + 1);
+    leitnerState.xp += 15;
+    toast('Remembered! Card promoted to Box ' + current.box + ' (+15 XP)', 'success');
+  } else {
+    current.box = 1;
+    leitnerState.xp += 5;
+    toast('Forgot! Card demoted to Box 1 (+5 XP)', 'warn');
   }
+  
+  leitnerState.index = (leitnerState.index + 1) % deck.length;
+  leitnerState.flipped = false;
+  
+  saveLeitnerState();
+  updateLeitnerStats();
+  renderLeitnerCard();
 }
 
-$('flashcard').addEventListener('click', flipFlashcard);
-$('flashcard-flip').addEventListener('click', flipFlashcard);
-$('flashcard-prev').addEventListener('click', () => moveFlashcard(-1));
-$('flashcard-next').addEventListener('click', () => moveFlashcard(1));
+function showLevelUp(level) {
+  const lvlNumEl = $('level-up-num');
+  if (lvlNumEl) lvlNumEl.textContent = level;
+  $('level-up-overlay').style.display = 'grid';
+}
+
+function closeLevelUp() {
+  $('level-up-overlay').style.display = 'none';
+}
 
 // ============================================================================
 // Language Controls
@@ -1527,8 +2054,9 @@ async function generateFlashcards() {
     return;
   }
   
-  $('btn-generate-flashcards').disabled = true;
-  $('btn-generate-flashcards').innerHTML = '<span class="spinner"></span>';
+  const btn = $('btn-generate-flashcards');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>';
   
   const docId = window.selectedDocId || window.lastDocId;
   const payload = {
@@ -1543,8 +2071,8 @@ async function generateFlashcards() {
     body: JSON.stringify(payload)
   });
   
-  $('btn-generate-flashcards').disabled = false;
-  $('btn-generate-flashcards').textContent = 'Generate AI';
+  btn.disabled = false;
+  btn.textContent = 'Generate AI';
   
   if (!res.ok) {
     toast('Failed to generate flashcards', 'error');
@@ -1553,19 +2081,56 @@ async function generateFlashcards() {
   
   const newCards = res.body.flashcards;
   if (newCards && newCards.length > 0) {
-    FLASHCARDS[currentLang] = newCards.map(c => ({term: c.front, definition: c.back}));
-    flashState.index = 0;
-    flashState.flipped = false;
-    renderFlashcard();
-    toast('Flashcards generated!', 'success');
+    const mapped = newCards.map(c => ({
+      term: c.front,
+      definition: c.back,
+      box: 1
+    }));
+    
+    leitnerState.cards = [...mapped, ...leitnerState.cards];
+    leitnerState.index = 0;
+    leitnerState.flipped = false;
+    
+    saveLeitnerState();
+    updateLeitnerStats();
+    renderLeitnerCard();
+    
+    $('leitner-empty').style.display = 'none';
+    $('leitner-deck-view').style.display = 'block';
+    toast('Flashcards generated & loaded into Box 1!', 'success');
   } else {
     toast('No flashcards generated.', 'warn');
   }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    initLanguageControls();
-    setLanguage(currentLang);
+  initLanguageControls();
+  
+  currentLang = localStorage.getItem('studybot-lang') || 'en';
+  applyI18n();
+  updateLangButtons();
+  renderWelcomeMessage();
+  loadStatus();
+  refresh();
+  initQuiz();
+  
+  loadLeitnerState();
+  updateLeitnerStats();
+  if (leitnerState.cards && leitnerState.cards.length > 0) {
+    const emptyEl = $('leitner-empty');
+    const viewEl = $('leitner-deck-view');
+    if (emptyEl) emptyEl.style.display = 'none';
+    if (viewEl) viewEl.style.display = 'block';
+    renderLeitnerCard();
+  }
+  
+  if (window.mermaid) {
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'default',
+      securityLevel: 'loose',
+    });
+  }
 });
 </script>
 </body>

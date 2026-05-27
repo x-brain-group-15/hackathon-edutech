@@ -54,6 +54,7 @@ def _resolve_user_id(x_user_id: str | None) -> str:
 
 class QueryRequest(BaseModel):
     question: str
+    socratic: bool = False
 
 
 @app.get("/health")
@@ -119,6 +120,7 @@ def query(req: QueryRequest, x_user_id: str | None = Header(default=None)) -> di
             vector_store=vector_store,
             vector_backend=config.vector_backend,
             bedrock_kb_id=config.vector_bedrock_kb_id,
+            socratic=req.socratic,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}")
@@ -182,6 +184,7 @@ def list_docs(x_user_id: str | None = Header(default=None)) -> dict:
 class FlashcardRequest(BaseModel):
     topic: str
     limit: int = 5
+    doc_id: str | None = None
 
 @app.post("/flashcards")
 def generate_flashcards(req: FlashcardRequest, x_user_id: str | None = Header(default=None)) -> dict:
@@ -192,14 +195,49 @@ def generate_flashcards(req: FlashcardRequest, x_user_id: str | None = Header(de
         user_id=user_id,
         topic=req.topic,
         limit=req.limit,
-        ai_client=ai_client,
+        doc_id=req.doc_id,
         vector_store=vector_store,
+        ai_client=ai_client,
         aws_region=config.aws_region
     )
 
 @app.get("/queries/recent")
 def recent(x_user_id: str | None = Header(default=None), limit: int = 10) -> dict:
     return handlers.handle_recent_queries(_resolve_user_id(x_user_id), userstore, limit=limit)
+
+
+@app.post("/docs/{doc_id}/mindmap")
+def generate_mindmap(doc_id: str, x_user_id: str | None = Header(default=None)) -> dict:
+    user_id = _resolve_user_id(x_user_id)
+    try:
+        return handlers.handle_generate_mindmap(
+            user_id=user_id,
+            doc_id=doc_id,
+            storage=storage,
+            userstore=userstore,
+            ai_client=ai_client,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/docs/{doc_id}/cornell")
+def generate_cornell(doc_id: str, x_user_id: str | None = Header(default=None)) -> dict:
+    user_id = _resolve_user_id(x_user_id)
+    try:
+        return handlers.handle_generate_cornell(
+            user_id=user_id,
+            doc_id=doc_id,
+            storage=storage,
+            userstore=userstore,
+            ai_client=ai_client,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ---- Static frontend ----

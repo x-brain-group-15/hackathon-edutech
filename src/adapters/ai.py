@@ -120,6 +120,46 @@ class LocalAI:
     """Local stub. Returns canned responses. Use for development without AWS credentials."""
 
     def invoke(self, prompt: str, **kwargs: Any) -> str:
+        prompt_lower = prompt.lower()
+        if "cornell note-taking format" in prompt_lower:
+            return """
+            {
+              "cues": [
+                {"keyword": "Photosynthesis", "association": "Chloroplasts"},
+                {"keyword": "Light Reactions", "association": "Thylakoid Membrane"},
+                {"keyword": "Calvin Cycle", "association": "Stroma"},
+                {"keyword": "Chlorophyll", "association": "Pigment"},
+                {"keyword": "ATP", "association": "Energy carrier"}
+              ],
+              "notes": [
+                "Photosynthesis converts light energy into chemical energy.",
+                "Light reactions split water molecules, releasing oxygen as a byproduct.",
+                "ATP and NADPH are synthesized to power the Calvin Cycle.",
+                "Carbon dioxide fixation occurs in the stroma during the light-independent phase.",
+                "Chloroplasts contain chlorophyll pigments that absorb light wavelengths."
+              ],
+              "summary": "Photosynthesis is the primary process by which plants synthesize organic compounds from CO2 and water, utilizing sunlight as an energy source."
+            }
+            """
+        elif "mermaid.js" in prompt_lower or "mindmap" in prompt_lower:
+            return """
+            mindmap
+              root((Photosynthesis))
+                Light Reactions
+                  Water
+                  Oxygen
+                Calvin Cycle
+                  CO2
+                  Sugar
+            """
+        elif "flashcards" in prompt_lower:
+            return """
+            [
+              {"front": "Where does photosynthesis occur?", "back": "In the chloroplasts of plant cells."},
+              {"front": "What does light-dependent phase produce?", "back": "Oxygen, ATP, and NADPH."}
+            ]
+            """
+        
         snippet = prompt[:200].replace("\n", " ")
         return (
             f"[LOCAL_AI_STUB] Received prompt: {snippet!r}... "

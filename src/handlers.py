@@ -50,6 +50,65 @@ CONTEXT:
 {context}
 """
 
+SOCRATIC_PROMPT = """You are a Socratic tutor assisting a student based on their lecture notes.
+Your goal is to guide the student to discover the answer themselves through thought-provoking leading questions, rather than giving the answer directly.
+
+Guidelines:
+1. NEVER give the direct answer to the student's question.
+2. Formulate your response as a gentle, encouraging question or series of short prompts that guide their logic based ONLY on the provided context.
+3. Be supportive, friendly, and act like a wise professor.
+4. Keep your responses relatively short (under 4 sentences).
+
+Context from lecture notes:
+{context}
+
+Student's Question: {question}
+
+Response:"""
+
+MINDMAP_PROMPT = """You are a study assistant. Analyze the provided lecture notes and generate an interactive mind-map of the core concepts in the Mermaid.js `mindmap` diagram format.
+
+Guidelines:
+1. Start your response EXACTLY with `mindmap` (no header, no other text).
+2. Use valid Mermaid.js `mindmap` syntax. Example syntax:
+mindmap
+  root((Photosynthesis))
+    Light Reactions
+      Inputs
+        Water
+        Light
+      Outputs
+        Oxygen
+        ATP
+        NADPH
+    Calvin Cycle
+      Inputs
+        CO2
+        ATP
+        NADPH
+      Outputs
+        G3P Sugar
+3. Do NOT use any special characters like parentheses, brackets, or quotes in node names unless escaped. Keep node names short (1-4 words).
+4. Focus on the most important testable concepts and structural connections in the lecture notes.
+5. Return ONLY the raw code block starting with `mindmap` and ending with the final node. Do NOT wrap it in markdown code blocks like ```mermaid. Just output the raw mermaid code directly.
+
+LECTURE NOTES:
+{context}
+"""
+
+CORNELL_PROMPT = """You are a study assistant. Analyze the provided lecture notes and generate a highly structured study guide in the prestigious Cornell Note-taking format.
+
+Your response must be returned strictly as a JSON object with the following three fields:
+1. "cues": a list of objects, each containing "keyword" (a key question, formula, or cue term) and "association" (what section or concept it points to). Generate at least 5 cues.
+2. "notes": a list of detailed, structured study points (bullet points, structured facts, definitions, or equations) matching the cues on the left. Generate at least 5 points.
+3. "summary": a concise, 2-3 sentence summary summarizing the absolute core takeaway of the entire lecture.
+
+Return the output STRICTLY as a raw JSON object. Do NOT wrap it in markdown code blocks or add any text before or after the JSON.
+
+LECTURE NOTES:
+{context}
+"""
+
 def _put_cloudwatch_metric(metric_name: str, value: float, unit: str, aws_region: str, status: str = "Success"):
     """Real-world scenario: Put custom metrics to CloudWatch to monitor AI operations."""
     try:
@@ -238,6 +297,7 @@ def handle_query(
     vector_store,
     vector_backend: str,
     bedrock_kb_id: str,
+    socratic: bool = False,
 ) -> dict:
     """RAG flow: retrieve user's relevant chunks → call AI with context → log + return."""
 
@@ -248,10 +308,81 @@ def handle_query(
         "query_received",
         user_id=user_id,
         question=question,
-        vector_backend=vector_backend
+        vector_backend=vector_backend,
+        socratic=socratic
     )
 
     try:
+        if socratic:
+            log_step(
+                "rag_query",
+                "socratic_mode_start",
+                user_id=user_id
+            )
+            
+            # Retrieve chunks
+            if vector_backend == "bedrock_kb":
+                log_step(
+                    "rag_query",
+                    "bedrock_retrieve_start",
+                    user_id=user_id,
+                    kb_id=bedrock_kb_id
+                )
+                ret_res = ai_client.agent_runtime.retrieve(
+                    knowledgeBaseId=bedrock_kb_id,
+                    retrievalQuery={"text": question},
+                    retrievalConfiguration={
+                        "vectorSearchConfiguration": {
+                            "numberOfResults": 5
+                        }
+                    }
+                )
+                chunks = []
+                for i, r in enumerate(ret_res.get("retrievalResults", [])):
+                    chunks.append({
+                        "text": r["content"]["text"],
+                        "chunk": i + 1,
+                        "score": r.get("score", 0),
+                    })
+            else:
+                chunks = vector_store.search(
+                    question,
+                    top_k=5,
+                    filter={"user_id": user_id}
+                )
+
+            if not chunks:
+                answer = "I could not find any context in your uploaded lecture notes to guide you. Please upload a lecture slide first!"
+                citations = []
+            else:
+                context = "\n\n".join(
+                    f"[chunk {c.get('chunk', i+1)}] {c['text']}"
+                    for i, c in enumerate(chunks)
+                )
+                prompt = SOCRATIC_PROMPT.format(
+                    context=context,
+                    question=question
+                )
+                answer = ai_client.invoke(prompt, max_tokens=512)
+                
+                citations = []
+                for c in chunks:
+                    citations.append({
+                        "chunk": c.get("chunk", 1),
+                        "score": c.get("score", 1.0),
+                        "text": c["text"],
+                    })
+
+            latency_ms = int((time.time() - start_time) * 1000)
+            _put_cloudwatch_metric("SocraticQueryLatency", latency_ms, "Milliseconds", "ap-southeast-1", "Success")
+            
+            try:
+                userstore.log_query(user_id, question, answer, doc_id=None)
+            except Exception:
+                pass
+
+            return {"answer": answer, "citations": citations}
+
         if vector_backend == "bedrock_kb":
             log_step(
                 "rag_query",
@@ -867,16 +998,24 @@ def handle_evaluate(
         raise
 
 
-def handle_generate_flashcards(user_id: str, topic: str, limit: int, doc_id: Optional[str], vector_store, llm_backend) -> dict:
+def handle_generate_flashcards(
+    user_id: str,
+    topic: str,
+    limit: int,
+    doc_id: Optional[str],
+    vector_store,
+    ai_client,
+    aws_region: str
+) -> dict:
     start_time = time.time()
     try:
         context = ""
         if doc_id:
-            results = vector_store.search(doc_id=doc_id, query=topic, limit=10)
+            results = vector_store.search(query=topic, top_k=10, filter={"doc_id": doc_id})
             context = "\n\n".join(r["text"] for r in results)
         
         prompt = FLASHCARD_PROMPT.format(limit=limit, topic=topic, context=context)
-        response = llm_backend.generate(prompt)
+        response = ai_client.invoke(prompt, max_tokens=1024)
         
         # Clean JSON markdown
         clean_json = response.strip()
@@ -899,5 +1038,106 @@ def handle_generate_flashcards(user_id: str, topic: str, limit: int, doc_id: Opt
         latency_ms = int((time.time() - start_time) * 1000)
         _put_cloudwatch_metric("FlashcardGenerationFailure", 1, "Count", "ap-southeast-1", "Failed")
         print(f"Error generating flashcards: {e}")
+        traceback.print_exc()
+        raise
+
+
+def handle_generate_mindmap(
+    user_id: str,
+    doc_id: str,
+    storage,
+    userstore,
+    ai_client,
+) -> dict:
+    """Read document text -> invoke Bedrock to generate Mermaid mindmap."""
+    start_time = time.time()
+    try:
+        docs = userstore.list_docs(user_id)
+        doc = next((d for d in docs if d["doc_id"] == doc_id), None)
+        if not doc:
+            raise ValueError(f"Document {doc_id} not found for user {user_id}")
+            
+        filename = doc.get("filename", "unknown")
+        key = f"{user_id}/{doc_id}/{filename}"
+        data = storage.get(key)
+        text = _extract_text(filename, data)
+        
+        if not text.strip():
+            raise ValueError("Document has no text content to build a mind-map.")
+            
+        prompt = MINDMAP_PROMPT.format(context=text[:6000])
+        response = ai_client.invoke(prompt, max_tokens=1024)
+        
+        mindmap_code = response.strip()
+        # Clean any accidental wrapping codeblocks
+        if mindmap_code.startswith("```mermaid"):
+            mindmap_code = mindmap_code[10:]
+        elif mindmap_code.startswith("```"):
+            mindmap_code = mindmap_code[3:]
+        if mindmap_code.endswith("```"):
+            mindmap_code = mindmap_code[:-3]
+        mindmap_code = mindmap_code.strip()
+        
+        latency_ms = int((time.time() - start_time) * 1000)
+        _put_cloudwatch_metric("MindMapGenerationLatency", latency_ms, "Milliseconds", "ap-southeast-1", "Success")
+        
+        return {
+            "doc_id": doc_id,
+            "filename": filename,
+            "mindmap": mindmap_code
+        }
+    except Exception as e:
+        print(f"Error generating mindmap: {e}")
+        traceback.print_exc()
+        raise
+
+
+def handle_generate_cornell(
+    user_id: str,
+    doc_id: str,
+    storage,
+    userstore,
+    ai_client,
+) -> dict:
+    """Read document text -> invoke Bedrock to generate Cornell Notes structured JSON."""
+    start_time = time.time()
+    try:
+        docs = userstore.list_docs(user_id)
+        doc = next((d for d in docs if d["doc_id"] == doc_id), None)
+        if not doc:
+            raise ValueError(f"Document {doc_id} not found for user {user_id}")
+            
+        filename = doc.get("filename", "unknown")
+        key = f"{user_id}/{doc_id}/{filename}"
+        data = storage.get(key)
+        text = _extract_text(filename, data)
+        
+        if not text.strip():
+            raise ValueError("Document has no text content to build Cornell notes.")
+            
+        prompt = CORNELL_PROMPT.format(context=text[:6000])
+        response = ai_client.invoke(prompt, max_tokens=1500)
+        
+        clean_json = response.strip()
+        if clean_json.startswith("```json"):
+            clean_json = clean_json[7:]
+        elif clean_json.startswith("```"):
+            clean_json = clean_json[3:]
+        if clean_json.endswith("```"):
+            clean_json = clean_json[:-3]
+        clean_json = clean_json.strip()
+        
+        cornell_data = json.loads(clean_json)
+        
+        latency_ms = int((time.time() - start_time) * 1000)
+        _put_cloudwatch_metric("CornellGenerationLatency", latency_ms, "Milliseconds", "ap-southeast-1", "Success")
+        
+        return {
+            "doc_id": doc_id,
+            "filename": filename,
+            "cornell": cornell_data
+        }
+    except Exception as e:
+        print(f"Error generating Cornell notes: {e}")
         traceback.print_exc()
         raise
