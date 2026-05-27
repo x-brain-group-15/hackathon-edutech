@@ -408,9 +408,16 @@
     // ============================================================================
     // Config
     // ============================================================================
-    const API_BASE = (window.API_BASE
-      || new URLSearchParams(location.search).get('api')
-      || '').replace(/\/$/, '');
+    const getApiDefault = () => {
+      if (window.API_BASE) return window.API_BASE;
+      const param = new URLSearchParams(location.search).get('api');
+      if (param) return param;
+      if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+        return '';
+      }
+      return 'https://1lse4odraj.execute-api.ap-southeast-1.amazonaws.com';
+    };
+    const API_BASE = getApiDefault().replace(/\/$/, '');
 
     const USER_ID = (new URLSearchParams(location.search).get('user') || 'test-user-001');
 
