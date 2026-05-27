@@ -73,16 +73,17 @@ class BedrockAI:
                 },
             )
         except Exception as first_err:
-            # Fallback: if the configured model fails (e.g. on-demand not supported),
-            # retry once with haiku which always supports on-demand throughput.
+            # Fallback: if the configured model fails (e.g. on-demand not supported or invalid),
+            # retry once with Claude 3 Haiku which is universally supported in ap-southeast-1
+            # and other regions, and always supports on-demand throughput.
             import logging
             logging.getLogger("StudyBot").warning(
                 f"retrieve_and_generate failed with model {model_arn}: {first_err}. "
-                "Retrying with claude-3-5-haiku fallback."
+                "Retrying with claude-3-haiku fallback."
             )
             fallback_arn = (
                 f"arn:aws:bedrock:{self.region}::foundation-model/"
-                f"anthropic.claude-3-5-haiku-20241022-v1:0"
+                f"anthropic.claude-3-haiku-20240307-v1:0"
             )
             resp = self.agent_runtime.retrieve_and_generate(
                 input={"text": query},
