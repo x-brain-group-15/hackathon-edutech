@@ -1,7 +1,9 @@
 """Endpoint handlers. Pure business logic; knows nothing about FastAPI or AWS specifics."""
 import uuid
+from pathlib import Path
 from typing import Optional
 
+from src.config import config
 from src.pdf_extractor import extract_pdf
 
 
@@ -47,7 +49,8 @@ def handle_upload(
 
     extraction_metadata = {}
     if filename.lower().endswith(".pdf"):
-        extracted = extract_pdf(data)
+        image_output_dir = Path(config.storage_local_dir) / "extracted_assets" / doc_id
+        extracted = extract_pdf(data, image_output_dir=image_output_dir)
         text = extracted.text
         extraction_metadata = extracted.metadata
     else:
