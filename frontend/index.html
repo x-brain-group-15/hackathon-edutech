@@ -1179,8 +1179,7 @@ function filterDocs() {
 // ============================================================================
 // Boot
 // ============================================================================
-initLanguageControls();
-setLanguage(currentLang);
+  
   
 // ============================================================================
 // I18N & Flashcard AI Generation
@@ -1543,7 +1542,8 @@ async function generateFlashcards() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    applyI18n();
+    initLanguageControls();
+    setLanguage(currentLang);
 });
 </script>
 </body>
