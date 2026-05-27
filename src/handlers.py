@@ -93,37 +93,6 @@ def _extract_text(filename: str, data: bytes) -> str:
         return ""
 
 
-def _extract_text(filename: str, data: bytes) -> str:
-    """Extract plain text from PDF or .txt upload."""
-    if filename.lower().endswith(".pdf"):
-        try:
-            from pypdf import PdfReader
-        except ImportError:
-            return "(pypdf not installed — install requirements.txt)"
-        reader = PdfReader(io.BytesIO(data))
-        return "\n\n".join(page.extract_text() or "" for page in reader.pages)
-
-    try:
-        return data.decode("utf-8", errors="replace")
-    except Exception:
-        return ""
-
-
-def _extract_text(filename: str, data: bytes) -> str:
-    """Extract plain text from PDF or .txt upload."""
-    if filename.lower().endswith(".pdf"):
-        try:
-            from pypdf import PdfReader
-        except ImportError:
-            return "(pypdf not installed — install requirements.txt)"
-        reader = PdfReader(io.BytesIO(data))
-        return "\n\n".join(page.extract_text() or "" for page in reader.pages)
-
-    try:
-        return data.decode("utf-8", errors="replace")
-    except Exception:
-        return ""
-
 
 def handle_upload(
     user_id: str,
@@ -869,4 +838,40 @@ def handle_evaluate(
             status="error"
         )
 
+        raise
+
+
+def handle_generate_flashcards(user_id: str, topic: str, limit: int, doc_id: Optional[str], vector_store, llm_backend) -> dict:
+    start_time = time.time()
+    try:
+        context = ""
+        if doc_id:
+            results = vector_store.search(doc_id=doc_id, query=topic, limit=10)
+            context = "\n\n".join(r["text"] for r in results)
+        
+        prompt = FLASHCARD_PROMPT.format(limit=limit, topic=topic, context=context)
+        response = llm_backend.generate(prompt)
+        
+        # Clean JSON markdown
+        clean_json = response.strip()
+        if clean_json.startswith("```json"):
+            clean_json = clean_json[7:]
+        elif clean_json.startswith("```"):
+            clean_json = clean_json[3:]
+        if clean_json.endswith("```"):
+            clean_json = clean_json[:-3]
+        clean_json = clean_json.strip()
+        
+        flashcards = json.loads(clean_json)
+        
+        latency_ms = int((time.time() - start_time) * 1000)
+        _put_cloudwatch_metric("FlashcardGenerationLatency", latency_ms, "Milliseconds", "ap-southeast-1", "Success")
+        _put_cloudwatch_metric("FlashcardGenerationSuccess", 1, "Count", "ap-southeast-1", "Success")
+        
+        return {"flashcards": flashcards}
+    except Exception as e:
+        latency_ms = int((time.time() - start_time) * 1000)
+        _put_cloudwatch_metric("FlashcardGenerationFailure", 1, "Count", "ap-southeast-1", "Failed")
+        print(f"Error generating flashcards: {e}")
+        traceback.print_exc()
         raise
