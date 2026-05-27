@@ -61,6 +61,24 @@ Parameters:
     Default: ""
     Description: "Bedrock Knowledge Base ID — get from AWS Console after creating KB"
 
+  # ---- Chunking ----
+  ChunkingStrategy:
+    Type: String
+    Default: "fixed"
+    AllowedValues: [fixed, structural, semantic]
+
+  ChunkSize:
+    Type: String
+    Default: "500"
+
+  ChunkOverlap:
+    Type: String
+    Default: "100"
+
+  SemanticThreshold:
+    Type: String
+    Default: "0.3"
+
   # ---- VPC ----
   # (VPC, PrivateSubnet, and LambdaSecurityGroup are now created dynamically as resources below)
 
@@ -87,6 +105,10 @@ Globals:
           - !Ref UserstoreTable
         VECTOR_BACKEND: !Ref VectorBackend
         VECTOR_BEDROCK_KB_ID: !Ref VectorBedrockKbId
+        CHUNKING_STRATEGY: !Ref ChunkingStrategy
+        CHUNK_SIZE: !Ref ChunkSize
+        CHUNK_OVERLAP: !Ref ChunkOverlap
+        SEMANTIC_THRESHOLD: !Ref SemanticThreshold
         SERVE_FRONTEND: "false"    # frontend served by CloudFront+S3, not Lambda
         CORS_ORIGINS: "*"
         LOG_LEVEL: INFO
@@ -254,7 +276,7 @@ Resources:
       StageName: "$default"
       CorsConfiguration:
         AllowOrigins: ["*"]
-        AllowMethods: ["GET", "POST", "OPTIONS"]
+        AllowMethods: ["GET", "POST", "DELETE", "OPTIONS"]
         AllowHeaders: ["Content-Type", "X-User-Id"]
 
   # --------------------------------------------------------------------------
@@ -509,6 +531,58 @@ Resources:
         From: 1024
         To: 65535
 
+  PrivateNaclOutboundAllowDnsUdp:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref PrivateNacl
+      RuleNumber: 120
+      Protocol: 17 # UDP
+      RuleAction: allow
+      Egress: true
+      CidrBlock: 0.0.0.0/0
+      PortRange:
+        From: 53
+        To: 53
+
+  PrivateNaclOutboundAllowDnsTcp:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref PrivateNacl
+      RuleNumber: 130
+      Protocol: 6 # TCP
+      RuleAction: allow
+      Egress: true
+      CidrBlock: 0.0.0.0/0
+      PortRange:
+        From: 53
+        To: 53
+
+  PrivateNaclInboundAllowDnsUdpEphemeral:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref PrivateNacl
+      RuleNumber: 120
+      Protocol: 17 # UDP
+      RuleAction: allow
+      Egress: false
+      CidrBlock: 0.0.0.0/0
+      PortRange:
+        From: 1024
+        To: 65535
+
+  PrivateNaclInboundAllowDnsUdp53:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref PrivateNacl
+      RuleNumber: 130
+      Protocol: 17 # UDP
+      RuleAction: allow
+      Egress: false
+      CidrBlock: 0.0.0.0/0
+      PortRange:
+        From: 53
+        To: 53
+
   PrivateSubnetNaclAssociation:
     Type: AWS::EC2::SubnetNetworkAclAssociation
     Properties:
@@ -596,6 +670,16 @@ Resources:
           ToPort: 443
           CidrIp: 0.0.0.0/0
           Description: "Allow HTTPS traffic out to VPC Endpoints and AWS services"
+        - IpProtocol: udp
+          FromPort: 53
+          ToPort: 53
+          CidrIp: 0.0.0.0/0
+          Description: "Allow DNS queries via UDP"
+        - IpProtocol: tcp
+          FromPort: 53
+          ToPort: 53
+          CidrIp: 0.0.0.0/0
+          Description: "Allow DNS queries via TCP"
       Tags:
         - Key: Name
           Value: !Sub "studybot-lambda-sg-${TeamName}"

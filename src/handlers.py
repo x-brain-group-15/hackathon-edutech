@@ -1,9 +1,35 @@
 """Endpoint handlers. Pure business logic — knows nothing about FastAPI or AWS specifics."""
 import io
-import json
 import re
 import uuid
+import json
+import time
+import logging
+import traceback
+from pathlib import Path
 from typing import Optional
+
+from src.config import config
+from src.pdf_extractor import extract_pdf
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+
+def log_event(event_type: str, **kwargs):
+    logger.info(json.dumps({
+        "event_type": event_type,
+        **kwargs
+    }, ensure_ascii=False))
+
+
+def log_step(operation: str, step: str, **kwargs):
+    log_event(
+        "PROCESS_STEP",
+        operation=operation,
+        step=step,
+        **kwargs
+    )
 
 
 PROMPT_TEMPLATE = """You are a study assistant. Answer the student's question using ONLY the
@@ -56,8 +82,7 @@ Rules:
 
 def _extract_text(filename: str, data: bytes) -> str:
     """Extract plain text from PDF or .txt upload."""
-    name = filename.lower()
-    if name.endswith(".pdf"):
+    if filename.lower().endswith(".pdf"):
         try:
             from pypdf import PdfReader
         except ImportError:
@@ -84,32 +109,75 @@ def handle_upload(
     threshold: Optional[float] = None,
 ) -> dict:
     """Store the file, extract text, ingest into vector store, record in userstore."""
-    doc_id = str(uuid.uuid4())
-    key = f"{user_id}/{doc_id}/{filename}"
-    location = storage.put(key, data)
-    text = _extract_text(filename, data)
-    if text.strip():
-        vector_store.ingest(
+    try:
+        start_time = time.time()
+        doc_id = str(uuid.uuid4())
+        key = f"{user_id}/{doc_id}/{filename}"
+        location = storage.put(key, data)
+        
+        # Write companion metadata.json for Bedrock KB multi-tenant filtering
+        try:
+            import json
+            metadata_json = {
+                "metadataAttributes": {
+                    "user_id": user_id,
+                    "doc_id": doc_id,
+                    "filename": filename
+                }
+            }
+            storage.put(key + ".metadata.json", json.dumps(metadata_json).encode("utf-8"))
+        except Exception:
+            pass
+            
+        text = _extract_text(filename, data)
+        if text.strip():
+            vector_store.ingest(
+                doc_id=doc_id,
+                text=text,
+                metadata={"user_id": user_id, "filename": filename},
+                strategy=strategy,
+                size=size,
+                overlap=overlap,
+                threshold=threshold,
+            )
+        userstore.add_doc(
+            user_id=user_id,
             doc_id=doc_id,
-            text=text,
-            metadata={"user_id": user_id, "filename": filename},
-            strategy=strategy,
-            size=size,
-            overlap=overlap,
-            threshold=threshold,
+            metadata={"filename": filename, "size": len(data), "location": location, "chars": len(text)},
         )
-    userstore.add_doc(
-        user_id=user_id,
-        doc_id=doc_id,
-        metadata={"filename": filename, "size": len(data), "location": location, "chars": len(text)},
-    )
-    return {
-        "doc_id": doc_id,
-        "filename": filename,
-        "size": len(data),
-        "chars_extracted": len(text),
-        "location": location,
-    }
+        log_event(
+            "DOCUMENT_UPLOAD",
+            user_id=user_id,
+            doc_id=doc_id,
+            filename=filename,
+            size=len(data),
+            chars_extracted=len(text),
+            location=location,
+            status="success"
+        )
+        return {
+            "doc_id": doc_id,
+            "filename": filename,
+            "size": len(data),
+            "chars_extracted": len(text),
+            "location": location,
+        }
+    except Exception as e:
+        latency_ms = int((time.time() - start_time) * 1000)
+
+        log_event(
+            "UPLOAD_ERROR",
+            user_id=user_id,
+            doc_id=doc_id,
+            filename=filename,
+            latency_ms=latency_ms,
+            error_type=type(e).__name__,
+            error_message=str(e),
+            stack_trace=traceback.format_exc(),
+            status="error"
+        )
+
+        raise
 
 
 def handle_query(
@@ -122,36 +190,237 @@ def handle_query(
     bedrock_kb_id: str,
 ) -> dict:
     """RAG flow: retrieve user's relevant chunks → call AI with context → log + return."""
-    if vector_backend == "bedrock_kb":
-        # Production path: let Bedrock do retrieve + generate in one call
-        result = ai_client.retrieve_and_generate(query=question, kb_id=bedrock_kb_id)
-        answer = result["answer"]
-        citations = result["citations"]
-    else:
-        # Local path: do our own retrieve then prompt
-        chunks = vector_store.search(question, top_k=5, filter={"user_id": user_id})
-        if not chunks:
-            answer = "No relevant content found in your uploaded documents. Upload some first."
-            citations = []
-        else:
-            context = "\n\n".join(f"[chunk {i+1}] {c['text']}" for i, c in enumerate(chunks))
-            prompt = PROMPT_TEMPLATE.format(context=context, question=question)
-            answer = ai_client.invoke(prompt, max_tokens=512)
-            citations = [
-                {"chunk": i + 1, "doc_id": c["doc_id"], "score": c["score"], "text": c["text"][:200]}
-                for i, c in enumerate(chunks)
-            ]
 
-    userstore.log_query(user_id=user_id, query=question, answer=answer)
-    return {"question": question, "answer": answer, "citations": citations}
+    start_time = time.time()
+
+    log_step(
+        "rag_query",
+        "query_received",
+        user_id=user_id,
+        question=question,
+        vector_backend=vector_backend
+    )
+
+    try:
+        if vector_backend == "bedrock_kb":
+            log_step(
+                "rag_query",
+                "bedrock_retrieve_generate_start",
+                user_id=user_id,
+                kb_id=bedrock_kb_id
+            )
+
+            result = ai_client.retrieve_and_generate(
+                query=question,
+                kb_id=bedrock_kb_id
+            )
+
+            answer = result["answer"]
+            citations = result.get("citations", [])
+
+            input_tokens = result.get("input_tokens", 0)
+            output_tokens = result.get("output_tokens", 0)
+
+            log_step(
+                "rag_query",
+                "bedrock_retrieve_generate_done",
+                user_id=user_id,
+                citations_count=len(citations)
+            )
+
+        else:
+            log_step(
+                "rag_query",
+                "vector_search_start",
+                user_id=user_id,
+                top_k=5
+            )
+
+            chunks = vector_store.search(
+                question,
+                top_k=5,
+                filter={"user_id": user_id}
+            )
+
+            log_step(
+                "rag_query",
+                "vector_search_done",
+                user_id=user_id,
+                chunks_found=len(chunks)
+            )
+
+            if not chunks:
+                answer = "No relevant content found in your uploaded documents. Upload some first."
+                citations = []
+                input_tokens = 0
+                output_tokens = 0
+
+                log_step(
+                    "rag_query",
+                    "no_relevant_chunks",
+                    user_id=user_id
+                )
+
+            else:
+                log_step(
+                    "rag_query",
+                    "build_prompt_start",
+                    user_id=user_id
+                )
+
+                context = "\n\n".join(
+                    f"[chunk {i+1}] {c['text']}"
+                    for i, c in enumerate(chunks)
+                )
+
+                prompt = PROMPT_TEMPLATE.format(
+                    context=context,
+                    question=question
+                )
+
+                log_step(
+                    "rag_query",
+                    "build_prompt_done",
+                    user_id=user_id,
+                    prompt_chars=len(prompt)
+                )
+
+                log_step(
+                    "rag_query",
+                    "ai_invoke_start",
+                    user_id=user_id
+                )
+
+                answer = ai_client.invoke(prompt, max_tokens=512)
+
+                log_step(
+                    "rag_query",
+                    "ai_invoke_done",
+                    user_id=user_id,
+                    answer_chars=len(answer)
+                )
+
+                citations = [
+                    {
+                        "chunk": i + 1,
+                        "doc_id": c["doc_id"],
+                        "score": c["score"],
+                        "text": c["text"][:200]
+                    }
+                    for i, c in enumerate(chunks)
+                ]
+
+                input_tokens = len(prompt.split())
+                output_tokens = len(answer.split())
+
+        latency_ms = int((time.time() - start_time) * 1000)
+        total_tokens = input_tokens + output_tokens
+
+        log_step(
+            "rag_query",
+            "save_query_history_start",
+            user_id=user_id
+        )
+
+        userstore.log_query(user_id=user_id, query=question, answer=answer)
+
+        log_step(
+            "rag_query",
+            "save_query_history_done",
+            user_id=user_id
+        )
+
+        log_event(
+            "RAG_QUERY",
+            user_id=user_id,
+            question=question,
+            latency_ms=latency_ms,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            total_tokens=total_tokens,
+            citations_count=len(citations),
+            vector_backend=vector_backend,
+            status="success"
+        )
+
+        log_step(
+            "rag_query",
+            "query_completed",
+            user_id=user_id,
+            latency_ms=latency_ms,
+            status="success"
+        )
+
+        return {
+            "question": question,
+            "answer": answer,
+            "citations": citations
+        }
+
+    except Exception as e:
+        latency_ms = int((time.time() - start_time) * 1000)
+
+        log_event(
+            "RAG_ERROR",
+            user_id=user_id,
+            question=question,
+            latency_ms=latency_ms,
+            error_type=type(e).__name__,
+            error_message=str(e),
+            stack_trace=traceback.format_exc(),
+            status="error"
+        )
+
+        log_step(
+            "rag_query",
+            "query_failed",
+            user_id=user_id,
+            question=question,
+            latency_ms=latency_ms,
+            error_type=type(e).__name__,
+            status="error"
+        )
+
+        raise
 
 
 def handle_list_docs(user_id: str, userstore) -> dict:
-    return {"user_id": user_id, "docs": userstore.list_docs(user_id)}
+    log_step(
+        "list_docs",
+        "list_docs_start",
+        user_id=user_id
+    )
+
+    docs = userstore.list_docs(user_id)
+
+    log_step(
+        "list_docs",
+        "list_docs_done",
+        user_id=user_id,
+        docs_count=len(docs)
+    )
+
+    return {"user_id": user_id, "docs": docs}
 
 
 def handle_recent_queries(user_id: str, userstore, limit: int = 10) -> dict:
-    return {"user_id": user_id, "queries": userstore.recent_queries(user_id, limit=limit)}
+    log_step(
+        "recent_queries",
+        "recent_queries_start",
+        user_id=user_id,
+        limit=limit
+    )
+
+    queries = userstore.recent_queries(user_id, limit=limit)
+
+    log_step(
+        "recent_queries",
+        "recent_queries_done",
+        user_id=user_id,
+        queries_count=len(queries)
+    )
+
+    return {"user_id": user_id, "queries": queries}
 
 
 # ── Teammate feature: chunking strategy evaluation ────────────────────────
@@ -167,162 +436,359 @@ def handle_evaluate(
     overlap: Optional[int] = None,
     threshold: Optional[float] = None,
 ) -> dict:
-    # 1. Find document in userstore
+    start_time = time.time()
+
+    log_step(
+        "evaluate",
+        "evaluate_start",
+        user_id=user_id,
+        doc_id=doc_id,
+        strategy=strategy or "default"
+    )
+
+    try:
+        log_step(
+            "evaluate",
+            "find_document_start",
+            user_id=user_id,
+            doc_id=doc_id
+        )
+
+        docs = userstore.list_docs(user_id)
+        doc = next((d for d in docs if d["doc_id"] == doc_id), None)
+
+        if not doc:
+            raise ValueError(f"Document {doc_id} not found for user {user_id}")
+
+        filename = doc.get("filename", "unknown")
+
+        log_step(
+            "evaluate",
+            "find_document_done",
+            user_id=user_id,
+            doc_id=doc_id,
+            filename=filename
+        )
+
+        key = f"{user_id}/{doc_id}/{filename}"
+
+        log_step(
+            "evaluate",
+            "retrieve_document_start",
+            user_id=user_id,
+            doc_id=doc_id,
+            key=key
+        )
+
+        data = storage.get(key)
+        text = _extract_text(filename, data)
+
+        log_step(
+            "evaluate",
+            "retrieve_document_done",
+            user_id=user_id,
+            doc_id=doc_id,
+            chars_extracted=len(text)
+        )
+
+        if strategy:
+            log_step(
+                "evaluate",
+                "reingest_start",
+                user_id=user_id,
+                doc_id=doc_id,
+                strategy=strategy,
+                size=size,
+                overlap=overlap,
+                threshold=threshold
+            )
+
+            if hasattr(vector_store, "clear_doc"):
+                vector_store.clear_doc(doc_id)
+
+            if text.strip():
+                vector_store.ingest(
+                    doc_id=doc_id,
+                    text=text,
+                    metadata={"user_id": user_id, "filename": filename},
+                    strategy=strategy,
+                    size=size,
+                    overlap=overlap,
+                    threshold=threshold,
+                )
+
+            log_step(
+                "evaluate",
+                "reingest_done",
+                user_id=user_id,
+                doc_id=doc_id
+            )
+
+        probe_questions = [
+            {
+                "query": "What is the chemical equation for photosynthesis?",
+                "keywords": ["6 co2", "6 h2o", "c6h12o6", "light energy"],
+            },
+            {
+                "query": "Where does photosynthesis occur in leaves?",
+                "keywords": ["chloroplasts", "chlorophyll", "pigment", "palisade"],
+            },
+            {
+                "query": "What happens during the light-dependent phase?",
+                "keywords": ["split water", "photolysis", "nadp", "nadph", "grana"],
+            },
+            {
+                "query": "What are the three main factors affecting photosynthesis?",
+                "keywords": ["light intensity", "carbon dioxide", "temperature"],
+            },
+            {
+                "query": "What is the global average rate of energy capture by photosynthesis today?",
+                "keywords": ["130 terawatts", "six times", "human civilization", "civilisation"],
+            },
+        ]
+
+        queries_results = []
+        rr_scores = []
+
+        p_at_1_list = []
+        p_at_3_list = []
+        p_at_5_list = []
+
+        r_at_1_list = []
+        r_at_3_list = []
+        r_at_5_list = []
+
+        log_step(
+            "evaluate",
+            "probe_questions_start",
+            user_id=user_id,
+            doc_id=doc_id,
+            total_probe_questions=len(probe_questions)
+        )
+
+        for index, item in enumerate(probe_questions, start=1):
+            q = item["query"]
+            keywords = item["keywords"]
+
+            log_step(
+                "evaluate",
+                "probe_question_search_start",
+                user_id=user_id,
+                doc_id=doc_id,
+                probe_index=index,
+                query=q
+            )
+
+            chunks = vector_store.search(q, top_k=5, filter={"user_id": user_id})
+            if not chunks and hasattr(vector_store, "kb_id"):
+                # Fallback for legacy Bedrock KB files that don't have metadata sidecars
+                chunks = vector_store.search(q, top_k=5, filter=None)
+
+            log_step(
+                "evaluate",
+                "probe_question_search_done",
+                user_id=user_id,
+                doc_id=doc_id,
+                probe_index=index,
+                chunks_found=len(chunks)
+            )
+
+            retrieved_items = []
+            rr = 0.0
+
+            for idx, c in enumerate(chunks):
+                text_lower = c["text"].lower()
+                is_relevant = any(kw in text_lower for kw in keywords)
+
+                retrieved_items.append({
+                    "chunk": idx + 1,
+                    "text": c["text"],
+                    "score": c["score"],
+                    "relevant": is_relevant,
+                })
+
+                if is_relevant and rr == 0.0:
+                    rr = 1.0 / (idx + 1)
+
+            rr_scores.append(rr)
+
+            def calc_metrics(k: int):
+                sub = retrieved_items[:k]
+                relevant_count = sum(1 for x in sub if x["relevant"])
+                precision = relevant_count / k
+                recall = 1.0 if relevant_count > 0 else 0.0
+                return precision, recall
+
+            p1, r1 = calc_metrics(1)
+            p3, r3 = calc_metrics(3)
+            p5, r5 = calc_metrics(5)
+
+            p_at_1_list.append(p1)
+            p_at_3_list.append(p3)
+            p_at_5_list.append(p5)
+
+            r_at_1_list.append(r1)
+            r_at_3_list.append(r3)
+            r_at_5_list.append(r5)
+
+            queries_results.append({
+                "query": q,
+                "keywords": keywords,
+                "retrieved": retrieved_items,
+                "metrics": {
+                    "precision_at_1": p1,
+                    "precision_at_3": p3,
+                    "precision_at_5": p5,
+                    "recall_at_1": r1,
+                    "recall_at_3": r3,
+                    "recall_at_5": r5,
+                    "mrr": rr,
+                },
+            })
+
+        avg_p_at_1 = sum(p_at_1_list) / len(p_at_1_list)
+        avg_p_at_3 = sum(p_at_3_list) / len(p_at_3_list)
+        avg_p_at_5 = sum(p_at_5_list) / len(p_at_5_list)
+
+        avg_r_at_1 = sum(r_at_1_list) / len(r_at_1_list)
+        avg_r_at_3 = sum(r_at_3_list) / len(r_at_3_list)
+        avg_r_at_5 = sum(r_at_5_list) / len(r_at_5_list)
+
+        avg_mrr = sum(rr_scores) / len(rr_scores)
+
+        total_chunks = -1
+        if hasattr(vector_store, "docs"):
+            total_chunks = len([
+                d for d in vector_store.docs
+                if d[2].get("doc_id") == doc_id
+            ])
+
+        latency_ms = int((time.time() - start_time) * 1000)
+
+        log_event(
+            "EVALUATE_RESULT",
+            user_id=user_id,
+            doc_id=doc_id,
+            filename=filename,
+            strategy_used=strategy or "default",
+            num_chunks_total=total_chunks,
+            precision_at_1=avg_p_at_1,
+            precision_at_3=avg_p_at_3,
+            precision_at_5=avg_p_at_5,
+            recall_at_1=avg_r_at_1,
+            recall_at_3=avg_r_at_3,
+            recall_at_5=avg_r_at_5,
+            mrr=avg_mrr,
+            latency_ms=latency_ms,
+            status="success"
+        )
+
+        log_step(
+            "evaluate",
+            "evaluate_done",
+            user_id=user_id,
+            doc_id=doc_id,
+            latency_ms=latency_ms,
+            status="success"
+        )
+
+        return {
+            "doc_id": doc_id,
+            "filename": filename,
+            "strategy_used": strategy or "default",
+            "num_chunks_total": total_chunks,
+            "metrics": {
+                "precision_at_1": avg_p_at_1,
+                "precision_at_3": avg_p_at_3,
+                "precision_at_5": avg_p_at_5,
+                "recall_at_1": avg_r_at_1,
+                "recall_at_3": avg_r_at_3,
+                "recall_at_5": avg_r_at_5,
+                "mrr": avg_mrr,
+            },
+            "queries": queries_results,
+        }
+    except Exception as e:
+        latency_ms = int((time.time() - start_time) * 1000)
+
+        log_event(
+            "EVALUATE_ERROR",
+            user_id=user_id,
+            doc_id=doc_id,
+            latency_ms=latency_ms,
+            error_type=type(e).__name__,
+            error_message=str(e),
+            stack_trace=traceback.format_exc(),
+            status="error"
+        )
+
+        log_step(
+            "evaluate",
+            "evaluate_failed",
+            user_id=user_id,
+            doc_id=doc_id,
+            latency_ms=latency_ms,
+            error_type=type(e).__name__,
+            status="error"
+        )
+
+        raise
+
+
+def handle_delete_doc(
+    user_id: str,
+    doc_id: str,
+    storage,
+    userstore,
+    vector_store,
+) -> dict:
+    """Delete a document from userstore, storage, and clear it from vector store."""
     docs = userstore.list_docs(user_id)
     doc = next((d for d in docs if d["doc_id"] == doc_id), None)
     if not doc:
         raise ValueError(f"Document {doc_id} not found for user {user_id}")
 
     filename = doc.get("filename", "unknown")
-
-    # 2. Retrieve original text from storage
     key = f"{user_id}/{doc_id}/{filename}"
+
+    # 1. Delete from storage
     try:
-        data = storage.get(key)
-        text = _extract_text(filename, data)
-    except Exception as e:
-        raise ValueError(f"Failed to retrieve document content: {str(e)}")
+        storage.delete(key)
+    except Exception:
+        pass
+    try:
+        storage.delete(key + ".metadata.json")
+    except Exception:
+        pass
 
-    # 3. Dynamic Re-ingestion: Clear vector index and re-ingest if custom strategy parameters are specified
-    if strategy:
-        if hasattr(vector_store, "clear_doc"):
-            vector_store.clear_doc(doc_id)
-        if text.strip():
-            vector_store.ingest(
-                doc_id=doc_id,
-                text=text,
-                metadata={"user_id": user_id, "filename": filename},
-                strategy=strategy,
-                size=size,
-                overlap=overlap,
-                threshold=threshold,
-            )
+    # 2. Delete from UserStore
+    userstore.delete_doc(user_id, doc_id)
 
-    # 4. Run the 5 probe questions
-    probe_questions = [
-        {
-            "query": "What is the chemical equation for photosynthesis?",
-            "keywords": ["6 co2", "6 h2o", "c6h12o6", "light energy"],
-        },
-        {
-            "query": "Where does photosynthesis occur in leaves?",
-            "keywords": ["chloroplasts", "chlorophyll", "pigment", "palisade"],
-        },
-        {
-            "query": "What happens during the light-dependent phase?",
-            "keywords": ["split water", "photolysis", "nadp", "nadph", "grana"],
-        },
-        {
-            "query": "What are the three main factors affecting photosynthesis?",
-            "keywords": ["light intensity", "carbon dioxide", "temperature"],
-        },
-        {
-            "query": "What is the global average rate of energy capture by photosynthesis today?",
-            "keywords": ["130 terawatts", "six times", "human civilization", "civilisation"],
-        },
-    ]
+    # 3. Clear from Vector store
+    if hasattr(vector_store, "clear_doc"):
+        vector_store.clear_doc(doc_id)
 
-    queries_results = []
-    rr_scores = []
+    # 4. If using Bedrock KB, trigger a sync so Bedrock deletes embeddings of the deleted S3 file
+    if hasattr(vector_store, "kb_id"):
+        try:
+            import boto3
+            from botocore.config import Config
+            # Use a fast timeout (2.0s) so the Lambda doesn't hang if the bedrock-agent control plane endpoint
+            # is unreachable from the isolated private subnet VPC (since there is no VPC endpoint for bedrock-agent)
+            config = Config(connect_timeout=2.0, read_timeout=2.0, retries={"max_attempts": 0})
+            client = boto3.client("bedrock-agent", region_name=vector_store.agent_runtime.meta.region_name, config=config)
+            ds_resp = client.list_data_sources(knowledgeBaseId=vector_store.kb_id)
+            ds_summaries = ds_resp.get("dataSourceSummaries", [])
+            if ds_summaries:
+                ds_id = ds_summaries[0]["dataSourceId"]
+                client.start_ingestion_job(
+                    knowledgeBaseId=vector_store.kb_id,
+                    dataSourceId=ds_id
+                )
+        except Exception:
+            pass
 
-    p_at_1_list = []
-    p_at_3_list = []
-    p_at_5_list = []
-
-    r_at_1_list = []
-    r_at_3_list = []
-    r_at_5_list = []
-
-    for item in probe_questions:
-        q = item["query"]
-        keywords = item["keywords"]
-
-        # Search up to top 5 chunks
-        chunks = vector_store.search(q, top_k=5, filter={"user_id": user_id})
-
-        retrieved_items = []
-        rr = 0.0
-
-        for idx, c in enumerate(chunks):
-            text_lower = c["text"].lower()
-            is_relevant = any(kw in text_lower for kw in keywords)
-
-            retrieved_items.append({
-                "chunk": idx + 1,
-                "text": c["text"],
-                "score": c["score"],
-                "relevant": is_relevant,
-            })
-
-            if is_relevant and rr == 0.0:
-                rr = 1.0 / (idx + 1)
-
-        rr_scores.append(rr)
-
-        def calc_metrics(k: int):
-            sub = retrieved_items[:k]
-            relevant_count = sum(1 for x in sub if x["relevant"])
-            precision = relevant_count / k
-            recall = 1.0 if relevant_count > 0 else 0.0
-            return precision, recall
-
-        p1, r1 = calc_metrics(1)
-        p3, r3 = calc_metrics(3)
-        p5, r5 = calc_metrics(5)
-
-        p_at_1_list.append(p1)
-        p_at_3_list.append(p3)
-        p_at_5_list.append(p5)
-
-        r_at_1_list.append(r1)
-        r_at_3_list.append(r3)
-        r_at_5_list.append(r5)
-
-        queries_results.append({
-            "query": q,
-            "keywords": keywords,
-            "retrieved": retrieved_items,
-            "metrics": {
-                "precision_at_1": p1,
-                "precision_at_3": p3,
-                "precision_at_5": p5,
-                "recall_at_1": r1,
-                "recall_at_3": r3,
-                "recall_at_5": r5,
-                "mrr": rr,
-            },
-        })
-
-    avg_p_at_1 = sum(p_at_1_list) / len(p_at_1_list)
-    avg_p_at_3 = sum(p_at_3_list) / len(p_at_3_list)
-    avg_p_at_5 = sum(p_at_5_list) / len(p_at_5_list)
-
-    avg_r_at_1 = sum(r_at_1_list) / len(r_at_1_list)
-    avg_r_at_3 = sum(r_at_3_list) / len(r_at_3_list)
-    avg_r_at_5 = sum(r_at_5_list) / len(r_at_5_list)
-
-    avg_mrr = sum(rr_scores) / len(rr_scores)
-
-    total_chunks = -1
-    if hasattr(vector_store, "docs"):
-        total_chunks = len([d for d in vector_store.docs if d[2].get("doc_id") == doc_id])
-
-    return {
-        "doc_id": doc_id,
-        "filename": filename,
-        "strategy_used": strategy or "default",
-        "num_chunks_total": total_chunks,
-        "metrics": {
-            "precision_at_1": avg_p_at_1,
-            "precision_at_3": avg_p_at_3,
-            "precision_at_5": avg_p_at_5,
-            "recall_at_1": avg_r_at_1,
-            "recall_at_3": avg_r_at_3,
-            "recall_at_5": avg_r_at_5,
-            "mrr": avg_mrr,
-        },
-        "queries": queries_results,
-    }
+    return {"status": "success", "message": f"Document {filename} deleted successfully"}
 
 
 # ── Quiz feature ───────────────────────────────────────────────────────────
@@ -343,19 +809,44 @@ def handle_quiz(
 ) -> dict:
     """Generate a multiple-choice quiz from the user's uploaded documents.
 
+    When doc_id is provided the quiz is scoped to that single document.
+    When doc_id is None the quiz draws from all documents the user has uploaded.
+
     Flow:
-      1. Retrieve relevant chunks from the vector store (filtered to this user / doc).
-      2. Build a quiz-generation prompt with the retrieved context.
-      3. Call AI to produce a JSON array of questions.
-      4. Parse + validate the response.
-      5. Persist the quiz in userstore and return it.
+      1. If doc_id given, verify it belongs to this user.
+      2. Retrieve relevant chunks from the vector store (filtered to user / doc).
+      3. Build a quiz-generation prompt with the retrieved context.
+      4. Call AI to produce a JSON array of questions.
+      5. Parse + validate the response.
+      6. Persist the quiz in userstore and return it.
     """
+    start_time = time.time()
+
     difficulty = difficulty.lower()
     if difficulty not in _VALID_DIFFICULTIES:
         difficulty = "medium"
     num_questions = max(1, min(num_questions, 20))  # clamp 1-20
 
-    # --- 1. Retrieve context ---
+    log_step("quiz", "quiz_start", user_id=user_id, doc_id=doc_id,
+             difficulty=difficulty, num_questions=num_questions)
+
+    # --- 1. Validate doc_id ownership when scoping to a specific document ---
+    source_filename: Optional[str] = None
+    if doc_id:
+        docs = userstore.list_docs(user_id)
+        doc_meta = next((d for d in docs if d["doc_id"] == doc_id), None)
+        if not doc_meta:
+            return {
+                "quiz_id": None,
+                "doc_id": doc_id,
+                "difficulty": difficulty,
+                "num_questions": 0,
+                "questions": [],
+                "error": f"Document {doc_id} not found for this user.",
+            }
+        source_filename = doc_meta.get("filename")
+
+    # --- 2. Retrieve context ---
     search_filter: dict = {"user_id": user_id}
     if doc_id:
         search_filter["doc_id"] = doc_id
@@ -366,6 +857,13 @@ def handle_quiz(
             top_k=10,
             filter=search_filter,
         )
+        # Fallback for legacy KB files without metadata sidecars
+        if not chunks and doc_id is None:
+            chunks = vector_store.search(
+                query="key concepts definitions important facts",
+                top_k=10,
+                filter=None,
+            )
     else:
         # Local keyword index: try a broad query first; if nothing matches (no
         # shared tokens with the generic query), fall back to all chunks for
@@ -382,6 +880,9 @@ def handle_quiz(
                 filter=search_filter,
             )
 
+    log_step("quiz", "chunks_retrieved", user_id=user_id, doc_id=doc_id,
+             chunks_found=len(chunks))
+
     if not chunks:
         return {
             "quiz_id": None,
@@ -394,20 +895,23 @@ def handle_quiz(
 
     context = "\n\n".join(f"[chunk {i+1}] {c['text']}" for i, c in enumerate(chunks))
 
-    # --- 2. Build prompt ---
+    # --- 3. Build prompt ---
     prompt = QUIZ_PROMPT_TEMPLATE.format(
         num_questions=num_questions,
         difficulty=difficulty,
         context=context,
     )
 
-    # --- 3. Call AI ---
+    # --- 4. Call AI ---
+    log_step("quiz", "ai_invoke_start", user_id=user_id, doc_id=doc_id)
     raw = ai_client.generate_quiz(prompt, max_tokens=2048, temperature=0.4)
+    log_step("quiz", "ai_invoke_done", user_id=user_id, doc_id=doc_id,
+             raw_chars=len(raw))
 
-    # --- 4. Parse JSON ---
+    # --- 5. Parse JSON ---
     questions = _parse_quiz_json(raw)
 
-    # --- 5. Persist + return ---
+    # --- 6. Persist + return ---
     quiz_id = str(uuid.uuid4())
     resolved_doc_id = doc_id or "all"
     userstore.save_quiz(
@@ -418,9 +922,23 @@ def handle_quiz(
         questions=questions,
     )
 
+    latency_ms = int((time.time() - start_time) * 1000)
+    log_event(
+        "QUIZ_GENERATED",
+        user_id=user_id,
+        quiz_id=quiz_id,
+        doc_id=resolved_doc_id,
+        source_filename=source_filename,
+        difficulty=difficulty,
+        num_questions=len(questions),
+        latency_ms=latency_ms,
+        status="success",
+    )
+
     return {
         "quiz_id": quiz_id,
         "doc_id": resolved_doc_id,
+        "source_filename": source_filename,
         "difficulty": difficulty,
         "num_questions": len(questions),
         "questions": questions,

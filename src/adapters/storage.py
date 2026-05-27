@@ -25,6 +25,9 @@ class S3Storage:
         resp = self.s3.get_object(Bucket=self.bucket, Key=key)
         return resp["Body"].read()
 
+    def delete(self, key: str) -> None:
+        self.s3.delete_object(Bucket=self.bucket, Key=key)
+
     def list(self, prefix: str = "") -> list:
         resp = self.s3.list_objects_v2(Bucket=self.bucket, Prefix=prefix)
         return [obj["Key"] for obj in resp.get("Contents", [])]
@@ -45,6 +48,11 @@ class LocalStorage:
 
     def get(self, key: str) -> bytes:
         return (self.base / key).read_bytes()
+
+    def delete(self, key: str) -> None:
+        path = self.base / key
+        if path.exists():
+            path.unlink()
 
     def list(self, prefix: str = "") -> list:
         results = []

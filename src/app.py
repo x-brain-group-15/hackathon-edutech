@@ -57,13 +57,26 @@ class QueryRequest(BaseModel):
 
 
 class QuizRequest(BaseModel):
-    doc_id: str | None = None       # optional: scope quiz to a specific document
+    difficulty: str = "medium"      # easy | medium | hard
+    num_questions: int = 5          # 1-20
+
+
+class QuizAllRequest(BaseModel):
+    doc_id: str | None = None       # optional: scope to a specific document
     difficulty: str = "medium"      # easy | medium | hard
     num_questions: int = 5          # 1-20
 
 
 @app.get("/health")
 def health() -> dict:
+    import os
+    aws_env = {}
+    for k, v in os.environ.items():
+        if k.startswith("AWS_") or "KEY" in k or "SECRET" in k or "TOKEN" in k:
+            if len(v) > 8:
+                aws_env[k] = f"{v[:4]}...{v[-4:]} (len={len(v)})"
+            else:
+                aws_env[k] = f"... (len={len(v)})"
     return {
         "status": "ok",
         "backends": {
@@ -72,6 +85,7 @@ def health() -> dict:
             "userstore": config.userstore_backend,
             "vector": config.vector_backend,
         },
+        "debug_aws_env": aws_env,
     }
 
 
@@ -150,6 +164,24 @@ def evaluate(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.delete("/docs/{doc_id}")
+def delete_doc(doc_id: str, x_user_id: str | None = Header(default=None)) -> dict:
+    user_id = _resolve_user_id(x_user_id)
+    try:
+        return handlers.handle_delete_doc(
+            user_id=user_id,
+            doc_id=doc_id,
+            storage=storage,
+            userstore=userstore,
+            vector_store=vector_store,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
 @app.get("/docs/list")
 def list_docs(x_user_id: str | None = Header(default=None)) -> dict:
     return handlers.handle_list_docs(_resolve_user_id(x_user_id), userstore)
@@ -161,12 +193,12 @@ def recent(x_user_id: str | None = Header(default=None), limit: int = 10) -> dic
 
 
 @app.post("/quiz")
-def generate_quiz(req: QuizRequest, x_user_id: str | None = Header(default=None)) -> dict:
-    """Generate a multiple-choice quiz from the user's uploaded documents.
+def generate_quiz(req: QuizAllRequest, x_user_id: str | None = Header(default=None)) -> dict:
+    """Generate a quiz from all (or a specific) uploaded document.
 
-    - `doc_id` (optional): scope to a specific document; omit to use all user docs.
+    - `doc_id` (optional): scope to one document; omit to use all user docs.
     - `difficulty`: easy | medium | hard (default: medium).
-    - `num_questions`: how many questions to generate, 1-20 (default: 5).
+    - `num_questions`: 1-20 (default: 5).
     """
     user_id = _resolve_user_id(x_user_id)
     return handlers.handle_quiz(
@@ -180,6 +212,37 @@ def generate_quiz(req: QuizRequest, x_user_id: str | None = Header(default=None)
         vector_backend=config.vector_backend,
         bedrock_kb_id=config.vector_bedrock_kb_id,
     )
+
+
+@app.post("/docs/{doc_id}/quiz")
+def generate_quiz_for_doc(
+    doc_id: str,
+    req: QuizRequest,
+    x_user_id: str | None = Header(default=None),
+) -> dict:
+    """Generate a quiz scoped to a specific document.
+
+    Mirrors the pattern of POST /docs/{doc_id}/evaluate.
+    - `difficulty`: easy | medium | hard (default: medium).
+    - `num_questions`: 1-20 (default: 5).
+    """
+    user_id = _resolve_user_id(x_user_id)
+    try:
+        return handlers.handle_quiz(
+            user_id=user_id,
+            doc_id=doc_id,
+            difficulty=req.difficulty,
+            num_questions=req.num_questions,
+            ai_client=ai_client,
+            userstore=userstore,
+            vector_store=vector_store,
+            vector_backend=config.vector_backend,
+            bedrock_kb_id=config.vector_bedrock_kb_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/quiz/list")
