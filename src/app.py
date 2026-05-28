@@ -198,7 +198,7 @@ def generate_quiz(
     x_user_id: str | None = Header(default=None),
     num_questions: int = 5,
     doc_id: str | None = None,
-) -> list[dict]:
+) -> dict:
     user_id = _resolve_user_id(x_user_id)
     requested_count = req.num_questions if req else num_questions
     requested_doc_id = req.doc_id if req and req.doc_id else doc_id
@@ -216,6 +216,12 @@ def generate_quiz(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}")
+
+
+@app.get("/quiz/{doc_id}")
+def get_quiz(doc_id: str, x_user_id: str | None = Header(default=None)) -> dict:
+    user_id = _resolve_user_id(x_user_id)
+    return handlers.handle_get_quiz(user_id=user_id, doc_id=doc_id)
 
 @app.post("/flashcards")
 def generate_flashcards(req: FlashcardRequest, x_user_id: str | None = Header(default=None)) -> dict:

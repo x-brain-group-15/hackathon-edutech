@@ -103,9 +103,10 @@ def test_quiz_generated_from_uploaded_document():
 
     assert quiz_res.status_code == 200, quiz_res.text
     body = quiz_res.json()
-    assert isinstance(body, list)
-    assert body
-    assert {"id", "question", "options", "correct_answer", "explanation"} <= set(body[0])
+    assert "quiz" in body
+    assert isinstance(body["quiz"], list)
+    assert body["quiz"]
+    assert {"id", "question", "options", "correct_answer", "explanation"} <= set(body["quiz"][0])
 
 
 def test_quiz_falls_back_when_bedrock_is_throttled():
@@ -140,11 +141,11 @@ def test_quiz_falls_back_when_bedrock_is_throttled():
         userstore=DummyUserStore(),
     )
 
-    assert len(quiz) == 3
-    assert quiz[0]["correct_answer"] in quiz[0]["options"]
-    assert len({item["question"] for item in quiz}) == len(quiz)
-    assert any(item["options"].index(item["correct_answer"]) != 0 for item in quiz)
-    assert "Based on the selected notes" in quiz[0]["explanation"]
+    assert len(quiz["quiz"]) == 3
+    assert quiz["quiz"][0]["correct_answer"] in quiz["quiz"][0]["options"]
+    assert len({item["question"] for item in quiz["quiz"]}) == len(quiz["quiz"])
+    assert any(item["options"].index(item["correct_answer"]) != 0 for item in quiz["quiz"])
+    assert "Based on the selected notes" in quiz["quiz"][0]["explanation"]
 
 
 def test_quiz_normalization_does_not_leave_all_answers_at_a():
@@ -201,9 +202,9 @@ def test_quiz_falls_back_when_bedrock_credentials_are_missing():
         userstore=DummyUserStore(),
     )
 
-    assert len(quiz) == 5
-    assert len({item["question"] for item in quiz}) == 5
-    assert any(item["options"].index(item["correct_answer"]) != 0 for item in quiz)
+    assert len(quiz["quiz"]) == 5
+    assert len({item["question"] for item in quiz["quiz"]}) == 5
+    assert any(item["options"].index(item["correct_answer"]) != 0 for item in quiz["quiz"])
 
 
 def test_quiz_fallback_uses_full_local_doc_when_search_returns_partial_chunks():
@@ -244,9 +245,9 @@ def test_quiz_fallback_uses_full_local_doc_when_search_returns_partial_chunks():
         userstore=DummyUserStore(),
     )
 
-    assert len(quiz) == 5
-    assert len({item["question"] for item in quiz}) == 5
-    assert any(item["options"].index(item["correct_answer"]) != 0 for item in quiz)
+    assert len(quiz["quiz"]) == 5
+    assert len({item["question"] for item in quiz["quiz"]}) == 5
+    assert any(item["options"].index(item["correct_answer"]) != 0 for item in quiz["quiz"])
 
 
 def test_list_docs_per_user_isolation():

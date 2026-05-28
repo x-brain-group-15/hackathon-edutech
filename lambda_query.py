@@ -42,6 +42,11 @@ class FlashcardRequest(BaseModel):
     doc_id: str | None = None
 
 
+class QuizRequest(BaseModel):
+    num_questions: int = 5
+    doc_id: str | None = None
+
+
 @app.post("/query")
 def query(req: QueryRequest, x_user_id: str | None = Header(default=None)):
     if not req.question.strip():
@@ -74,6 +79,29 @@ def generate_flashcards(req: FlashcardRequest, x_user_id: str | None = Header(de
         ai_client=ai_client,
         aws_region=config.aws_region,
     )
+
+
+@app.post("/quiz")
+def generate_quiz(req: QuizRequest | None = None, x_user_id: str | None = Header(default=None)):
+    try:
+        return handlers.handle_generate_quiz(
+            user_id=_uid(x_user_id),
+            num_questions=req.num_questions if req else 5,
+            doc_id=req.doc_id if req else None,
+            vector_store=vector_store,
+            ai_client=ai_client,
+            userstore=userstore,
+            storage=storage,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}")
+
+
+@app.get("/quiz/{doc_id}")
+def get_quiz(doc_id: str, x_user_id: str | None = Header(default=None)):
+    return handlers.handle_get_quiz(user_id=_uid(x_user_id), doc_id=doc_id)
 
 
 @app.post("/docs/{doc_id}/mindmap")

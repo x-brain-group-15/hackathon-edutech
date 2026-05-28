@@ -795,47 +795,62 @@
               <span class="meta" data-i18n="quizMeta"></span>
             </div>
             <div class="quiz-shell">
-              <div class="quiz-deck" data-i18n="quizDeck"></div>
-              <div class="quiz-status">
-                <span class="badge" id="quiz-progress"></span>
-                <span class="badge subtle" id="quiz-score"></span>
-              </div>
-              <div
-                class="quiz-question"
-                id="quiz-question"
-                aria-live="polite"
-              ></div>
-              <div class="quiz-options" id="quiz-options"></div>
-              <div
-                class="quiz-explain"
-                id="quiz-explain"
-                aria-live="polite"
-              ></div>
-              <div class="quiz-actions">
+              <!-- Doc + action bar -->
+              <div class="quiz-toolbar" id="quiz-toolbar">
+                <div class="quiz-doc-label" id="quiz-doc-label">
+                  <span class="muted" data-i18n="quizNoDoc"></span>
+                </div>
                 <button
-                  class="ghost"
-                  id="quiz-prev"
-                  type="button"
-                  data-i18n="quizPrev"
-                ></button>
-                <button
-                  class="ghost"
-                  id="quiz-reset"
-                  type="button"
-                  data-i18n="quizReset"
-                ></button>
-                <button
-                  class="ghost"
+                  class="primary"
                   id="quiz-generate"
                   type="button"
                   data-i18n="quizGenerate"
                 ></button>
-                <button
-                  class="primary"
-                  id="quiz-next"
-                  type="button"
-                  data-i18n="quizNext"
-                ></button>
+              </div>
+
+              <!-- Empty state -->
+              <div class="quiz-empty" id="quiz-empty">
+                <span class="muted" data-i18n="quizDeck"></span>
+              </div>
+
+              <!-- Active quiz view -->
+              <div id="quiz-active-view" style="display:none">
+                <div class="quiz-status">
+                  <span class="badge" id="quiz-progress"></span>
+                  <span class="badge subtle" id="quiz-score"></span>
+                  <span class="badge subtle" id="quiz-saved-badge" style="display:none" data-i18n="quizSaved"></span>
+                </div>
+                <div
+                  class="quiz-question"
+                  id="quiz-question"
+                  aria-live="polite"
+                ></div>
+                <div class="quiz-options" id="quiz-options"></div>
+                <div
+                  class="quiz-explain"
+                  id="quiz-explain"
+                  aria-live="polite"
+                ></div>
+                <div class="quiz-actions">
+                  <button
+                    class="ghost"
+                    id="quiz-prev"
+                    type="button"
+                    data-i18n="quizPrev"
+                  ></button>
+                  <button
+                    class="ghost"
+                    id="quiz-reset"
+                    type="button"
+                    data-i18n="quizReset"
+                  ></button>
+                  <button
+                    class="primary"
+                    id="quiz-next"
+                    type="button"
+                    data-i18n="quizNext"
+                  ></button>
+                </div>
               </div>
             </div>
           </section>
@@ -1262,12 +1277,14 @@
           quizTitle: 'Practice Quiz',
           quizMeta: 'Generated from your active document',
           quizDeck:
-            'Select a document, then generate a quiz from its retrieved chunks.',
+            'Select a document, then click "Generate Quiz" to create questions from its content.',
+          quizNoDoc: '📄 No document selected',
+          quizDocLabel: '📄 {filename}',
           quizProgress: 'Question {index} / {total}',
           quizScore: 'Score {score} / {total}',
           quizPrev: 'Previous',
-          quizReset: 'Fallback Deck',
-          quizGenerate: 'Generate Quiz',
+          quizReset: 'Restart',
+          quizGenerate: '✨ Generate Quiz',
           quizNext: 'Next',
           quizCorrect: 'Correct',
           quizIncorrect: 'Try again',
@@ -1276,6 +1293,9 @@
           quizGenerating: 'Generating quiz...',
           quizGenerated: 'Quiz generated from active document.',
           quizFailed: 'Quiz generation failed: {detail}',
+          quizSaved: '☁️ Saved',
+          quizLoadedFromS3: 'Loaded saved quiz.',
+          quizLoading: 'Loading saved quiz...',
         },
         vi: {
           pageTitle: 'StudyBot — Trợ lý học tập AI',
@@ -1321,12 +1341,14 @@
           docDeleteSuccess: 'Đã xóa {filename}',
           quizTitle: 'Practice Quiz',
           quizMeta: 'Sinh từ tài liệu đang chọn',
-          quizDeck: 'Chọn tài liệu, rồi tạo quiz từ các chunk liên quan.',
+          quizDeck: 'Chọn tài liệu, rồi nhấn "Tạo Quiz" để sinh câu hỏi từ nội dung.',
+          quizNoDoc: '📄 Chưa chọn tài liệu',
+          quizDocLabel: '📄 {filename}',
           quizProgress: 'Câu {index} / {total}',
           quizScore: 'Điểm {score} / {total}',
           quizPrev: 'Trước',
-          quizReset: 'Bộ dự phòng',
-          quizGenerate: 'Tạo Quiz',
+          quizReset: 'Làm lại',
+          quizGenerate: '✨ Tạo Quiz',
           quizNext: 'Tiếp',
           quizCorrect: 'Đúng',
           quizIncorrect: 'Thử lại',
@@ -1335,6 +1357,9 @@
           quizGenerating: 'Đang tạo quiz...',
           quizGenerated: 'Đã tạo quiz từ tài liệu đang chọn.',
           quizFailed: 'Tạo quiz thất bại: {detail}',
+          quizSaved: '☁️ Đã lưu',
+          quizLoadedFromS3: 'Đã tải quiz đã lưu.',
+          quizLoading: 'Đang tải quiz đã lưu...',
         },
       };
 
@@ -2054,6 +2079,7 @@
         index: 0,
         answers: {},
         sourceDocId: null,
+        savedToS3: false,
       };
 
       function shuffle(list) {
@@ -2088,14 +2114,59 @@
           );
       }
 
-      function initQuiz(deckOverride = null) {
-        const deck = deckOverride || QUIZ_BANK[currentLang] || QUIZ_BANK.en;
-        quizState.items = deckOverride
-          ? normalizeQuizItems(deck)
-          : shuffle(deck).slice(0, Math.min(5, deck.length));
+      function updateQuizDocLabel() {
+        const docId = window.selectedDocId || window.lastDocId;
+        const labelEl = $('quiz-doc-label');
+        if (!labelEl) return;
+        const filename = window.selectedDocName || window.lastDocName || '';
+        if (docId && filename) {
+          // Strip extension for display
+          const displayName = filename.replace(/\.[^.]+$/, '');
+          labelEl.innerHTML = `<span style="color:var(--accent);font-weight:600">${t('quizDocLabel', { filename: displayName })}</span>`;
+        } else {
+          labelEl.innerHTML = `<span class="muted">${t('quizNoDoc')}</span>`;
+        }
+      }
+
+      function initQuiz(deckOverride = null, savedToS3 = false) {
+        if (!deckOverride || deckOverride.length === 0) {
+          quizState.items = [];
+          quizState.index = 0;
+          quizState.answers = {};
+          quizState.savedToS3 = false;
+          renderQuiz();
+          return;
+        }
+        quizState.items = normalizeQuizItems(deckOverride);
         quizState.index = 0;
         quizState.answers = {};
+        quizState.savedToS3 = savedToS3;
         renderQuiz();
+      }
+
+      async function loadQuizFromS3(docId) {
+        const btn = $('quiz-generate');
+        const oldText = btn ? btn.textContent : '';
+        if (btn) {
+          btn.disabled = true;
+          btn.innerHTML = `<span class="spinner"></span> ${t('quizLoading')}`;
+        }
+        try {
+          const res = await call(`/quiz/${docId}`, { method: 'GET' });
+          if (res.ok && res.body.quiz && res.body.quiz.length > 0) {
+            initQuiz(res.body.quiz, true);
+            quizState.sourceDocId = docId;
+            toast(t('quizLoadedFromS3'), 'success');
+          }
+          // If empty, do nothing — keep empty state, let user generate
+        } catch (err) {
+          // Silently ignore load errors
+        } finally {
+          if (btn) {
+            btn.disabled = false;
+            btn.textContent = oldText || t('quizGenerate');
+          }
+        }
       }
 
       async function generatePracticeQuiz() {
@@ -2121,16 +2192,13 @@
             throw new Error(res.body.detail || res.status);
           }
 
-          const quizItems = Array.isArray(res.body)
-            ? res.body
-            : res.body.quiz || [];
-          initQuiz(quizItems);
+          const quizItems = res.body.quiz || (Array.isArray(res.body) ? res.body : []);
+          const saved = res.body.saved === true;
+          initQuiz(quizItems, saved);
           quizState.sourceDocId = docId;
           toast(t('quizGenerated'), 'success');
         } catch (err) {
           toast(t('quizFailed', { detail: err.message }), 'error');
-          initQuiz();
-          quizState.sourceDocId = null;
         } finally {
           btn.disabled = false;
           btn.textContent = oldText || t('quizGenerate');
@@ -2145,6 +2213,20 @@
       }
 
       function renderQuiz() {
+        const activeView = $('quiz-active-view');
+        const emptyView = $('quiz-empty');
+        const savedBadge = $('quiz-saved-badge');
+
+        if (!quizState.items.length) {
+          if (activeView) activeView.style.display = 'none';
+          if (emptyView) emptyView.style.display = 'block';
+          return;
+        }
+
+        if (activeView) activeView.style.display = 'block';
+        if (emptyView) emptyView.style.display = 'none';
+        if (savedBadge) savedBadge.style.display = quizState.savedToS3 ? 'inline-flex' : 'none';
+
         const questionEl = $('quiz-question');
         const optionsEl = $('quiz-options');
         const explainEl = $('quiz-explain');
@@ -2152,17 +2234,6 @@
         const scoreEl = $('quiz-score');
         const prevBtn = $('quiz-prev');
         const nextBtn = $('quiz-next');
-
-        if (!quizState.items.length) {
-          questionEl.textContent = '';
-          optionsEl.innerHTML = '';
-          explainEl.textContent = '';
-          progressEl.textContent = '';
-          scoreEl.textContent = '';
-          prevBtn.disabled = true;
-          nextBtn.disabled = true;
-          return;
-        }
 
         const current = quizState.items[quizState.index];
         const total = quizState.items.length;
@@ -2235,8 +2306,9 @@
       });
 
       $('quiz-reset').addEventListener('click', () => {
-        initQuiz();
-        quizState.sourceDocId = null;
+        quizState.answers = {};
+        quizState.index = 0;
+        renderQuiz();
       });
 
       $('quiz-generate').addEventListener('click', () => {
@@ -2264,9 +2336,12 @@
           updateLeitnerStats();
         }
         if (tabId === 'tab-quiz') {
+          updateQuizDocLabel();
           const docId = window.selectedDocId || window.lastDocId;
           if (docId && quizState.sourceDocId !== docId) {
-            generatePracticeQuiz();
+            loadQuizFromS3(docId).then(() => {
+              quizState.sourceDocId = docId;
+            });
           }
         }
       }
@@ -2829,6 +2904,12 @@
         window.selectedDocId = docId;
         window.selectedDocName = filename;
         toast(t('docSelectedToast', { filename }), 'info');
+        // Reset quiz state when doc changes so tab will auto-load new doc's quiz
+        if (quizState.sourceDocId !== docId) {
+          quizState.sourceDocId = null;
+          initQuiz(null);
+        }
+        updateQuizDocLabel();
         refresh();
       }
 

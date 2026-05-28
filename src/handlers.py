@@ -1023,7 +1023,7 @@ def handle_generate_quiz(
             latency_ms=latency_ms,
             status="fallback_throttled",
         )
-        return quiz_items
+        return {"quiz": quiz_items, "saved": False}
 
     raw_items = json.loads(_clean_json_response(response))
     quiz_items = _normalize_quiz_items(raw_items, num_questions)
@@ -1049,7 +1049,44 @@ def handle_generate_quiz(
         status="success",
     )
 
-    return quiz_items
+    # Save quiz to S3 if bucket is configured and doc_id is provided
+    saved = False
+    if doc_id and config.flashcard_bucket:
+        try:
+            import boto3
+            s3 = boto3.client("s3", region_name=config.aws_region)
+            key = f"{user_id}/quiz/{doc_id}.json"
+            s3.put_object(
+                Bucket=config.flashcard_bucket,
+                Key=key,
+                Body=json.dumps(quiz_items, ensure_ascii=False).encode("utf-8"),
+                ContentType="application/json",
+            )
+            saved = True
+            log_step("generate_quiz", "s3_save_done", user_id=user_id, doc_id=doc_id, key=key)
+        except Exception as e:
+            logger.warning(f"Quiz S3 save failed for {doc_id}: {e}")
+
+    return {"quiz": quiz_items, "saved": saved}
+
+
+def handle_get_quiz(user_id: str, doc_id: str) -> dict:
+    """Load a previously saved quiz from S3. Returns empty list if not found or bucket not configured."""
+    if not config.flashcard_bucket:
+        return {"doc_id": doc_id, "quiz": []}
+    try:
+        import boto3
+        s3 = boto3.client("s3", region_name=config.aws_region)
+        key = f"{user_id}/quiz/{doc_id}.json"
+        resp = s3.get_object(Bucket=config.flashcard_bucket, Key=key)
+        quiz_items = json.loads(resp["Body"].read().decode("utf-8"))
+        log_step("get_quiz", "s3_load_done", user_id=user_id, doc_id=doc_id, count=len(quiz_items))
+        return {"doc_id": doc_id, "quiz": quiz_items}
+    except Exception as e:
+        if "NoSuchKey" in str(type(e).__name__) or "NoSuchKey" in str(e):
+            return {"doc_id": doc_id, "quiz": []}
+        logger.warning(f"Quiz S3 load failed for {doc_id}: {e}")
+        return {"doc_id": doc_id, "quiz": []}
 
 
 def handle_delete_doc(
