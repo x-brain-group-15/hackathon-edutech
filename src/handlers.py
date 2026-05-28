@@ -219,13 +219,33 @@ def _get_document_text(user_id: str, doc_id: str, filename: str, storage) -> str
         pass
 
     # 2. Fall back to parsing the raw file if extracted_text.txt doesn't exist
+    if filename and filename != "unknown":
+        try:
+            key = f"{user_id}/{doc_id}/{filename}"
+            data = storage.get(key)
+            return _extract_text(filename, data)
+        except Exception as e:
+            print(f"Error getting document text for doc_id {doc_id}: {e}")
+
+    # 3. Scan the folder for any usable file (handles missing/unknown filename)
     try:
-        key = f"{user_id}/{doc_id}/{filename}"
-        data = storage.get(key)
-        return _extract_text(filename, data)
+        prefix = f"{user_id}/{doc_id}/"
+        keys = storage.list(prefix)
+        for key in keys:
+            fname = key.split("/")[-1]
+            if fname.endswith(".metadata.json") or fname == "extracted_text.txt":
+                continue
+            try:
+                data = storage.get(key)
+                text = _extract_text(fname, data)
+                if text.strip():
+                    return text
+            except Exception:
+                continue
     except Exception as e:
-        print(f"Error getting document text for doc_id {doc_id}: {e}")
-        return ""
+        print(f"Error scanning folder for doc_id {doc_id}: {e}")
+
+    return ""
 
 
 def handle_upload(
@@ -995,10 +1015,33 @@ def handle_generate_quiz(
 
     # Step 1: Fetch document text from S3
     context = ""
-    if doc_id and storage is not None and filename:
+    if doc_id and storage is not None:
         log_step("generate_quiz", "s3_fetch_start", user_id=user_id, doc_id=doc_id, filename=filename)
         try:
-            context = _get_document_text(user_id, doc_id, filename, storage)
+            if filename:
+                context = _get_document_text(user_id, doc_id, filename, storage)
+            else:
+                # filename unknown — try extracted_text.txt directly, then scan the folder
+                try:
+                    txt_data = storage.get(f"{user_id}/{doc_id}/extracted_text.txt")
+                    context = txt_data.decode("utf-8", errors="replace")
+                except Exception:
+                    pass
+                if not context.strip():
+                    # Scan folder for any file and try to extract text from it
+                    prefix = f"{user_id}/{doc_id}/"
+                    keys = storage.list(prefix)
+                    for key in keys:
+                        fname = key.split("/")[-1]
+                        if fname.endswith(".metadata.json") or fname == "extracted_text.txt":
+                            continue
+                        try:
+                            data = storage.get(key)
+                            context = _extract_text(fname, data)
+                            if context.strip():
+                                break
+                        except Exception:
+                            continue
             log_step("generate_quiz", "s3_fetch_done", user_id=user_id, doc_id=doc_id, chars=len(context))
         except Exception as e:
             log_step("generate_quiz", "s3_fetch_failed", user_id=user_id, doc_id=doc_id, error=str(e))

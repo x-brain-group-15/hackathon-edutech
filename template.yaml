@@ -252,6 +252,7 @@ Resources:
                   - bedrock:InvokeModelWithResponseStream
                 Resource:
                   - !Sub "arn:aws:bedrock:${AWS::Region}::foundation-model/*"
+                  - !Sub "arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/*"
 
               - Sid: MarketplaceAccess
                 Effect: Allow
@@ -930,6 +931,16 @@ Resources:
         - !Ref PrivateSubnet
       SecurityGroupIds:
         - !Ref VpcEndpointsSecurityGroup
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !GetAtt StudyBotLambdaRole.Arn
+            Action:
+              - bedrock:InvokeModel
+              - bedrock:InvokeModelWithResponseStream
+            Resource: "*"
 
   BedrockAgentRuntimeEndpoint:
     Type: AWS::EC2::VPCEndpoint
@@ -942,6 +953,16 @@ Resources:
         - !Ref PrivateSubnet
       SecurityGroupIds:
         - !Ref VpcEndpointsSecurityGroup
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !GetAtt StudyBotLambdaRole.Arn
+            Action:
+              - bedrock:Retrieve
+              - bedrock:RetrieveAndGenerate
+            Resource: "*"
 
   # --------------------------------------------------------------------------
   # 12. Cost Control & Budgets (Monitoring Section)
