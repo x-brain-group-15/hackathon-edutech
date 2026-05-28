@@ -130,7 +130,8 @@ def test_step3_select_doc_and_generate_quiz():
         headers=HEADERS,
     )
     assert resp.status_code == 200, f"Quiz generation failed: {resp.text}"
-    quiz = resp.json()
+    body = resp.json()
+    quiz = body["quiz"]
 
     # Validate structure (same as what renderQuiz() expects)
     assert isinstance(quiz, list), "Quiz must be a JSON array"
@@ -177,7 +178,7 @@ def test_step4_answer_quiz_questions():
         json={"num_questions": 5, "doc_id": doc_id},
         headers=HEADERS,
     )
-    quiz = resp.json()
+    quiz = resp.json()["quiz"]
 
     # Simulate answering all questions (always pick correct answer)
     score = 0
@@ -229,14 +230,14 @@ def test_step5_quiz_uses_selected_doc_content():
         "/quiz",
         json={"num_questions": 3, "doc_id": doc_a},
         headers=HEADERS,
-    ).json()
+    ).json()["quiz"]
 
     # Generate quiz for doc_b only
     quiz_b = client.post(
         "/quiz",
         json={"num_questions": 3, "doc_id": doc_b},
         headers=HEADERS,
-    ).json()
+    ).json()["quiz"]
 
     assert isinstance(quiz_a, list) and len(quiz_a) > 0
     assert isinstance(quiz_b, list) and len(quiz_b) > 0
@@ -284,8 +285,8 @@ def test_step7_regenerate_quiz():
     )
     doc_id = upload.json()["doc_id"]
 
-    quiz1 = client.post("/quiz", json={"num_questions": 5, "doc_id": doc_id}, headers=HEADERS).json()
-    quiz2 = client.post("/quiz", json={"num_questions": 5, "doc_id": doc_id}, headers=HEADERS).json()
+    quiz1 = client.post("/quiz", json={"num_questions": 5, "doc_id": doc_id}, headers=HEADERS).json()["quiz"]
+    quiz2 = client.post("/quiz", json={"num_questions": 5, "doc_id": doc_id}, headers=HEADERS).json()["quiz"]
 
     assert isinstance(quiz1, list) and len(quiz1) > 0
     assert isinstance(quiz2, list) and len(quiz2) > 0
@@ -331,7 +332,7 @@ def test_step8_full_flow_with_sample_data():
         headers=HEADERS,
     )
     assert quiz_resp.status_code == 200, f"Quiz failed: {quiz_resp.text}"
-    quiz = quiz_resp.json()
+    quiz = quiz_resp.json()["quiz"]
 
     assert isinstance(quiz, list) and len(quiz) > 0
     for q in quiz:
