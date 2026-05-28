@@ -228,15 +228,20 @@ def generate_flashcards(req: FlashcardRequest, x_user_id: str | None = Header(de
     user_id = _resolve_user_id(x_user_id)
     if not req.topic.strip():
         raise HTTPException(status_code=400, detail="Empty topic")
-    return handlers.handle_generate_flashcards(
-        user_id=user_id,
-        topic=req.topic,
-        limit=req.limit,
-        doc_id=req.doc_id,
-        vector_store=vector_store,
-        ai_client=ai_client,
-        aws_region=config.aws_region
-    )
+    try:
+        return handlers.handle_generate_flashcards(
+            user_id=user_id,
+            topic=req.topic,
+            limit=req.limit,
+            doc_id=req.doc_id,
+            vector_store=vector_store,
+            ai_client=ai_client,
+            aws_region=config.aws_region
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}")
 
 @app.get("/queries/recent")
 def recent(x_user_id: str | None = Header(default=None), limit: int = 10) -> dict:

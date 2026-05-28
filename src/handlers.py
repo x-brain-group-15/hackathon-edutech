@@ -1602,35 +1602,78 @@ def handle_generate_flashcards(
     aws_region: str
 ) -> dict:
     start_time = time.time()
+    raw_response = ""
     try:
         context = ""
         if doc_id:
-            results = vector_store.search(query=topic, top_k=10, filter={"doc_id": doc_id})
-            context = "\n\n".join(r["text"] for r in results)
-        
+            try:
+                results = vector_store.search(query=topic, top_k=10, filter={"doc_id": doc_id})
+                context = "\n\n".join(r["text"] for r in results)
+            except Exception as ve:
+                logger.warning(f"Vector search failed for flashcards (topic='{topic}', doc_id='{doc_id}'): {ve}")
+                context = ""
+
         prompt = FLASHCARD_PROMPT.format(limit=limit, topic=topic, context=context)
-        response = ai_client.invoke(prompt, max_tokens=1024)
-        
-        # Clean JSON markdown
-        clean_json = response.strip()
-        if clean_json.startswith("```json"):
-            clean_json = clean_json[7:]
-        elif clean_json.startswith("```"):
-            clean_json = clean_json[3:]
-        if clean_json.endswith("```"):
-            clean_json = clean_json[:-3]
-        clean_json = clean_json.strip()
-        
-        flashcards = json.loads(clean_json)
-        
+
+        try:
+            raw_response = ai_client.invoke(prompt, max_tokens=1024)
+        except Exception as ai_err:
+            if _is_bedrock_fallback_error(ai_err):
+                logger.warning(f"Bedrock throttled/unavailable for flashcards, using fallback: {ai_err}")
+                _put_cloudwatch_metric("FlashcardGenerationFailure", 1, "Count", aws_region, "Throttled")
+                fallback = [
+                    {"front": f"What is {topic}?", "back": f"Bedrock is temporarily unavailable. Review your notes on {topic}."},
+                    {"front": f"Why is {topic} important?", "back": f"Try again in a moment for AI-generated cards about {topic}."},
+                ]
+                return {"flashcards": fallback, "warning": "AI service throttled; showing placeholder cards."}
+            raise
+
+        # Clean JSON markdown fences
+        clean_json = _clean_json_response(raw_response)
+
+        try:
+            flashcards = json.loads(clean_json)
+        except json.JSONDecodeError as je:
+            logger.warning(f"Flashcard JSON parse error for topic '{topic}': {je}. Snippet: {raw_response[:200]}")
+            _put_cloudwatch_metric("FlashcardGenerationFailure", 1, "Count", aws_region, "ParseError")
+            fallback = [
+                {"front": f"What is {topic}?", "back": f"AI response was not parseable. Review your notes on {topic}."},
+                {"front": f"Why is {topic} important?", "back": f"Refer to the lecture notes about {topic}."},
+            ]
+            return {"flashcards": fallback, "warning": "AI returned non-JSON; showing placeholder cards."}
+
+        if not isinstance(flashcards, list):
+            raise ValueError(f"Expected a JSON array of flashcards, got: {type(flashcards).__name__}")
+
         latency_ms = int((time.time() - start_time) * 1000)
-        _put_cloudwatch_metric("FlashcardGenerationLatency", latency_ms, "Milliseconds", "ap-southeast-1", "Success")
-        _put_cloudwatch_metric("FlashcardGenerationSuccess", 1, "Count", "ap-southeast-1", "Success")
-        
+        _put_cloudwatch_metric("FlashcardGenerationLatency", latency_ms, "Milliseconds", aws_region, "Success")
+        _put_cloudwatch_metric("FlashcardGenerationSuccess", 1, "Count", aws_region, "Success")
+
+        log_event(
+            "FLASHCARD_GENERATED",
+            user_id=user_id,
+            topic=topic,
+            doc_id=doc_id,
+            limit=limit,
+            returned_count=len(flashcards),
+            latency_ms=latency_ms,
+            status="success",
+        )
+
         return {"flashcards": flashcards}
     except Exception as e:
         latency_ms = int((time.time() - start_time) * 1000)
-        _put_cloudwatch_metric("FlashcardGenerationFailure", 1, "Count", "ap-southeast-1", "Failed")
+        _put_cloudwatch_metric("FlashcardGenerationFailure", 1, "Count", aws_region, "Failed")
+        log_event(
+            "FLASHCARD_ERROR",
+            user_id=user_id,
+            topic=topic,
+            doc_id=doc_id,
+            latency_ms=latency_ms,
+            error_type=type(e).__name__,
+            error_message=str(e),
+            status="error",
+        )
         print(f"Error generating flashcards: {e}")
         traceback.print_exc()
         raise
