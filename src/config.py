@@ -29,6 +29,16 @@ class Config:
         "anthropic.claude-3-haiku-20240307-v1:0"
     )
     aws_region: str = _env("AWS_REGION", "ap-southeast-1")
+    
+    # Groq (fallback for Bedrock)
+    groq_api_key: str = _env("GROQ_API_KEY", "")
+    groq_model_fallbacks: str = _env(
+        "GROQ_MODEL_FALLBACKS",
+        "mixtral-8x7b-32768,"
+        "gemma2-9b-it,"
+        "llama-3.1-70b-versatile,"
+        "llama-3.2-11b-vision-preview"
+    )
 
     # Storage
     storage_backend: str = _env("STORAGE_BACKEND", "local")

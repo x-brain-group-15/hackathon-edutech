@@ -19,7 +19,7 @@ class BedrockAI:
         self.runtime = None
         self.agent_runtime = None
         self.init_error = None
-        self.local_fallback = LocalAI()
+        self.groq_fallback = None
         try:
             import boto3
             from botocore.config import Config
@@ -33,6 +33,11 @@ class BedrockAI:
             self.agent_runtime = boto3.client("bedrock-agent-runtime", region_name=region, config=config_boto)
         except Exception as e:
             self.init_error = e
+        
+        # Initialize Groq fallback
+        from src.config import config
+        if config.groq_api_key:
+            self.groq_fallback = GroqAI(api_key=config.groq_api_key, model_fallbacks=config.groq_model_fallbacks)
 
     def _build_arn_for_model(self, model_id: str) -> str:
         """Build model ARN or Inference Profile ARN dynamically based on region constraints."""
@@ -140,8 +145,13 @@ class BedrockAI:
                     logger.warning(f"Bedrock issue detected ({type(e).__name__}). Aborting model loop for immediate fallback.")
                     break
 
-        logger.warning(f"All Bedrock models failed. Falling back to LocalAI. Last error: {last_error}")
-        return self.local_fallback.invoke(prompt, **kwargs)
+        logger.warning(f"All Bedrock models failed. Falling back to Groq. Last error: {last_error}")
+        if self.groq_fallback:
+            return self.groq_fallback.invoke(prompt, **kwargs)
+        else:
+            raise RuntimeError(
+                f"Bedrock models failed and no Groq fallback configured. Please set GROQ_API_KEY in environment variables. Last error: {last_error}"
+            )
 
     def generate_quiz_from_kb(self, prompt: str, **kwargs: Any) -> str:
         """Generate quiz JSON through Bedrock Converse API."""
@@ -262,7 +272,7 @@ class BedrockAI:
             except Exception as e:
                 logger.warning(f"Failed to retrieve chunks from local vector store during fallback: {e}")
 
-        # Format prompt for LocalAI.invoke
+        # Format prompt for Groq fallback
         prompt = (
             "You are a study assistant. Answer the student's question using ONLY the\n"
             "context retrieved from their uploaded lecture notes. Cite the source by chunk\n"
@@ -273,12 +283,101 @@ class BedrockAI:
             "ANSWER:"
         )
 
-        simulated_answer = self.local_fallback.invoke(prompt)
+        if self.groq_fallback:
+            simulated_answer = self.groq_fallback.invoke(prompt)
+        else:
+            # Fallback to LocalAI if Groq is not configured
+            fallback_ai = LocalAI()
+            simulated_answer = fallback_ai.invoke(prompt)
+        
         return {
             "answer": simulated_answer,
             "citations": citations
         }
 
+
+class GroqAI:
+    """Groq API client. Used as fallback when Bedrock fails.
+    
+    Supports multiple model names from environment variable for resilience.
+    Models are tried in order until one succeeds.
+    """
+
+    def __init__(self, api_key: str, model_fallbacks: str = ""):
+        self.api_key = api_key
+        # Parse fallback list from comma-separated env string, filter empty strings
+        self.model_fallbacks = [m.strip() for m in model_fallbacks.split(",") if m.strip()] if model_fallbacks else []
+        self.client = None
+        self.init_error = None
+        try:
+            from groq import Groq
+            self.client = Groq(api_key=api_key)
+        except Exception as e:
+            self.init_error = e
+
+    def invoke(self, prompt: str, **kwargs: Any) -> str:
+        import logging
+        import time
+        logger = logging.getLogger("StudyBot")
+
+        if self.init_error or not self.client:
+            raise RuntimeError(
+                f"Groq client failed to initialize: {self.init_error}"
+            )
+
+        max_tokens = kwargs.get("max_tokens", 1024)
+        temperature = kwargs.get("temperature", 0.2)
+        
+        # Try all configured models in order
+        models_to_try = self.model_fallbacks if self.model_fallbacks else ["mixtral-8x7b-32768"]
+
+        start_time = time.time()
+        last_error = None
+        for model_id in models_to_try:
+            # Enforce a strict time budget (4.0s) to guarantee response under API Gateway's limit
+            if time.time() - start_time > 4.0:
+                logger.warning("Approaching timeout budget (4.0s). Aborting Groq model loop to ensure timely response.")
+                break
+
+            logger.info(f"Attempting invoke with Groq model: {model_id}")
+            try:
+                message = self.client.chat.completions.create(
+                    model=model_id,
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    timeout=3.5
+                )
+                logger.info(f"Successfully invoked Groq API using model: {model_id}")
+                return message.choices[0].message.content
+            except Exception as e:
+                logger.warning(f"Groq invoke failed with model {model_id}: {e}")
+                last_error = e
+                # Connection, timeout issues mean we should try the next model
+                err_name = type(e).__name__.lower()
+                if any(k in err_name for k in ("connect", "timeout", "connection")):
+                    logger.warning(f"Groq connection issue detected ({type(e).__name__}). Trying next model.")
+                    continue
+
+        raise RuntimeError(
+            f"All Groq models failed. Last error: {last_error}"
+        )
+
+    def generate_quiz_from_kb(self, prompt: str, **kwargs: Any) -> str:
+        """Generate quiz JSON through Groq API."""
+        return self.invoke(
+            prompt,
+            max_tokens=kwargs.get("max_tokens", 2048),
+            temperature=kwargs.get("temperature", 0.1),
+        )
+
+    def retrieve_and_generate(self, query: str, kb_id: str = "") -> dict:
+        """Groq doesn't have native KB integration, so this method is not supported."""
+        raise NotImplementedError(
+            "Groq does not support Knowledge Base integration. "
+            "This method should not be called for Groq fallback. "
+            "Knowledge Base retrieval must be handled by the local RAG fallback in BedrockAI._local_rag_fallback."
+        )
 
 
 class LocalAI:

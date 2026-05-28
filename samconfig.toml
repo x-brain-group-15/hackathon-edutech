@@ -7,7 +7,7 @@ s3_prefix = "sam-app"
 confirm_changeset = false
 capabilities = "CAPABILITY_IAM CAPABILITY_NAMED_IAM"
 disable_rollback = true
-parameter_overrides = "TeamName=\"G15\" Environment=\"hackathon\" AiBackend=\"bedrock\" AiModelId=\"arn:aws:bedrock:ap-southeast-1::foundation-model/anthropic.claude-3-5-sonnet-20240620-v1:0\" StorageBucket=\"w7-hackathon-docs-2\" FlashcardBucket=\"hackathon-edu-storage\" UserstoreBackend=\"dynamodb\" UserstoreTable=\"\" VectorBackend=\"bedrock_kb\" VectorBedrockKbId=\"HOLLRN2KI7\""
+parameter_overrides = "TeamName=\"G15\" Environment=\"hackathon\" AiBackend=\"bedrock\" AiModelId=\"arn:aws:bedrock:ap-southeast-1::foundation-model/anthropic.claude-3-5-sonnet-20240620-v1:0\" GroqApiKey=\"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\" GroqModelFallbacks=\"meta-llama/llama-4-scout-17b-16e-instruct,openai/gpt-oss-120b,llama-3.3-70b-versatile\" StorageBucket=\"w7-hackathon-docs-2\" FlashcardBucket=\"hackathon-edu-storage\" UserstoreBackend=\"dynamodb\" UserstoreTable=\"\" VectorBackend=\"bedrock_kb\" VectorBedrockKbId=\"HOLLRN2KI7\""
 image_repositories = []
 
 [default.global.parameters]

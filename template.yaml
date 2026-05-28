@@ -34,6 +34,18 @@ Parameters:
     Default: "anthropic.claude-3-5-haiku-20241022-v1:0"
     Description: "Bedrock model ID — Haiku is cheapest sufficient option"
 
+  # ---- Groq (fallback for Bedrock) ----
+  GroqApiKey:
+    Type: String
+    Default: ""
+    Description: "Groq API Key for fallback when Bedrock is unavailable (leave blank to disable Groq fallback)"
+    NoEcho: true
+
+  GroqModelFallbacks:
+    Type: String
+    Default: "mixtral-8x7b-32768,gemma2-9b-it,llama-3.1-70b-versatile,llama-3.2-11b-vision-preview"
+    Description: "Comma-separated list of Groq model names to try in order"
+
   # ---- Storage ----
   StorageBucket:
     Type: String
@@ -103,6 +115,8 @@ Globals:
         AI_BACKEND: !Ref AiBackend
         AI_MODEL_ID: !Ref AiModelId
         AI_MODEL_FALLBACKS: "anthropic.claude-sonnet-4-5-20250929-v1:0,amazon.nova-2-lite-v1:0,amazon.nova-lite-v1:0,anthropic.claude-haiku-4-5-20251001-v1:0,anthropic.claude-sonnet-4-6,amazon.nova-pro-v1:0,anthropic.claude-3-haiku-20240307-v1:0"
+        GROQ_API_KEY: !Ref GroqApiKey
+        GROQ_MODEL_FALLBACKS: !Ref GroqModelFallbacks
         STORAGE_BACKEND: s3
         STORAGE_BUCKET: !Ref StorageBucket
         FLASHCARD_BUCKET: !Ref FlashcardBucket
