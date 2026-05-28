@@ -347,6 +347,7 @@ def handle_query(
             )
             
             # Retrieve chunks
+            chunks = []
             if vector_backend == "bedrock_kb":
                 log_step(
                     "rag_query",
@@ -354,28 +355,43 @@ def handle_query(
                     user_id=user_id,
                     kb_id=bedrock_kb_id
                 )
-                ret_res = ai_client.agent_runtime.retrieve(
-                    knowledgeBaseId=bedrock_kb_id,
-                    retrievalQuery={"text": question},
-                    retrievalConfiguration={
-                        "vectorSearchConfiguration": {
-                            "numberOfResults": 5
+                try:
+                    ret_res = ai_client.agent_runtime.retrieve(
+                        knowledgeBaseId=bedrock_kb_id,
+                        retrievalQuery={"text": question},
+                        retrievalConfiguration={
+                            "vectorSearchConfiguration": {
+                                "numberOfResults": 5
+                            }
                         }
-                    }
-                )
-                chunks = []
-                for i, r in enumerate(ret_res.get("retrievalResults", [])):
-                    chunks.append({
-                        "text": r["content"]["text"],
-                        "chunk": i + 1,
-                        "score": r.get("score", 0),
-                    })
+                    )
+                    for i, r in enumerate(ret_res.get("retrievalResults", [])):
+                        chunks.append({
+                            "text": r["content"]["text"],
+                            "chunk": i + 1,
+                            "score": r.get("score", 0),
+                        })
+                except Exception as e:
+                    logger.warning(f"Bedrock KB retrieve failed, falling back to local vector: {e}")
+                    try:
+                        from src.adapters.factory import _local_vector_singleton
+                        if _local_vector_singleton:
+                            chunks = _local_vector_singleton.search(
+                                question,
+                                top_k=5,
+                                filter={"user_id": user_id}
+                            )
+                    except Exception as le:
+                        logger.warning(f"Local vector fallback failed: {le}")
             else:
-                chunks = vector_store.search(
-                    question,
-                    top_k=5,
-                    filter={"user_id": user_id}
-                )
+                try:
+                    chunks = vector_store.search(
+                        question,
+                        top_k=5,
+                        filter={"user_id": user_id}
+                    )
+                except Exception as e:
+                    logger.warning(f"Local vector search failed: {e}")
 
             if not chunks:
                 prompt = SOCRATIC_PROMPT.format(

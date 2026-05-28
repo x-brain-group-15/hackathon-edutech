@@ -23,10 +23,17 @@ class BedrockKBVector:
 
     def __init__(self, kb_id: str, region: str):
         import boto3
+        from botocore.config import Config
         if not kb_id:
             raise ValueError("VECTOR_BEDROCK_KB_ID must be set for Bedrock KB backend")
         self.kb_id = kb_id
-        self.agent_runtime = boto3.client("bedrock-agent-runtime", region_name=region)
+        # Use short connect (2.0s) and read (4.0s) timeouts to avoid hanging Lambda
+        config_boto = Config(
+            connect_timeout=2.0,
+            read_timeout=4.0,
+            retries={"max_attempts": 1}
+        )
+        self.agent_runtime = boto3.client("bedrock-agent-runtime", region_name=region, config=config_boto)
 
     def ingest(self, doc_id: str, text: str, metadata: Optional[dict] = None, **kwargs) -> None:
         # Ingestion is typically S3-event driven. Trigger a manual sync if needed
