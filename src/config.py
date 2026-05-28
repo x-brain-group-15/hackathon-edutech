@@ -24,6 +24,7 @@ class Config:
     storage_backend: str = _env("STORAGE_BACKEND", "local")
     storage_bucket: str = _env("STORAGE_BUCKET", "")
     storage_local_dir: str = _env("STORAGE_LOCAL_DIR", "./_data/uploads")
+    flashcard_bucket: str = _env("FLASHCARD_BUCKET", "")
 
     # UserStore
     userstore_backend: str = _env("USERSTORE_BACKEND", "sqlite")

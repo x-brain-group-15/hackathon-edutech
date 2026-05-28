@@ -39,6 +39,10 @@ Parameters:
     Type: String
     Description: "S3 bucket name for uploaded documents (create separately)"
 
+  FlashcardBucket:
+    Type: String
+    Description: "S3 bucket name for flashcard JSON sets (create separately)"
+
   # ---- UserStore ----
   UserstoreBackend:
     Type: String
@@ -98,6 +102,7 @@ Globals:
         AI_MODEL_ID: !Ref AiModelId
         STORAGE_BACKEND: s3
         STORAGE_BUCKET: !Ref StorageBucket
+        FLASHCARD_BUCKET: !Ref FlashcardBucket
         USERSTORE_BACKEND: !Ref UserstoreBackend
         USERSTORE_TABLE: !If
           - CreateDynamoTable
@@ -189,6 +194,18 @@ Resources:
                 Resource:
                   - !Sub "arn:aws:s3:::${StorageBucket}"
                   - !Sub "arn:aws:s3:::${StorageBucket}/*"
+
+              # ---- S3: flashcard bucket ----
+              - Sid: S3FlashcardAccess
+                Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                  - s3:ListBucket
+                  - s3:DeleteObject
+                Resource:
+                  - !Sub "arn:aws:s3:::${FlashcardBucket}"
+                  - !Sub "arn:aws:s3:::${FlashcardBucket}/*"
 
               # ---- DynamoDB: studybot table only ----
               - Sid: DynamoDBAccess
