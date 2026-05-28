@@ -1814,6 +1814,36 @@ document.addEventListener('DOMContentLoaded', () => {
       securityLevel: 'loose',
     });
   }
+
+  // Wire file input → doUpload
+  const fileInput = $('file');
+  if (fileInput) {
+    fileInput.addEventListener('change', e => {
+      const file = e.target.files[0];
+      if (file) {
+        doUpload(file);
+        e.target.value = ''; // reset so same file can be re-uploaded
+      }
+    });
+  }
+
+  // Wire drag & drop zone → doUpload
+  const dropZone = $('drop');
+  if (dropZone) {
+    dropZone.addEventListener('dragover', e => {
+      e.preventDefault();
+      dropZone.classList.add('drag-over');
+    });
+    dropZone.addEventListener('dragleave', () => {
+      dropZone.classList.remove('drag-over');
+    });
+    dropZone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropZone.classList.remove('drag-over');
+      const file = e.dataTransfer.files[0];
+      if (file) doUpload(file);
+    });
+  }
 });
 </script>
 </body>
