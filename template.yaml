@@ -344,6 +344,12 @@ Resources:
             ApiId: !Ref StudyBotHttpApi
             Path: /quiz/{doc_id}
             Method: GET
+        Synthesize:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref StudyBotHttpApi
+            Path: /docs/synthesize
+            Method: POST
 
   # --------------------------------------------------------------------------
   # 3b. Lambda — Upload & Document management (I/O-heavy)

@@ -16,10 +16,10 @@ class BedrockAI:
         self.model_id = model_id
         # Parse fallback list from comma-separated env string, filter empty strings
         self.model_fallbacks = [m.strip() for m in model_fallbacks.split(",") if m.strip()] if model_fallbacks else []
-        self.local_fallback = LocalAI()
         self.runtime = None
         self.agent_runtime = None
         self.init_error = None
+        self.local_fallback = LocalAI()
         try:
             import boto3
             from botocore.config import Config
@@ -103,8 +103,9 @@ class BedrockAI:
         logger = logging.getLogger("StudyBot")
 
         if self.init_error or not self.runtime:
-            logger.warning(f"Bedrock runtime not initialized ({self.init_error}). Falling back to local AI invoke.")
-            return self.local_fallback.invoke(prompt, **kwargs)
+            raise RuntimeError(
+                f"Bedrock runtime failed to initialize: {self.init_error}"
+            )
 
         max_tokens = kwargs.get("max_tokens", 1024)
         
@@ -139,7 +140,7 @@ class BedrockAI:
                     logger.warning(f"Bedrock issue detected ({type(e).__name__}). Aborting model loop for immediate fallback.")
                     break
 
-        logger.warning(f"All Bedrock models failed. Falling back to local AI invoke. Last error: {last_error}")
+        logger.warning(f"All Bedrock models failed. Falling back to LocalAI. Last error: {last_error}")
         return self.local_fallback.invoke(prompt, **kwargs)
 
     def generate_quiz_from_kb(self, prompt: str, **kwargs: Any) -> str:
@@ -156,8 +157,9 @@ class BedrockAI:
         logger = logging.getLogger("StudyBot")
 
         if self.init_error or not self.agent_runtime:
-            logger.warning(f"Bedrock agent_runtime not initialized ({self.init_error}). Falling back to local RAG logic.")
-            return self._local_rag_fallback(query, kb_id, None)
+            raise RuntimeError(
+                f"Bedrock agent runtime failed to initialize: {self.init_error}"
+            )
 
         if not kb_id:
             raise ValueError("VECTOR_BEDROCK_KB_ID must be set for Bedrock KB retrieve_and_generate")
@@ -208,7 +210,7 @@ class BedrockAI:
                     logger.warning(f"Bedrock agent issue detected ({type(e).__name__}). Aborting model loop for immediate fallback.")
                     break
 
-        logger.warning(f"All Bedrock models failed for retrieve_and_generate. Falling back to local RAG logic. Last error: {last_error}")
+        logger.warning(f"All Bedrock models failed for retrieve_and_generate. Falling back to local RAG. Last error: {last_error}")
         return self._local_rag_fallback(query, kb_id, last_error)
 
     def _local_rag_fallback(self, query: str, kb_id: str, last_error: Any) -> dict:

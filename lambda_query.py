@@ -37,17 +37,20 @@ def _uid(x_user_id):
 class QueryRequest(BaseModel):
     question: str
     socratic: bool = False
+    doc_ids: list[str] | None = None
 
 
 class FlashcardRequest(BaseModel):
     topic: str
     limit: int = 5
     doc_id: str | None = None
+    doc_ids: list[str] | None = None
 
 
 class QuizRequest(BaseModel):
     num_questions: int = 5
     doc_id: str | None = None
+    doc_ids: list[str] | None = None
 
 
 @app.post("/query")
@@ -66,6 +69,7 @@ def query(req: QueryRequest, x_user_id: str | None = Header(default=None)) -> di
             vector_backend=config.vector_backend,
             bedrock_kb_id=config.vector_bedrock_kb_id,
             socratic=req.socratic,
+            doc_ids=req.doc_ids or None,
         )
     except Exception as e:
         logger.error(f"[/query] Unexpected error user={user_id}: {type(e).__name__}: {e}", exc_info=True)
@@ -83,6 +87,7 @@ def generate_flashcards(req: FlashcardRequest, x_user_id: str | None = Header(de
         topic=req.topic,
         limit=req.limit,
         doc_id=req.doc_id,
+        doc_ids=req.doc_ids or None,
         vector_store=vector_store,
         ai_client=ai_client,
         aws_region=config.aws_region,
@@ -99,11 +104,13 @@ def generate_quiz(
     user_id = _uid(x_user_id)
     requested_count = req.num_questions if req else num_questions
     requested_doc_id = req.doc_id if req and req.doc_id else doc_id
+    requested_doc_ids = req.doc_ids if req and req.doc_ids else None
     try:
         return handlers.handle_generate_quiz(
             user_id=user_id,
             num_questions=requested_count,
             doc_id=requested_doc_id,
+            doc_ids=requested_doc_ids,
             vector_store=vector_store,
             ai_client=ai_client,
             userstore=userstore,
@@ -124,7 +131,11 @@ def get_quiz(doc_id: str, x_user_id: str | None = Header(default=None)) -> dict:
 
 
 @app.post("/docs/{doc_id}/mindmap")
-def generate_mindmap(doc_id: str, x_user_id: str | None = Header(default=None)) -> dict:
+def generate_mindmap(
+    doc_id: str,
+    x_user_id: str | None = Header(default=None),
+    doc_ids: list[str] | None = Body(default=None, embed=True),
+) -> dict:
     user_id = _uid(x_user_id)
     try:
         return handlers.handle_generate_mindmap(
@@ -133,6 +144,7 @@ def generate_mindmap(doc_id: str, x_user_id: str | None = Header(default=None)) 
             storage=storage,
             userstore=userstore,
             ai_client=ai_client,
+            doc_ids=doc_ids,
         )
     except ValueError as e:
         logger.warning(f"[/docs/{doc_id}/mindmap] Not found user={user_id}: {e}")
@@ -143,7 +155,11 @@ def generate_mindmap(doc_id: str, x_user_id: str | None = Header(default=None)) 
 
 
 @app.post("/docs/{doc_id}/cornell")
-def generate_cornell(doc_id: str, x_user_id: str | None = Header(default=None)) -> dict:
+def generate_cornell(
+    doc_id: str,
+    x_user_id: str | None = Header(default=None),
+    doc_ids: list[str] | None = Body(default=None, embed=True),
+) -> dict:
     user_id = _uid(x_user_id)
     try:
         return handlers.handle_generate_cornell(
@@ -152,6 +168,7 @@ def generate_cornell(doc_id: str, x_user_id: str | None = Header(default=None)) 
             storage=storage,
             userstore=userstore,
             ai_client=ai_client,
+            doc_ids=doc_ids,
         )
     except ValueError as e:
         logger.warning(f"[/docs/{doc_id}/cornell] Not found user={user_id}: {e}")
@@ -161,4 +178,25 @@ def generate_cornell(doc_id: str, x_user_id: str | None = Header(default=None)) 
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class SynthesizeRequest(BaseModel):
+    doc_ids: list[str]
+
+@app.post("/docs/synthesize")
+def synthesize(req: SynthesizeRequest, x_user_id: str | None = Header(default=None)) -> dict:
+    user_id = _uid(x_user_id)
+    if not req.doc_ids:
+        raise HTTPException(status_code=400, detail="No document IDs specified")
+    try:
+        return handlers.handle_cross_synthesis(
+            user_id=user_id,
+            doc_ids=req.doc_ids,
+            storage=storage,
+            ai_client=ai_client,
+        )
+    except Exception as e:
+        logger.error(f"[/docs/synthesize] Unexpected error user={user_id}: {type(e).__name__}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 handler = Mangum(app, lifespan="off")
+

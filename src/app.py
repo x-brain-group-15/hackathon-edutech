@@ -55,6 +55,7 @@ def _resolve_user_id(x_user_id: str | None) -> str:
 class QueryRequest(BaseModel):
     question: str
     socratic: bool = False
+    doc_ids: list[str] | None = None
 
 
 @app.get("/health")
@@ -121,6 +122,7 @@ def query(req: QueryRequest, x_user_id: str | None = Header(default=None)) -> di
             vector_backend=config.vector_backend,
             bedrock_kb_id=config.vector_bedrock_kb_id,
             socratic=req.socratic,
+            doc_ids=req.doc_ids or None,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}")
@@ -185,6 +187,7 @@ class FlashcardRequest(BaseModel):
     topic: str
     limit: int = 5
     doc_id: str | None = None
+    doc_ids: list[str] | None = None
 
 
 class QuizRequest(BaseModel):
@@ -234,6 +237,7 @@ def generate_flashcards(req: FlashcardRequest, x_user_id: str | None = Header(de
             topic=req.topic,
             limit=req.limit,
             doc_id=req.doc_id,
+            doc_ids=req.doc_ids or None,
             vector_store=vector_store,
             ai_client=ai_client,
             aws_region=config.aws_region
@@ -280,6 +284,26 @@ def generate_cornell(doc_id: str, x_user_id: str | None = Header(default=None)) 
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+class SynthesizeRequest(BaseModel):
+    doc_ids: list[str]
+
+@app.post("/docs/synthesize")
+def synthesize(req: SynthesizeRequest, x_user_id: str | None = Header(default=None)) -> dict:
+    user_id = _resolve_user_id(x_user_id)
+    if not req.doc_ids:
+        raise HTTPException(status_code=400, detail="No document IDs specified")
+    try:
+        return handlers.handle_cross_synthesis(
+            user_id=user_id,
+            doc_ids=req.doc_ids,
+            storage=storage,
+            ai_client=ai_client,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 
 # ---- Static frontend ----

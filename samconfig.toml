@@ -7,7 +7,7 @@ s3_prefix = "sam-app"
 confirm_changeset = false
 capabilities = "CAPABILITY_IAM CAPABILITY_NAMED_IAM"
 disable_rollback = true
-parameter_overrides = "TeamName=\"G15\" Environment=\"hackathon\" AiBackend=\"bedrock\" AiModelId=\"apac.anthropic.claude-3-5-sonnet-20240620-v1:0\" StorageBucket=\"w7-hackathon-docs-2\" FlashcardBucket=\"hackathon-edu-storage\" UserstoreBackend=\"dynamodb\" UserstoreTable=\"\" VectorBackend=\"bedrock_kb\" VectorBedrockKbId=\"HOLLRN2KI7\""
+parameter_overrides = "TeamName=\"G15\" Environment=\"hackathon\" AiBackend=\"bedrock\" AiModelId=\"arn:aws:bedrock:ap-southeast-1::foundation-model/anthropic.claude-3-5-sonnet-20240620-v1:0\" StorageBucket=\"w7-hackathon-docs-2\" FlashcardBucket=\"hackathon-edu-storage\" UserstoreBackend=\"dynamodb\" UserstoreTable=\"\" VectorBackend=\"bedrock_kb\" VectorBedrockKbId=\"HOLLRN2KI7\""
 image_repositories = []
 
 [default.global.parameters]
