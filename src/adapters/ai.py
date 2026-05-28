@@ -110,10 +110,21 @@ class BedrockAI:
         else:
             return f"arn:aws:bedrock:{self.region}::foundation-model/{model_id}"
 
+    def _log_sanitized_prompt(self, logger, prompt: str, max_chars: int = 900) -> None:
+        """Avoid logging huge prompts; also avoid logging any secret-like content."""
+        try:
+            snippet = (prompt or "").replace("\n", " ")
+            if len(snippet) > max_chars:
+                snippet = snippet[:max_chars] + "..."
+            logger.info({"event": "prompt_snippet", "prompt_snippet": snippet, "prompt_chars": len(prompt or "")})
+        except Exception:
+            logger.info({"event": "prompt_snippet", "prompt_snippet": "<unavailable>", "prompt_chars": -1})
+
     def invoke(self, prompt: str, **kwargs: Any) -> str:
         import logging
         import time
         logger = logging.getLogger("StudyBot")
+
 
         if self.init_error or not self.runtime:
             raise RuntimeError(
@@ -134,18 +145,25 @@ class BedrockAI:
                 break
 
             model_arn = self._build_arn_for_model(model_id)
-            logger.info(f"Attempting invoke with model: {model_id} (ARN: {model_arn})")
+            logger.info({"event": "bedrock_invoke_attempt", "model_id": model_id, "model_arn": model_arn, "max_tokens": max_tokens, "temperature": kwargs.get("temperature", 0.2)})
+            self._log_sanitized_prompt(logger, prompt)
             try:
                 resp = self.runtime.converse(
                     modelId=model_arn,
                     messages=[{"role": "user", "content": [{"text": prompt}]}],
                     inferenceConfig={"maxTokens": max_tokens, "temperature": kwargs.get("temperature", 0.2)},
                 )
-                logger.info(f"Successfully invoked Converse API using model: {model_id}")
-                return resp["output"]["message"]["content"][0]["text"]
+                answer_text = resp["output"]["message"]["content"][0]["text"]
+                logger.info({"event": "bedrock_invoke_success", "model_id": model_id, "answer_chars": len(answer_text or "")})
+                try:
+                    logger.info({"event": "bedrock_invoke_answer_snippet", "answer_snippet": (answer_text or "").replace("\n", " ")[:700]})
+                except Exception:
+                    pass
+                return answer_text
             except Exception as e:
-                logger.warning(f"invoke failed with model {model_id}: {e}")
+                logger.warning({"event": "bedrock_invoke_failed", "model_id": model_id, "error_type": type(e).__name__, "error": str(e)})
                 last_error = e
+
                 # Connection, timeout, endpoint, or permission/authorization issues mean we should abort early
                 # to prevent compounding latency and immediately fall back to the local simulator.
                 err_name = type(e).__name__.lower()
@@ -193,7 +211,11 @@ class BedrockAI:
                 break
 
             model_arn = self._build_arn_for_model(model_id)
-            logger.info(f"Attempting retrieve_and_generate with model: {model_id} (ARN: {model_arn})")
+            logger.info({"event": "bedrock_rag_attempt", "model_id": model_id, "model_arn": model_arn, "kb_id": kb_id, "query_chars": len(query or "")})
+            try:
+                logger.info({"event": "bedrock_rag_query_snippet", "query_snippet": (query or "").replace("\n", " ")[:700]})
+            except Exception:
+                pass
             try:
                 resp = self.agent_runtime.retrieve_and_generate(
                     input={"text": query},
@@ -205,21 +227,26 @@ class BedrockAI:
                         },
                     },
                 )
-                logger.info(f"Successfully generated answer using model: {model_id}")
-                return {
-                    "answer": resp["output"]["text"],
-                    "citations": [
-                        {
-                            "text": ref.get("content", {}).get("text", ""),
-                            "source": ref.get("location", {}),
-                        }
-                        for citation in resp.get("citations", [])
-                        for ref in citation.get("retrievedReferences", [])
-                    ],
-                }
+                answer_text = resp["output"]["text"]
+                raw_citations = [
+                    {
+                        "text": ref.get("content", {}).get("text", ""),
+                        "source": ref.get("location", {}),
+                    }
+                    for citation in resp.get("citations", [])
+                    for ref in citation.get("retrievedReferences", [])
+                ]
+                logger.info({"event": "bedrock_rag_success", "model_id": model_id, "answer_chars": len(answer_text or ""), "citations_count": len(raw_citations)})
+                try:
+                    logger.info({"event": "bedrock_rag_answer_snippet", "answer_snippet": (answer_text or "").replace("\n", " ")[:700]})
+                    logger.info({"event": "bedrock_rag_citations_preview", "citations": [ {"text_snippet": c.get('text','').replace('\n',' ')[:120], "source_type": (c.get('source',{}) or {}).get('type','')} for c in raw_citations[:5] ]})
+                except Exception:
+                    pass
+                return {"answer": answer_text, "citations": raw_citations}
             except Exception as e:
-                logger.warning(f"retrieve_and_generate failed with model {model_id}: {e}")
+                logger.warning({"event": "bedrock_rag_failed", "model_id": model_id, "error_type": type(e).__name__, "error": str(e)})
                 last_error = e
+
                 # Connection, timeout, endpoint, or permission/authorization issues mean we should abort early
                 # to prevent compounding latency and immediately fall back to the local simulator.
                 err_name = type(e).__name__.lower()
