@@ -493,19 +493,46 @@ def handle_query(
 
     def _search_chunks(query: str, top_k: int = 5) -> list[dict]:
         """Search vector store, handling multi-doc fan-out when needed."""
+        chunks = []
         if not doc_ids or len(doc_ids) <= 1:
-            return vector_store.search(query, top_k=top_k, filter=_build_vector_filter())
-        # Multiple docs: search each separately and merge by score
-        per_doc = max(top_k, 3)
-        all_chunks: list[dict] = []
-        for did in doc_ids:
             try:
-                results = vector_store.search(query, top_k=per_doc, filter={"user_id": user_id, "doc_id": did})
-                all_chunks.extend(results)
+                chunks = vector_store.search(query, top_k=top_k, filter=_build_vector_filter())
             except Exception as e:
-                logger.warning(f"Vector search failed for doc_id={did}: {e}")
-        all_chunks.sort(key=lambda c: c.get("score", 0), reverse=True)
-        return all_chunks[:top_k]
+                logger.warning(f"Primary search failed: {e}")
+        else:
+            # Multiple docs: search each separately and merge by score
+            per_doc = max(top_k, 3)
+            all_chunks: list[dict] = []
+            for did in doc_ids:
+                try:
+                    results = vector_store.search(query, top_k=per_doc, filter={"user_id": user_id, "doc_id": did})
+                    all_chunks.extend(results)
+                except Exception as e:
+                    logger.warning(f"Vector search failed for doc_id={did}: {e}")
+            all_chunks.sort(key=lambda c: c.get("score", 0), reverse=True)
+            chunks = all_chunks[:top_k]
+
+        # If primary search (like Bedrock KB) returned 0 chunks, explicitly fall back to local vector search!
+        if not chunks and vector_backend == "bedrock_kb":
+            logger.info("Bedrock KB returned 0 chunks. Falling back to local vector store search.")
+            try:
+                from src.adapters.factory import _local_vector_singleton
+                from src.adapters.vector import LocalVector
+                local_store = _local_vector_singleton or LocalVector()
+                if not doc_ids or len(doc_ids) <= 1:
+                    chunks = local_store.search(query, top_k=top_k, filter=_build_vector_filter())
+                else:
+                    per_doc = max(top_k, 3)
+                    all_chunks: list[dict] = []
+                    for did in doc_ids:
+                        results = local_store.search(query, top_k=per_doc, filter={"user_id": user_id, "doc_id": did})
+                        all_chunks.extend(results)
+                    all_chunks.sort(key=lambda c: c.get("score", 0), reverse=True)
+                    chunks = all_chunks[:top_k]
+            except Exception as le:
+                logger.warning(f"Fallback to local vector store search failed: {le}")
+                
+        return chunks
 
     def _ensure_docs_in_local_store(target_doc_ids: Optional[list[str]]):
         from src.adapters.vector import LocalVector
