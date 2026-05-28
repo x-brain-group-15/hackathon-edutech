@@ -43,12 +43,267 @@
             theme: newTheme === 'dark' ? 'dark' : 'default',
             securityLevel: 'loose',
           });
-          container.innerHTML = `<div class="mermaid" id="mindmap-mermaid">${window.lastMindmapCode}</div>`;
+          const isFS = container.classList.contains('fullscreen');
+          const btnLabel = isFS ? '📺 Collapse' : '📺 Maximize';
+          container.innerHTML = `
+            <div class="mindmap-toolbar">
+              <button onclick="zoomMindmap(1.15)">🔍 Zoom In</button>
+              <button onclick="zoomMindmap(0.85)">🔍 Zoom Out</button>
+              <button onclick="resetZoomMindmap()">🔄 Reset</button>
+              <button onclick="toggleMindmapFullscreen()" id="btn-mindmap-fullscreen">${btnLabel}</button>
+            </div>
+            <div class="mermaid" id="mindmap-mermaid">${window.lastMindmapCode}</div>
+          `;
           mermaid.init(undefined, document.querySelectorAll('.mermaid'));
+          setTimeout(() => {
+            if (typeof initMindmapInteractivity === 'function') {
+              initMindmapInteractivity();
+            }
+          }, 300);
         }
       }
     }
   </script>
+  <style>
+    /* ─── Expandable Accordion Citations ────────────────────────────────────── */
+    .citation {
+      border-radius: var(--radius-sm);
+      margin-top: 0.6rem;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.02);
+      transition: all 0.3s ease;
+      cursor: pointer;
+    }
+    [data-theme="light"] .citation {
+      background: rgba(0, 0, 0, 0.01);
+    }
+    .citation:hover {
+      border-color: rgba(var(--accent-rgb), 0.3);
+      background: rgba(var(--accent-rgb), 0.03);
+    }
+    .citation .body {
+      display: none;
+      margin-top: 0.5rem;
+      border-top: 1px dashed var(--border);
+      padding-top: 0.5rem;
+      color: var(--text);
+      opacity: 0.85;
+      line-height: 1.5;
+    }
+    .chevron-icon {
+      transform: rotate(0deg);
+      transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    /* ─── Mindmap Workspace Layout ────────────────────────────────────────── */
+    #mindmap-workspace {
+      display: none;
+      gap: 1rem;
+      flex-wrap: wrap;
+      margin-top: 0.5rem;
+    }
+    #mindmap-container {
+      flex: 1 1 500px;
+      padding: 1rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: rgba(255, 255, 255, 0.02);
+      overflow: hidden !important;
+      text-align: center;
+      min-height: 450px;
+      max-height: 600px;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    [data-theme="light"] #mindmap-container {
+      background: rgba(255, 255, 255, 0.6);
+    }
+    #mindmap-container.fullscreen {
+      position: fixed !important;
+      top: 0 !important;
+      left: 0 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      max-width: 100vw !important;
+      max-height: 100vh !important;
+      z-index: 9999 !important;
+      background: var(--bg) !important;
+      border-radius: 0 !important;
+      border: none !important;
+      margin: 0 !important;
+      padding: 2rem !important;
+      box-shadow: none !important;
+    }
+    .mindmap-toolbar {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      display: flex;
+      gap: 0.5rem;
+      z-index: 100;
+      background: rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 0.4rem;
+      border-radius: var(--radius-sm);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+    [data-theme="light"] .mindmap-toolbar {
+      background: rgba(0, 0, 0, 0.05);
+      border: 1px solid rgba(0, 0, 0, 0.08);
+    }
+    .mindmap-toolbar button {
+      background: transparent;
+      border: none;
+      color: var(--text);
+      font-size: 0.78rem;
+      font-weight: 600;
+      padding: 0.35rem 0.65rem;
+      border-radius: 4px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+      transition: all 0.2s ease;
+    }
+    .mindmap-toolbar button:hover {
+      background: rgba(var(--accent-rgb), 0.15);
+      color: var(--accent);
+      transform: translateY(-1px);
+    }
+    .mindmap-toolbar button:active {
+      transform: translateY(0);
+    }
+    #mindmap-learning-panel {
+      flex: 0 1 320px;
+      min-width: 280px;
+      padding: 1.25rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--chat-bg);
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      max-height: 600px;
+      overflow-y: auto;
+      box-shadow: var(--shadow);
+      transition: border-color 0.3s ease;
+    }
+    #mindmap-learning-panel.active {
+      border-color: rgba(var(--accent-rgb), 0.5);
+      box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.08), var(--shadow);
+    }
+    #mindmap-learning-content {
+      font-size: 0.88rem;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+    @keyframes fadeSlideIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .mindmap-node-selected rect,
+    .mindmap-node-selected circle,
+    .mindmap-node-selected ellipse {
+      stroke: var(--accent) !important;
+      stroke-width: 3px !important;
+      filter: drop-shadow(0 0 10px rgba(var(--accent-rgb), 0.6)) !important;
+    }
+    .mindmap-node-selected text {
+      font-weight: 800 !important;
+    }
+
+    /* ─── Premium Mermaid Mindmap Visual Customizations ───────────────────── */
+    .mermaid svg, #mindmap-mermaid svg {
+      background: transparent !important;
+      font-family: var(--font-sans) !important;
+    }
+    .mermaid .node, .mermaid .mindmap-node,
+    #mindmap-mermaid .node, #mindmap-mermaid .mindmap-node {
+      cursor: pointer !important;
+    }
+    
+    /* Central Root Node Specific Styles */
+    .mermaid .mindmap-node-depth-0 rect,
+    .mermaid .mindmap-node-depth-0 circle,
+    .mermaid .mindmap-node-depth-0 ellipse,
+    #mindmap-mermaid .mindmap-node-depth-0 rect,
+    #mindmap-mermaid .mindmap-node-depth-0 circle,
+    #mindmap-mermaid .mindmap-node-depth-0 ellipse {
+      fill: var(--accent) !important;
+      stroke: var(--accent-light) !important;
+      stroke-width: 3px !important;
+      filter: drop-shadow(0 6px 12px rgba(var(--accent-rgb), 0.35)) !important;
+    }
+    .mermaid .mindmap-node-depth-0 text,
+    #mindmap-mermaid .mindmap-node-depth-0 text {
+      fill: #ffffff !important;
+      font-size: 15px !important;
+      font-weight: 800 !important;
+    }
+
+    /* Sub-concepts (Level 1, 2, etc.) Border and Shadows */
+    .mermaid .mindmap-node rect,
+    .mermaid .mindmap-node circle,
+    .mermaid .mindmap-node ellipse,
+    #mindmap-mermaid .mindmap-node rect,
+    #mindmap-mermaid .mindmap-node circle,
+    #mindmap-mermaid .mindmap-node ellipse {
+      stroke-width: 2px !important;
+      filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.1)) !important;
+      transition: all 0.2s ease !important;
+    }
+    .mermaid .mindmap-node:hover rect,
+    .mermaid .mindmap-node:hover circle,
+    .mermaid .mindmap-node:hover ellipse,
+    #mindmap-mermaid .mindmap-node:hover rect,
+    #mindmap-mermaid .mindmap-node:hover circle,
+    #mindmap-mermaid .mindmap-node:hover ellipse {
+      stroke: var(--accent) !important;
+      filter: drop-shadow(0 8px 16px rgba(var(--accent-rgb), 0.3)) !important;
+    }
+
+    /* Theme-aware High-Contrast Text Color for mindmap nodes */
+    /* Dark Mode (Default) - Crisp white text for readability against dark theme background */
+    .mermaid .mindmap-node text,
+    #mindmap-mermaid .mindmap-node text,
+    .mermaid .node text,
+    #mindmap-mermaid .node text {
+      fill: #ffffff !important;
+      font-weight: 600 !important;
+      font-family: var(--font-sans) !important;
+      font-size: 12.5px !important;
+      letter-spacing: 0.01em !important;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.6) !important; /* Add high-contrast text shadow for white text */
+    }
+
+    /* Light Mode Overrides - Slate dark text for perfect contrast on light background pastel shapes */
+    [data-theme="light"] .mermaid .mindmap-node:not(.mindmap-node-depth-0) text,
+    [data-theme="light"] #mindmap-mermaid .mindmap-node:not(.mindmap-node-depth-0) text,
+    [data-theme="light"] .mermaid .node:not(.mindmap-node-depth-0) text,
+    [data-theme="light"] #mindmap-mermaid .node:not(.mindmap-node-depth-0) text {
+      fill: #0f172a !important;
+      text-shadow: none !important;
+    }
+
+    /* Mindmap connectors / edges */
+    .mermaid .mindmap-edge,
+    #mindmap-mermaid .mindmap-edge,
+    .mermaid .edgePath .path,
+    #mindmap-mermaid .edgePath .path {
+      stroke: var(--accent-light) !important;
+      stroke-width: 3px !important;
+      stroke-opacity: 0.8 !important;
+    }
+    [data-theme="light"] .mermaid .mindmap-edge,
+    [data-theme="light"] #mindmap-mermaid .mindmap-edge {
+      stroke: var(--accent) !important;
+      stroke-opacity: 0.6 !important;
+    }
+  </style>
 </head>
 
 <body>
@@ -373,7 +628,21 @@
               </span>
               <h2 data-i18n="askTitle"></h2>
             </div>
-            <span class="meta" data-i18n="askMeta"></span>
+            <div style="display:flex;align-items:center;gap:0.75rem;">
+              <span class="meta" data-i18n="askMeta"></span>
+              <button id="btn-reset-chat" onclick="resetChat()" title="Clear chat history"
+                style="display:none;padding:0.45rem 0.85rem;font-size:0.8rem;font-weight:600;border-radius:8px;border:1px solid rgba(239,68,68,0.3);background:rgba(239,68,68,0.08);color:#f87171;cursor:pointer;display:flex;align-items:center;gap:0.4rem;transition:all 0.2s ease;"
+                onmouseover="this.style.background='rgba(239,68,68,0.18)';this.style.borderColor='rgba(239,68,68,0.5)'"
+                onmouseout="this.style.background='rgba(239,68,68,0.08)';this.style.borderColor='rgba(239,68,68,0.3)'">
+                <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="3 6 5 6 21 6"></polyline>
+                  <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+                  <path d="M10 11v6"></path><path d="M14 11v6"></path>
+                  <path d="M9 6V4h6v2"></path>
+                </svg>
+                Reset Chat
+              </button>
+            </div>
           </div>
 
           <!-- Socratic Tutor Switcher -->
@@ -513,20 +782,23 @@
             </button>
           </div>
 
-          <div id="mindmap-container" style="
-                display: none;
-                padding: 1rem;
-                border: 1px solid var(--border);
-                border-radius: var(--radius-sm);
-                background: rgba(255, 255, 255, 0.02);
-                overflow: auto;
-                text-align: center;
-                min-height: 400px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-              ">
-            <div class="mermaid" id="mindmap-mermaid"></div>
+          <div id="mindmap-workspace" style="display: none; gap: 1rem; flex-wrap: wrap;">
+            <div id="mindmap-container">
+              <div class="mermaid" id="mindmap-mermaid"></div>
+            </div>
+            
+            <!-- Learning panel for node detail display -->
+            <div id="mindmap-learning-panel">
+              <h3 style="margin: 0; font-size: 0.95rem; font-weight: 800; color: var(--accent); display: flex; align-items: center; gap: 0.4rem; border-bottom: 2px solid var(--border); padding-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em;">
+                <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 16a1.5 1.5 0 1 1 1.5-1.5A1.5 1.5 0 0 1 12 18zm1.07-5.91a2.3 2.3 0 0 0-.27-.41c-.24-.26-.53-.47-.8-.74A3.07 3.07 0 0 1 11 9.5a1.5 1.5 0 0 1 3 0c0 .4-.1.8-.3 1.1a1 1 0 0 0-.63.49z"></path>
+                </svg>
+                <span>Study Hub</span>
+              </h3>
+              <div id="mindmap-learning-content">
+                💡 Click on any branch or concept in the mindmap to display detailed learning notes here! Double-click a node to sprout new sub-concepts.
+              </div>
+            </div>
           </div>
           <div id="mindmap-empty" class="empty" style="padding: 3rem 1.5rem; text-align: center">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="
@@ -849,6 +1121,25 @@
             <span data-i18n="benchmarkIntroPrefix"></span><strong data-i18n="benchmarkIntroStrong"></strong><span
               data-i18n="benchmarkIntroSuffix"></span>
           </p>
+          <div style="margin-bottom: 1.25rem; display: flex; flex-direction: column; gap: 0.4rem; max-width: 450px;">
+            <label for="benchmark-doc-select" style="font-size: 0.8rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em;">Chọn tài liệu để đánh giá (Select Library Source):</label>
+            <select id="benchmark-doc-select" onchange="onBenchmarkDocSelect(this.value)" style="
+              padding: 0.65rem 0.9rem;
+              font-family: var(--font-sans);
+              font-size: 0.88rem;
+              font-weight: 500;
+              color: var(--text);
+              background: var(--chat-bg);
+              border: 1px solid var(--border);
+              border-radius: var(--radius-sm);
+              outline: none;
+              cursor: pointer;
+              transition: all 0.3s ease;
+              box-shadow: var(--shadow-sm);
+            ">
+              <!-- Dynamically populated -->
+            </select>
+          </div>
           <div style="
                 display: flex;
                 gap: 0.75rem;
@@ -1669,6 +1960,34 @@
   `;
     }
 
+    function resetChat() {
+      const card = $('answer-card');
+      const resetBtn = $('btn-reset-chat');
+      if (!card) return;
+
+      // Animate out
+      card.style.transition = 'opacity 0.25s ease, transform 0.25s ease';
+      card.style.opacity = '0';
+      card.style.transform = 'translateY(4px)';
+
+      setTimeout(() => {
+        card.innerHTML = '';
+        card.removeAttribute('data-has-messages');
+        card.classList.remove('visible');
+        card.style.opacity = '';
+        card.style.transform = '';
+        card.style.transition = '';
+        // Hide reset button
+        if (resetBtn) resetBtn.style.display = 'none';
+        // Clear input
+        const input = $('question');
+        if (input) input.value = '';
+        toast('Chat cleared ✨', 'success');
+        // Show welcome again
+        setTimeout(() => renderWelcomeMessage(), 100);
+      }, 250);
+    }
+
     function parseMarkdownAndCitations(text) {
       if (!text) return '';
       // 1. Escape HTML first for security (excluding our own generated HTML later)
@@ -1764,16 +2083,23 @@
     }
 
     function scrollToCitation(chunkId) {
-      const el = document.getElementById(`citation-${chunkId}`);
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        // Highlight it briefly with a premium flash effect!
-        el.classList.add('highlight-flash');
-        setTimeout(() => el.classList.remove('highlight-flash'), 1500);
-      } else {
-        toast('Citation source details found below.', 'info');
+      // Find nearest citation .body by chunk label (works with multiple Q&A rounds)
+      const allCitations = document.querySelectorAll('.citation');
+      for (const el of allCitations) {
+        const head = el.querySelector('.head');
+        if (head && head.textContent.includes(`chunk ${chunkId}`)) {
+          const body = el.querySelector('.body');
+          if (body) {
+            body.style.display = 'block';
+            const chevron = el.querySelector('.chevron-icon');
+            if (chevron) chevron.style.transform = 'rotate(180deg)';
+          }
+          el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          break;
+        }
       }
     }
+
 
     window.parseMarkdownAndCitations = parseMarkdownAndCitations;
     window.scrollToCitation = scrollToCitation;
@@ -1924,6 +2250,10 @@
       }
       $('answer-card').setAttribute('data-has-messages', 'true');
 
+      // Show reset button once chat has started
+      const resetBtn = $('btn-reset-chat');
+      if (resetBtn) resetBtn.style.display = 'flex';
+
       $('question').value = '';
 
       const prevAns = $('answer-text');
@@ -2041,19 +2371,48 @@
 
       $('answer-text').innerHTML = parseMarkdownAndCitations(answerText);
 
+      // Reranking metadata header
+      let rerankHtml = '';
+      if (res.body.reranking_metadata && res.body.reranking_metadata.rerank_applied) {
+        const rm = res.body.reranking_metadata;
+        rerankHtml = `
+          <div class="reranking-badge" style="
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.55rem 0.8rem;
+            background: rgba(16, 185, 129, 0.08);
+            border: 1px dashed var(--success);
+            border-radius: var(--radius-sm);
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: var(--success);
+            margin-bottom: 0.75rem;
+            width: 100%;
+            animation: fadeIn 0.35s ease;
+          ">
+            <svg style="width: 14px; height: 14px; flex-shrink: 0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline>
+              <polyline points="16 7 22 7 22 13"></polyline>
+            </svg>
+            <span>Reranking Active: Cohere v3.5 filtered ${rm.original_count} raw chunks down to top ${rm.final_count} most relevant study nodes!</span>
+          </div>
+        `;
+      }
+
       if (c.length) {
-        $('citations').innerHTML =
+        $('citations').innerHTML = rerankHtml +
           `
       <div class="citations-title">
         <svg style="width:12px;height:12px;vertical-align:middle;" viewBox="0 0 20 20" fill="currentColor">
           <path fill-rule="evenodd" d="M12.586 4.586a2 2 0 112.828 2.828l-3 3a2 2 0 01-2.828 0 1 1 0 00-1.414 1.414 4 4 0 005.656 0l3-3a4 4 0 00-5.656-5.656l-1.5 1.5a1 1 0 101.414 1.414l1.5-1.5zm-5 5a2 2 0 012.828 0 1 1 0 101.414-1.414 4 4 0 00-5.656 0l-3 3a4 4 0 105.656 5.656l1.5-1.5a1 1 0 10-1.414-1.414l-1.5 1.5a2 2 0 11-2.828-2.828l3-3z" clip-rule="evenodd"/>
         </svg>
-        ${t('citationsTitle')}
+        ${t('citationsTitle')} (Click to expand)
       </div>` +
           c
             .map(
-              (x) => `
-        <div class="citation" id="citation-${x.chunk}">
+              (x, idx) => `
+        <div class="citation" id="citation-${x.chunk}-${idx}" onclick="toggleCitationBody(this)">
           <div class="head">
             <span>
               <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -2062,9 +2421,14 @@
               </svg>
               ${t('citationChunk', { chunk: x.chunk })}
             </span>
-            <span class="score">${t('citationScore', {
-                score: (x.score || 0).toFixed(1),
+            <div style="display: flex; align-items: center; gap: 0.35rem;">
+              <span class="score">${t('citationScore', {
+                score: (x.score || 0).toFixed(2),
               })}</span>
+              <svg class="chevron-icon" style="width:12px;height:12px;transition: transform 0.2s;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </div>
           </div>
           <div class="body">${(x.text || '').replace(/</g, '&lt;')}</div>
         </div>
@@ -2072,9 +2436,7 @@
             )
             .join('');
       } else {
-        $(
-          'citations'
-        ).innerHTML = `<div class="muted" style="font-size:0.82rem; margin-top:0.6rem; text-align: center;">${t(
+        $('citations').innerHTML = rerankHtml + `<div class="muted" style="font-size:0.82rem; margin-top:0.6rem; text-align: center;">${t(
           'citationsNone'
         )}</div>`;
       }
@@ -2721,11 +3083,19 @@
         // Render Notes
         const notesHtml = data.notes
           .map(
-            (n) => `
-      <div class="cornell-note-point">
-        ${n}
-      </div>
-    `
+            (n) => {
+              let text = '';
+              if (typeof n === 'object' && n !== null) {
+                text = n.note || n.point || n.text || n.content || JSON.stringify(n);
+              } else {
+                text = n;
+              }
+              return `
+                <div class="cornell-note-point">
+                  ${text}
+                </div>
+              `;
+            }
           )
           .join('');
         $('cornell-notes-points').innerHTML =
@@ -2777,6 +3147,88 @@
     let startPanX = 0;
     let startPanY = 0;
 
+    function toggleCitationBody(elOrId) {
+      // Accept either a DOM element (from onclick="toggleCitationBody(this)")
+      // or a legacy numeric chunkId for backward compat
+      let citEl;
+      if (elOrId instanceof Element) {
+        citEl = elOrId;
+      } else {
+        // Fallback: find by chunk label text (handles duplicate IDs across messages)
+        const allCitations = document.querySelectorAll('.citation');
+        for (const el of allCitations) {
+          const head = el.querySelector('.head');
+          if (head && head.textContent.includes(`chunk ${elOrId}`)) {
+            citEl = el;
+            break;
+          }
+        }
+      }
+      if (!citEl) return;
+      const body = citEl.querySelector('.body');
+      const chevron = citEl.querySelector('.chevron-icon');
+      if (!body) return;
+      const isHidden = body.style.display === 'none' || !body.style.display;
+      body.style.display = isHidden ? 'block' : 'none';
+      if (chevron) chevron.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
+    }
+
+    async function showConceptDetails(concept) {
+      const panel = $('mindmap-learning-content');
+      const panelWrapper = $('mindmap-learning-panel');
+      if (!panel) return;
+
+      // Highlight the panel to show it's active
+      panelWrapper && panelWrapper.classList.add('active');
+
+      // Loading state with pulsing animation
+      panel.innerHTML = `
+        <div style="display:flex;flex-direction:column;align-items:center;padding:2rem 0;text-align:center;gap:0.75rem;">
+          <span class="spinner" style="width:28px;height:28px;"></span>
+          <span style="font-weight:600;font-size:0.88rem;color:var(--accent);">${concept}</span>
+          <span style="font-size:0.8rem;color:var(--muted);">Đang tải kiến thức...</span>
+        </div>
+      `;
+
+      try {
+        const question = `Explain the concept "${concept}" concisely in 3-5 sentences based on the study material. Use bullet points for key facts. Highlight important terms in bold.`;
+        const activeDocIds = (window.selectedDocIds && window.selectedDocIds.size > 0)
+          ? [...window.selectedDocIds]
+          : null;
+
+        const res = await call('/query', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question, socratic: false, doc_ids: activeDocIds }),
+        });
+
+        const answer = (res.ok && res.body && res.body.answer)
+          ? res.body.answer
+          : `No information found for "${concept}" in the uploaded documents. Try uploading relevant study material first.`;
+
+        panel.innerHTML = `
+          <div style="animation: fadeSlideIn 0.35s cubic-bezier(0.16,1,0.3,1);">
+            <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.75rem;padding-bottom:0.6rem;border-bottom:2px solid var(--border);">
+              <span style="width:8px;height:8px;border-radius:50%;background:var(--accent);flex-shrink:0;box-shadow:0 0 6px rgba(var(--accent-rgb),0.6);"></span>
+              <h4 style="margin:0;font-size:1rem;font-weight:800;color:var(--accent);font-family:var(--font-display);">${concept}</h4>
+            </div>
+            <div style="font-size:0.88rem;line-height:1.7;color:var(--text);">
+              ${parseMarkdownAndCitations(answer)}
+            </div>
+            <div style="margin-top:1.25rem;padding:0.6rem 0.75rem;background:rgba(var(--accent-rgb),0.07);border-left:3px solid var(--accent);border-radius:0 6px 6px 0;font-size:0.8rem;font-weight:500;color:var(--accent);display:flex;align-items:center;gap:0.4rem;">
+              <span>💡</span><span>Double-click a node to sprout sub-concepts</span>
+            </div>
+          </div>
+        `;
+      } catch (err) {
+        panel.innerHTML = `
+          <div style="padding:1rem;text-align:center;color:var(--error);font-size:0.85rem;">
+            ⚠️ Could not load details for <strong>${concept}</strong>.
+          </div>
+        `;
+      }
+    }
+
     function initMindmapInteractivity() {
       const svg = document.querySelector('#mindmap-mermaid svg');
       if (!svg) return;
@@ -2785,23 +3237,34 @@
       svg.style.transition = 'transform 0.1s ease';
       applyMindmapTransform();
 
-      // 1. Pan Event Listeners
+      // ── Pan state ───────────────────────────────────────────────────────────
       const container = $('mindmap-container');
       container.style.cursor = 'grab';
+      let panStartX = 0, panStartY = 0;
+      let didDrag = false;
+      const DRAG_THRESHOLD = 5;
 
       container.onmousedown = (e) => {
-        if (e.target.closest('.mindmap-toolbar') || e.target.closest('.node')) return;
+        if (e.target.closest('.mindmap-toolbar')) return;
         isPanningMindmap = true;
+        didDrag = false;
         container.style.cursor = 'grabbing';
+        panStartX = e.clientX;
+        panStartY = e.clientY;
         startPanX = e.clientX - mindmapPanX;
         startPanY = e.clientY - mindmapPanY;
       };
 
       window.onmousemove = (e) => {
         if (!isPanningMindmap) return;
-        mindmapPanX = e.clientX - startPanX;
-        mindmapPanY = e.clientY - startPanY;
-        applyMindmapTransform();
+        const dx = Math.abs(e.clientX - panStartX);
+        const dy = Math.abs(e.clientY - panStartY);
+        if (dx > DRAG_THRESHOLD || dy > DRAG_THRESHOLD) {
+          didDrag = true;
+          mindmapPanX = e.clientX - startPanX;
+          mindmapPanY = e.clientY - startPanY;
+          applyMindmapTransform();
+        }
       };
 
       window.onmouseup = () => {
@@ -2811,21 +3274,75 @@
         }
       };
 
-      // 2. Double Click Sprout Event Listeners to Nodes
-      const nodes = document.querySelectorAll('#mindmap-mermaid .node');
-      nodes.forEach(node => {
-        node.style.cursor = 'pointer';
-        node.setAttribute('title', 'Double-click to sprout sub-concepts!');
+      // ── SVG-level event delegation for node click/dblclick ──────────────────
+      // Using delegation on the SVG root is safer than cloneNode on SVG elements
+      // (cloneNode can break SVG namespace + loses reference after DOM swap).
+      let selectedNode = null;
 
-        node.ondblclick = (e) => {
-          e.stopPropagation();
-          const textEl = node.querySelector('text');
-          if (textEl) {
-            const concept = textEl.textContent.trim();
-            sproutConcept(concept);
+      // Helper: walk up from event target to find the mindmap node <g>
+      function findNodeGroup(target) {
+        let el = target;
+        while (el && el !== svg) {
+          if (
+            el.tagName === 'g' &&
+            el.classList &&
+            (el.classList.contains('mindmap-node') ||
+             el.classList.contains('node') ||
+             Array.from(el.classList).some(c => c.includes('node')))
+          ) {
+            return el;
           }
-        };
-      });
+          el = el.parentElement;
+        }
+        return null;
+      }
+
+      // Helper: extract visible label text from a node group
+      function getNodeLabel(nodeGroup) {
+        const texts = Array.from(nodeGroup.querySelectorAll('text, tspan'));
+        const label = texts.map(t => t.textContent.trim()).filter(Boolean).join(' ');
+        return label.replace(/\s+/g, ' ').trim();
+      }
+
+      // Apply pointer cursor to all nodes via CSS (no DOM mutation)
+      if (!document.getElementById('_mindmap_cursor_style')) {
+        const s = document.createElement('style');
+        s.id = '_mindmap_cursor_style';
+        s.textContent = '#mindmap-mermaid svg g.mindmap-node, #mindmap-mermaid svg g.node { cursor: pointer !important; }';
+        document.head.appendChild(s);
+      }
+
+      // Single-click delegation on SVG
+      svg.onclick = (e) => {
+        if (didDrag) return;
+        const nodeGroup = findNodeGroup(e.target);
+        if (!nodeGroup) return;
+        e.stopPropagation();
+
+        // Highlight selected
+        if (selectedNode) selectedNode.classList.remove('mindmap-node-selected');
+        selectedNode = nodeGroup;
+        nodeGroup.classList.add('mindmap-node-selected');
+
+        const label = getNodeLabel(nodeGroup);
+        if (label) {
+          const panel = $('mindmap-learning-panel');
+          if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          showConceptDetails(label);
+        }
+      };
+
+      // Double-click delegation on SVG
+      svg.ondblclick = (e) => {
+        const nodeGroup = findNodeGroup(e.target);
+        if (!nodeGroup) return;
+        e.stopPropagation();
+        const label = getNodeLabel(nodeGroup);
+        if (label) sproutConcept(label);
+      };
+
+      // Expose re-attach hook (no-op now since we use delegation, kept for compatibility)
+      window._mindmapReattachListeners = () => {};
     }
 
     function applyMindmapTransform() {
@@ -2846,6 +3363,36 @@
       mindmapPanY = 0;
       applyMindmapTransform();
     }
+
+    function toggleMindmapFullscreen() {
+      const container = $('mindmap-container');
+      const btn = $('btn-mindmap-fullscreen');
+      if (!container || !btn) return;
+
+      const isFS = container.classList.toggle('fullscreen');
+      if (isFS) {
+        btn.innerHTML = '📺 Collapse';
+        toast('Sơ đồ tư duy đang ở chế độ toàn màn hình!', 'info');
+      } else {
+        btn.innerHTML = '📺 Maximize';
+        toast('Đã thu nhỏ sơ đồ tư duy!', 'info');
+      }
+      
+      // Re-center mindmap canvas on resize/fullscreen toggle
+      setTimeout(() => {
+        resetZoomMindmap();
+      }, 150);
+    }
+
+    // Bind Escape key to collapse full-screen mindmap
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        const container = $('mindmap-container');
+        if (container && container.classList.contains('fullscreen')) {
+          toggleMindmapFullscreen();
+        }
+      }
+    });
 
     async function sproutConcept(concept) {
       toast(`Sprouting concept: "${concept}" via AI...`, 'info');
@@ -2901,7 +3448,13 @@ Do not return any other text, headers, or explanations. Keep them very short (1-
         const newCode = codeLines.join('\n');
         window.lastMindmapCode = newCode;
 
+        const workspace = $('mindmap-workspace');
+        if (workspace) workspace.style.display = 'flex';
+        $('mindmap-empty').style.display = 'none';
+
         const container = $('mindmap-container');
+        const isFS = container.classList.contains('fullscreen');
+        const btnLabel = isFS ? '📺 Collapse' : '📺 Maximize';
 
         // Re-render
         container.innerHTML = `
@@ -2909,6 +3462,7 @@ Do not return any other text, headers, or explanations. Keep them very short (1-
               <button onclick="zoomMindmap(1.15)">🔍 Zoom In</button>
               <button onclick="zoomMindmap(0.85)">🔍 Zoom Out</button>
               <button onclick="resetZoomMindmap()">🔄 Reset</button>
+              <button onclick="toggleMindmapFullscreen()" id="btn-mindmap-fullscreen">${btnLabel}</button>
             </div>
             <div class="mermaid" id="mindmap-mermaid">${newCode}</div>
           `;
@@ -2950,15 +3504,20 @@ Do not return any other text, headers, or explanations. Keep them very short (1-
 
         const code = res.body.mindmap;
         window.lastMindmapCode = code; // Cache for theme changes
-        const container = $('mindmap-container');
-        container.style.display = 'flex';
+        
+        const workspace = $('mindmap-workspace');
+        if (workspace) workspace.style.display = 'flex';
         $('mindmap-empty').style.display = 'none';
 
+        const container = $('mindmap-container');
+        const isFS = container.classList.contains('fullscreen');
+        const btnLabel = isFS ? '📺 Collapse' : '📺 Maximize';
         container.innerHTML = `
             <div class="mindmap-toolbar">
               <button onclick="zoomMindmap(1.15)">🔍 Zoom In</button>
               <button onclick="zoomMindmap(0.85)">🔍 Zoom Out</button>
               <button onclick="resetZoomMindmap()">🔄 Reset</button>
+              <button onclick="toggleMindmapFullscreen()" id="btn-mindmap-fullscreen">${btnLabel}</button>
             </div>
             <div class="mermaid" id="mindmap-mermaid">${code}</div>
           `;
@@ -3199,8 +3758,8 @@ Do not return any other text, headers, or explanations. Keep them very short (1-
       // Update session progress bar
       const fillEl = $('fc-session-fill');
       if (fillEl) {
-        const pct = deck.length > 1
-          ? (leitnerState.index / (deck.length - 1)) * 100
+        const pct = activeDeck.length > 1
+          ? (leitnerState.index / (activeDeck.length - 1)) * 100
           : 100;
         fillEl.style.width = pct + '%';
       }
@@ -3379,8 +3938,26 @@ Do not return any other text, headers, or explanations. Keep them very short (1-
     // ============================================================================
     // RAG Quality Evaluation Benchmark
     // ============================================================================
+    function onBenchmarkDocSelect(docId) {
+      window.selectedDocId = docId;
+      if (!window.selectedDocIds.has(docId)) {
+        window.selectedDocIds.clear();
+        window.selectedDocNames.clear();
+        const doc = window.allDocs.find(d => d.doc_id === docId);
+        if (doc) {
+          window.selectedDocIds.add(docId);
+          window.selectedDocNames.set(docId, doc.filename);
+        }
+        window.selectedDocId = docId;
+        window.selectedDocName = doc ? doc.filename : null;
+        if (typeof updateQuizDocLabel === 'function') updateQuizDocLabel();
+        refresh();
+      }
+    }
+
     async function runBenchmark() {
-      const docId = window.selectedDocId || window.lastDocId;
+      const docSelect = $('benchmark-doc-select');
+      const docId = docSelect ? docSelect.value : (window.selectedDocId || window.lastDocId);
       if (!docId) {
         toast(t('benchmarkNeedDoc'), 'warn');
         return;
@@ -3508,6 +4085,14 @@ Do not return any other text, headers, or explanations. Keep them very short (1-
 
       window.allDocs = res.body.docs;
       $('benchmark-section').style.display = 'block';
+
+      // Populate benchmark document select
+      const bSelect = $('benchmark-doc-select');
+      if (bSelect && res.body.docs) {
+        bSelect.innerHTML = res.body.docs
+          .map(d => `<option value="${d.doc_id}" ${d.doc_id === window.selectedDocId ? 'selected' : ''}>${d.filename || d.doc_id}</option>`)
+          .join('');
+      }
 
       if (!window.lastDocId) {
         window.lastDocId = res.body.docs[0].doc_id;

@@ -11,7 +11,7 @@
 | Lĩnh vực | EduTech - Trợ Lý Học Tập AI |
 | Ca sử dụng | Tải lên file PDF/slide/ghi chú văn bản bài giảng, sau đó đặt câu hỏi, tạo flashcard/bài kiểm tra và tiếp tục học từ trạng thái đã lưu. |
 | URL công khai | https://xmind.click/ |
-| API URL | `https://1lse4odraj.execute-api.ap-southeast-1.amazonaws.com` hoặc TODO: URL API Gateway cuối cùng |
+| API URL | `https://1lse4odraj.execute-api.ap-southeast-1.amazonaws.com` |
 | GitHub repo | https://github.com/x-brain-group-15/hackathon-edutech |
 | AWS region | `ap-southeast-1` |
 | Tổng chi phí | TODO: USD từ ảnh chụp màn hình Cost Explorer cuối cùng |
@@ -248,10 +248,7 @@ Bằng chứng cần chụp:
 - `37_s3_quiz_json.png` - artifact quiz đã persist trong S3.
 
 Ảnh chụp màn hình bắt buộc:
-- `06_architecture_diagram.png`
 - `07_api_gateway_routes.png`
-- `08_lambda_functions.png`
-- `09_cloudformation_stack_outputs.png`
 
 ## 4. Kiểm Soát Chi Phí
 
@@ -259,17 +256,17 @@ Bằng chứng cần chụp:
 
 | Thời gian | Ảnh chụp màn hình | Ghi chú |
 |---|---|---|
-| Cuối Ngày 1 - 2026-05-28 | `cost_day1_eod.png` | TODO: tổng cộng, các dịch vụ tốn kém nhất |
-| Cuối Ngày 2 - 2026-05-29 | `cost_day2_eod.png` | TODO: tổng cộng, các dịch vụ tốn kém nhất |
-| Sáng ngày Demo - 2026-05-30 | `cost_demo_morning.png` | TODO: tổng trước khi demo |
+| Cuối Ngày 1 - 2026-05-27 | ![Cost Wed](./cost-27.png) |0.25$ - Top3: WAF, KMS, S3|
+| Cuối Ngày 2 - 2026-05-28 | ![Cost Thur](./cost-28.png) |0.66$ - (Top3: OpenSearch Service, KMS, S3)|
+| Sáng ngày Demo - 2026-05-29 | `cost_demo_morning.png` | TODO: tổng trước khi demo |
 
 ### Các Yếu Tố Tốn Kém Nhất
 
 | Hạng | Dịch vụ | Chi phí | Lý do xuất hiện |
 |---|---:|---:|---|
-| 1 | TODO: Bedrock / OpenSearch / VPC Endpoint | TODO | TODO |
-| 2 | TODO | TODO | TODO |
-| 3 | TODO | TODO | TODO |
+| 1 | Open Search Service |  | Lượng truy vấn nhiều vào Knowledge Base |
+| 2 | KMS |  | Cần lưu trữ các key mã hoá |
+| 3 | S3 |  | Người dùng Upload và lưu trữ các bài tập hoặc thẻ ghi nhớ |
 
 ### Các Biện Pháp Kiểm Soát Chi Phí
 
@@ -280,9 +277,7 @@ Bằng chứng cần chụp:
 
 Ảnh chụp màn hình bắt buộc:
 - `10_budget_alert.png` - Xác nhận AWS Budget và SNS subscription.
-- `11_cost_anomaly_detection.png` - Cost Anomaly Detection (Phát hiện chi phí bất thường) được bật.
 - `12_cost_guard_lambda.png` - Cost Guard Lambda và các biến môi trường.
-- `13_cost_explorer_by_service.png` - chi phí nhóm theo dịch vụ.
 
 ## 5. Bảo Mật
 
@@ -296,6 +291,103 @@ Vai trò thực thi Lambda `studybot-lambda-role-G15` được giới hạn tron
 - CloudWatch `PutMetricData` chỉ cho namespace `StudyBot`.
 - Truy cập Lambda VPC và CloudWatch logging thông qua policy vai trò thực thi được quản lý.
 
+IAM Role cho Lambda:
+```
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Action": [
+                "s3:PutObject",
+                "s3:GetObject",
+                "s3:ListBucket",
+                "s3:DeleteObject"
+            ],
+            "Resource": [
+                "arn:aws:s3:::w7-hackathon-docs-2",
+                "arn:aws:s3:::w7-hackathon-docs-2/*"
+            ],
+            "Effect": "Allow",
+            "Sid": "S3DocsAccess"
+        },
+        {
+            "Action": [
+                "s3:PutObject",
+                "s3:GetObject",
+                "s3:ListBucket",
+                "s3:DeleteObject"
+            ],
+            "Resource": [
+                "arn:aws:s3:::hackathon-edu-storage",
+                "arn:aws:s3:::hackathon-edu-storage/*"
+            ],
+            "Effect": "Allow",
+            "Sid": "S3FlashcardAccess"
+        },
+        {
+            "Action": [
+                "dynamodb:PutItem",
+                "dynamodb:GetItem",
+                "dynamodb:Query",
+                "dynamodb:UpdateItem",
+                "dynamodb:DeleteItem"
+            ],
+            "Resource": "arn:aws:dynamodb:ap-southeast-1:921993307628:table/studybot-users-G15",
+            "Effect": "Allow",
+            "Sid": "DynamoDBAccess"
+        },
+        {
+            "Action": [
+                "bedrock:InvokeModel",
+                "bedrock:InvokeModelWithResponseStream"
+            ],
+            "Resource": [
+                "arn:aws:bedrock:ap-southeast-1::foundation-model/*",
+                "arn:aws:bedrock:ap-southeast-1::inference-profile/*",
+                "arn:aws:bedrock:ap-southeast-1:921993307628:inference-profile/*"
+            ],
+            "Effect": "Allow",
+            "Sid": "BedrockInvoke"
+        },
+        {
+            "Action": [
+                "aws-marketplace:Subscribe",
+                "aws-marketplace:Unsubscribe",
+                "aws-marketplace:ViewSubscriptions",
+                "aws-marketplace:GetEntitlements"
+            ],
+            "Resource": "*",
+            "Effect": "Allow",
+            "Sid": "MarketplaceAccess"
+        },
+        {
+            "Action": [
+                "bedrock:Retrieve",
+                "bedrock:RetrieveAndGenerate"
+            ],
+            "Resource": [
+                "arn:aws:bedrock:ap-southeast-1:921993307628:knowledge-base/*"
+            ],
+            "Effect": "Allow",
+            "Sid": "BedrockKBRetrieve"
+        },
+        {
+            "Condition": {
+                "StringEquals": {
+                    "cloudwatch:namespace": "StudyBot"
+                }
+            },
+            "Action": [
+                "cloudwatch:PutMetricData"
+            ],
+            "Resource": "*",
+            "Effect": "Allow",
+            "Sid": "CloudWatchMetrics"
+        }
+    ]
+}
+```
+
 ### Bảo Mật Mạng
 
 - Các hàm Lambda chạy trong StudyBot VPC private subnet.
@@ -304,18 +396,17 @@ Vai trò thực thi Lambda `studybot-lambda-role-G15` được giới hạn tron
 - VPC endpoint security group chỉ chấp nhận kết nối HTTPS từ Lambda security group.
 - Không có database nào mở công khai ra Internet.
 
+VPC Endpoint
+![VPCE](./vpce.png)
+
+
 ### Bảo Mật Đối Tượng
 
 - Các bucket S3 phải được bật Block Public Access (Chặn truy cập công khai).
 - CloudFront phân phối các asset frontend; quyền truy cập S3 trực tiếp công khai phải được chặn.
 - Tài liệu tải lên và các tạo tác học tập sinh ra được lưu trữ trong S3 dưới các tiền tố (prefix) giới hạn.
 
-Ảnh chụp màn hình bắt buộc:
-- `14_iam_lambda_role_policy.png`
-- `15_vpc_private_subnet.png`
-- `16_vpc_endpoints.png`
-- `17_s3_block_public_access.png`
-- `18_bedrock_model_access.png`
+![S3 Block PUblic Access](./s3-blockpbulic.png)
 
 ## 6. Giám Sát
 
@@ -328,7 +419,6 @@ Bằng chứng cần thu thập:
 | `19_cloudwatch_dashboard.png` | Dashboard `StudyBot-G15` hiển thị số lượt gọi/lỗi/thời lượng của Lambda và các request API Gateway. |
 | `20_alarm_query_errors.png` | Cảnh báo `StudyBot-G15-QueryErrors` ở trạng thái OK hoặc ALARM, không phải INSUFFICIENT_DATA. |
 | `21_alarm_upload_errors.png` | Cảnh báo `StudyBot-G15-UploadErrors` ở trạng thái OK hoặc ALARM. |
-| `22_log_insights_query.png` | Kết quả truy vấn Log Insights thực tế từ log Lambda. |
 | `23_custom_metrics.png` | Namespace `StudyBot`, ví dụ: `FlashcardGenerationLatency`, `FlashcardGenerationSuccess`, `SocraticQueryLatency`. |
 
 Truy vấn Log Insights được đề xuất:
@@ -550,31 +640,8 @@ Truy vấn lỗi đánh giá trả về 0 record matched, nghĩa là không có 
 
 - DynamoDB ít thuận tiện hơn SQL trong phân tích quan hệ đột xuất. Chúng tôi chấp nhận điều đó vì mẫu truy cập cốt lõi của StudyBot là "lấy tài liệu của người dùng này, các truy vấn gần đây, flashcard, và trạng thái bài kiểm tra".
 
-### Quyết định 3: Sử dụng VPC endpoints và tránh NAT Gateway
 
-**Các lựa chọn thay thế đã xem xét**
-
-- NAT Gateway: bị loại vì nó làm tăng chi phí cố định hàng giờ cộng với chi phí xử lý dữ liệu ngay cả khi ứng dụng đang rảnh.
-- Public Lambda không có VPC: bị loại vì tiêu chí chấm điểm yêu cầu bằng chứng nền tảng mạng và trạng thái tài nguyên riêng tư (private).
-- Một private subnet duy nhất với chỉ các endpoint cần thiết: được chọn vì tính đơn giản trong hackathon và kỷ luật chi phí.
-
-**Đo lường**
-
-- TODO: Số lượng NAT Gateway trong VPC: `0`.
-- TODO: Số lượng VPC endpoints: S3 gateway `1`, DynamoDB gateway `1`, Bedrock interface `2`.
-- Tham khảo ước tính chi phí: một Bedrock interface endpoint trong 48 giờ ở Singapore khoảng `$0.62`; NAT Gateway cho 48 giờ khoảng `$2.83` trước phí xử lý dữ liệu.
-
-**Bằng chứng**
-
-- `16_vpc_endpoints.png`
-- `29_no_nat_gateway.png`
-- `30_private_route_table.png`
-
-**Đánh đổi được chấp nhận**
-
-- Interface endpoints đòi hỏi công sức cấu hình và mỗi endpoint dịch vụ bổ sung đều tốn phí hàng giờ. Chúng tôi chấp nhận điều này vì ứng dụng chủ yếu gọi các dịch vụ AWS và không cần đường egress rộng ra Internet.
-
-### Quyết định 4: Thêm endpoint đo lường chất lượng truy xuất
+### Quyết định 3: Thêm endpoint đo lường chất lượng truy xuất
 
 **Các lựa chọn thay thế đã xem xét**
 
@@ -599,11 +666,30 @@ Truy vấn lỗi đánh giá trả về 0 record matched, nghĩa là không có 
 
 - Quá trình benchmark sử dụng một tập câu hỏi thăm dò nhỏ, do đó đây không phải là một đánh giá học thuật toàn diện. Nó vẫn tốt hơn những tuyên bố không đo lường được và đủ để giải thích hành vi chunking/truy xuất trong quá trình hỏi đáp (Q&A).
 
+## 6.7 CloudWatch Dashboard và Alarms
+
+**Dashboard StudyBot-G15**
+
+![Dashboard StudyBot-G15](19_cloudwatch_dashboard.jpg)
+
+Dashboard `StudyBot-G15` tổng hợp 3 widget theo dõi toàn bộ lớp compute:
+- **Lambda Invocations & Errors**: theo dõi số lần gọi và lỗi của cả 3 function `studybot-query-G15`, `studybot-upload-G15`, `studybot-core-G15` theo thời gian thực.
+- **Lambda Duration (avg ms)**: đo thời gian xử lý trung bình của từng function, giúp phát hiện function nào bị chậm bất thường.
+- **API Gateway Requests**: đếm số request vào hệ thống, đối chiếu với Lambda invocations để phát hiện request bị drop.
+
+**Alarm — Query Errors**
+
+![Alarm Query Errors](20_alarm_query_errors.jpg)
+
+Alarm `StudyBot-G15-QueryErrors` theo dõi Lambda `studybot-query-G15`. Ngưỡng: `Errors >= 1` trong 5 phút. Trạng thái hiện tại: **OK** — xác nhận không có lỗi RAG query nào trong thời gian gần nhất. Khi alarm chuyển ALARM, SNS topic `StudyBot-G15-Alarm-Topic` gửi email cảnh báo ngay cho nhóm.
+
+**Alarm — Upload Errors**
+
+![Alarm Upload Errors](21_alarm_upload_errors.jpg)
+
+Alarm `StudyBot-G15-UploadErrors` theo dõi Lambda `studybot-upload-G15`. Ngưỡng: `Errors >= 1` trong 5 phút. Trạng thái hiện tại: **OK** — xác nhận pipeline upload PDF đang hoạt động ổn định.
+
 ## 7. Bài Học Rút Ra
-
-TODO: Thay thế phần này bằng phiên bản cuối cùng dài 200 từ sau buổi demo.
-
-Bản nháp:
 
 StudyBot đã dạy chúng tôi rằng phần khó nhất của "trò chuyện với PDF" không phải là tải file lên; mà là làm cho câu trả lời bám sát nội dung, có thể đo lường được, và đủ rẻ để chạy liên tục. Kiến trúc serverless cho phép chúng tôi di chuyển nhanh chóng: S3 xử lý tài liệu, DynamoDB quản lý trạng thái người dùng, Lambda xử lý logic sản phẩm, và Bedrock cung cấp lớp AI. Quyết định kỹ thuật tốt nhất là thêm các tính năng định hướng bằng chứng từ sớm, đặc biệt là đánh giá RAG và các số liệu CloudWatch, vì chúng cung cấp cho chúng tôi những con số thay vì những tuyên bố mơ hồ.
 
@@ -637,55 +723,3 @@ sam delete --stack-name sam-app --region ap-southeast-1
 - `33_s3_buckets_empty_or_deleted.png`
 - `34_bedrock_kb_deleted_or_final_state.png`
 - `35_cost_after_teardown.png`
-
-## Danh Sách Kiểm Tra Chụp Ảnh Màn Hình
-
-Sử dụng danh sách này trong khi xây dựng và demo. Đặt tất cả hình ảnh vào thư mục ``.
-
-| File | Ảnh chụp màn hình cần lấy | Vị trí AWS/UI |
-|---|---|---|
-| `01_live_url_loaded.png` | Ứng dụng HTTPS công khai được tải | Trình duyệt |
-| `03_upload_flow.png` | Tải lên thành công | StudyBot UI |
-| `docs/pdf_extraction.md` | Tài liệu kỹ thuật hybrid PDF extraction | Repo docs |
-| `src/pdf_extractor.py` | Code trích xuất PDF, lọc ảnh, dedup, đánh dấu OCR/Textract | Repo source |
-| `src/handlers.py` | Code tích hợp upload vào storage/vector/userstore | Repo source |
-| `lambda_upload.py` | Lambda route `POST /upload` | Repo source |
-| `tests/test_pdf_extractor.py` | Test metadata PDF ít text | Repo tests |
-| `04_ai_answer_with_context.png` | Câu trả lời Q&A từ tài liệu đã tải | StudyBot UI |
-| `05_flashcards_or_quiz.png` | Flashcard hoặc bài kiểm tra được tạo | StudyBot UI |
-| `06_architecture_diagram.png` | Sơ đồ kiến trúc cuối cùng đã triển khai | Bản xuất sơ đồ |
-| `07_api_gateway_routes.png` | Các route API | API Gateway console |
-| `08_lambda_functions.png` | 3 Lambda backend | Lambda console |
-| `09_cloudformation_stack_outputs.png` | SAM/CFN outputs | CloudFormation console |
-| `10_budget_alert.png` | Xác nhận cảnh báo ngân sách và SNS | AWS Budgets/SNS |
-| `11_cost_anomaly_detection.png` | Phát hiện chi phí bất thường được bật | Cost Management |
-| `13_cost_explorer_by_service.png` | Chi phí theo dịch vụ | Cost Explorer |
-| `14_iam_lambda_role_policy.png` | IAM role inline policy | IAM console |
-| `15_vpc_private_subnet.png` | Private subnet | VPC console |
-| `16_vpc_endpoints.png` | S3/DynamoDB/Bedrock endpoints | VPC console |
-| `17_s3_block_public_access.png` | Block Public Access (Chặn Truy cập Công khai) | S3 console |
-| `18_bedrock_model_access.png` | Quyền truy cập mô hình được bật | Bedrock console |
-| `19_cloudwatch_dashboard.png` | Dashboard có dữ liệu | CloudWatch |
-| `20_alarm_query_errors.png` | Cảnh báo lỗi query ở trạng thái OK/ALARM | CloudWatch Alarms |
-| `22_log_insights_query.png` | Kết quả truy vấn Log Insights | CloudWatch Logs Insights |
-| `23_custom_metrics.png` | Các số liệu tùy chỉnh StudyBot | CloudWatch Metrics |
-| `log_code.jpg` | Code ghi log có cấu trúc `log_event()` / `log_step()` | Mã nguồn Lambda |
-| `log_group.jpg` | Log group `/aws/lambda/studybot-api-G15` | CloudWatch Logs |
-| `json_log.jpg` | Log JSON thực tế có `event_type`, `user_id`, `doc_id` | CloudWatch Logs |
-| `document_upload.jpg` | Truy vấn `DOCUMENT_UPLOAD` | CloudWatch Logs Insights |
-| `document_upload_error.jpg` | Truy vấn `UPLOAD_ERROR` | CloudWatch Logs Insights |
-| `rag_query.jpg` | Truy vấn số lượng `RAG_QUERY` theo user | CloudWatch Logs Insights |
-| `rag_latency.jpg` | Truy vấn độ trễ trung bình/tối đa/tối thiểu của RAG | CloudWatch Logs Insights |
-| `rag_error.jpg` | Truy vấn `RAG_ERROR` | CloudWatch Logs Insights |
-| `process_step.jpg` | Truy vấn trace `PROCESS_STEP` trong Lambda | CloudWatch Logs Insights |
-| `evaluate_result.jpg` | Truy vấn Precision@K/Recall@K/MRR | CloudWatch Logs Insights |
-| `evaluate_error.jpg` | Truy vấn `EVALUATE_ERROR` không có lỗi | CloudWatch Logs Insights |
-| `26_dynamodb_items.png` | Trạng thái ứng dụng được lưu trữ | DynamoDB console |
-| `28_fresh_session_persistence.png` | Dữ liệu vẫn hiển thị ở session mới | Trình duyệt |
-| `29_no_nat_gateway.png` | Số lượng NAT Gateway là 0 | Trang VPC NAT Gateway |
-| `31_rag_evaluation_metrics.png` | Bảng Precision@K/MRR | StudyBot UI |
-| `36_s3_uploaded_document.png` | Object tài liệu đã upload | S3 console |
-| `37_s3_quiz_json.png` | Object JSON quiz đã lưu | S3 console |
-| `32_stack_deleted.png` | Stack đã bị xóa sau demo | CloudFormation |
-| `35_cost_after_teardown.png` | Chi phí cuối cùng sau khi dọn dẹp | Cost Explorer |
-
