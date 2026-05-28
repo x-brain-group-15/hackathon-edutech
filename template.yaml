@@ -41,7 +41,8 @@ Parameters:
 
   FlashcardBucket:
     Type: String
-    Description: "S3 bucket name for flashcard JSON sets (create separately)"
+    Default: "hackathon-edu-storage"
+    Description: "S3 bucket name for flashcard and quiz JSON sets"
 
   # ---- UserStore ----
   UserstoreBackend:
@@ -161,7 +162,29 @@ Resources:
           Value: !Ref TeamName
 
   # --------------------------------------------------------------------------
-  # 2. IAM Role — least-privilege for Lambda
+  # 2. S3 Bucket — flashcard and quiz storage
+  # --------------------------------------------------------------------------
+  FlashcardStorageBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      BucketName: !Ref FlashcardBucket
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldVersions
+            Status: Enabled
+            NoncurrentVersionExpirationInDays: 30
+      Tags:
+        - Key: Project
+          Value: W7Capstone
+        - Key: Team
+          Value: !Ref TeamName
+
+  # --------------------------------------------------------------------------
+  # 3. IAM Role — least-privilege for Lambda
   #    Principle: only the exact actions this app actually calls.
   # --------------------------------------------------------------------------
   StudyBotLambdaRole:
