@@ -69,31 +69,28 @@ Student's Question: {question}
 
 Response:"""
 
-MINDMAP_PROMPT = """You are a study assistant. Analyze the provided lecture notes and generate an interactive mind-map of the core concepts in the Mermaid.js `mindmap` diagram format.
+MINDMAP_PROMPT = """You are a study assistant. Analyze the provided lecture notes and generate a highly organized, clean, and beautiful interactive mind-map of the core concepts in the Mermaid.js `mindmap` diagram format.
 
-Guidelines:
+To ensure the mind-map is visually stunning, spacious, and perfectly readable on the canvas:
 1. Start your response EXACTLY with `mindmap` (no header, no other text).
-2. Use valid Mermaid.js `mindmap` syntax. Example syntax:
+2. Limit the mind-map to EXACTLY 3 to 5 main branches radiating from the root node.
+3. For each main branch, limit to AT MOST 3 concise sub-concepts (leaf nodes).
+4. Strictly enforce a maximum depth of 3 levels: Root -> Main Branch -> Sub-Concept.
+5. Keep each node name extremely short and concise (strictly 1 to 3 words, e.g. "RTO and RPO", "Latency", "Storage cost"). Longer text causes layout clutter and overlapping!
+6. Do NOT use any special characters like parentheses, brackets, or quotes in node names.
+7. Return ONLY the raw code block starting with `mindmap` and ending with the final node. Do NOT wrap it in markdown code blocks like ```mermaid. Just output the raw mermaid code directly.
+
+EXAMPLE SYNTAX:
 mindmap
   root((Photosynthesis))
     Light Reactions
-      Inputs
-        Water
-        Light
-      Outputs
-        Oxygen
-        ATP
-        NADPH
+      Water Input
+      Light Energy
+      Oxygen Output
     Calvin Cycle
-      Inputs
-        CO2
-        ATP
-        NADPH
-      Outputs
-        G3P Sugar
-3. Do NOT use any special characters like parentheses, brackets, or quotes in node names unless escaped. Keep node names short (1-4 words).
-4. Focus on the most important testable concepts and structural connections in the lecture notes.
-5. Return ONLY the raw code block starting with `mindmap` and ending with the final node. Do NOT wrap it in markdown code blocks like ```mermaid. Just output the raw mermaid code directly.
+      CO2 Intake
+      Sugar Output
+      ATP Usage
 
 LECTURE NOTES:
 {context}

@@ -126,50 +126,96 @@
     }
 
     /* ─── Premium Mermaid Mindmap Visual Customizations ───────────────────── */
-    #mindmap-mermaid svg {
+    .mermaid svg, #mindmap-mermaid svg {
       background: transparent !important;
       font-family: var(--font-sans) !important;
     }
-    #mindmap-mermaid .node,
-    #mindmap-mermaid .mindmap-node {
+    .mermaid .node, .mermaid .mindmap-node,
+    #mindmap-mermaid .node, #mindmap-mermaid .mindmap-node {
       cursor: pointer !important;
+      transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
     }
-    #mindmap-mermaid .node rect,
-    #mindmap-mermaid .node circle,
-    #mindmap-mermaid .node ellipse,
-    #mindmap-mermaid .node polygon {
+    .mermaid .node:hover, .mermaid .mindmap-node:hover,
+    #mindmap-mermaid .node:hover, #mindmap-mermaid .mindmap-node:hover {
+      transform: scale(1.05) !important;
+    }
+    
+    /* Central Root Node Specific Styles */
+    .mermaid .mindmap-node-depth-0 rect,
+    .mermaid .mindmap-node-depth-0 circle,
+    .mermaid .mindmap-node-depth-0 ellipse,
+    #mindmap-mermaid .mindmap-node-depth-0 rect,
+    #mindmap-mermaid .mindmap-node-depth-0 circle,
+    #mindmap-mermaid .mindmap-node-depth-0 ellipse {
       fill: var(--accent) !important;
       stroke: var(--accent-light) !important;
+      stroke-width: 3px !important;
+      filter: drop-shadow(0 6px 12px rgba(var(--accent-rgb), 0.35)) !important;
+    }
+    .mermaid .mindmap-node-depth-0 text,
+    #mindmap-mermaid .mindmap-node-depth-0 text {
+      fill: #ffffff !important;
+      font-size: 15px !important;
+      font-weight: 800 !important;
+    }
+
+    /* Sub-concepts (Level 1, 2, etc.) Border and Shadows */
+    .mermaid .mindmap-node rect,
+    .mermaid .mindmap-node circle,
+    .mermaid .mindmap-node ellipse,
+    #mindmap-mermaid .mindmap-node rect,
+    #mindmap-mermaid .mindmap-node circle,
+    #mindmap-mermaid .mindmap-node ellipse {
       stroke-width: 2px !important;
-      filter: drop-shadow(0 4px 8px rgba(var(--accent-rgb), 0.25)) !important;
-      transition: all 0.2s ease-in-out !important;
+      filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.1)) !important;
+      transition: all 0.2s ease !important;
     }
-    #mindmap-mermaid .node:hover rect,
-    #mindmap-mermaid .node:hover circle,
-    #mindmap-mermaid .node:hover ellipse,
-    #mindmap-mermaid .node:hover polygon {
-      fill: var(--accent-dark) !important;
+    .mermaid .mindmap-node:hover rect,
+    .mermaid .mindmap-node:hover circle,
+    .mermaid .mindmap-node:hover ellipse,
+    #mindmap-mermaid .mindmap-node:hover rect,
+    #mindmap-mermaid .mindmap-node:hover circle,
+    #mindmap-mermaid .mindmap-node:hover ellipse {
       stroke: var(--accent) !important;
-      filter: drop-shadow(0 6px 12px rgba(var(--accent-rgb), 0.4)) !important;
+      filter: drop-shadow(0 8px 16px rgba(var(--accent-rgb), 0.3)) !important;
     }
+
+    /* Theme-aware High-Contrast Text Color for mindmap nodes */
+    /* Dark Mode (Default) - Crisp white text for readability against dark theme background */
+    .mermaid .mindmap-node text,
+    #mindmap-mermaid .mindmap-node text,
+    .mermaid .node text,
     #mindmap-mermaid .node text {
-      fill: #ffffff !important; /* Force high-contrast white text inside central node/nodes always */
-      font-weight: 700 !important;
+      fill: #ffffff !important;
+      font-weight: 600 !important;
       font-family: var(--font-sans) !important;
-      font-size: 13px !important;
-      letter-spacing: 0.02em !important;
+      font-size: 12.5px !important;
+      letter-spacing: 0.01em !important;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.6) !important; /* Add high-contrast text shadow for white text */
     }
+
+    /* Light Mode Overrides - Slate dark text for perfect contrast on light background pastel shapes */
+    [data-theme="light"] .mermaid .mindmap-node:not(.mindmap-node-depth-0) text,
+    [data-theme="light"] #mindmap-mermaid .mindmap-node:not(.mindmap-node-depth-0) text,
+    [data-theme="light"] .mermaid .node:not(.mindmap-node-depth-0) text,
+    [data-theme="light"] #mindmap-mermaid .node:not(.mindmap-node-depth-0) text {
+      fill: #0f172a !important;
+      text-shadow: none !important;
+    }
+
+    /* Mindmap connectors / edges */
+    .mermaid .mindmap-edge,
     #mindmap-mermaid .mindmap-edge,
-    #mindmap-mermaid .edgePath .path,
-    #mindmap-mermaid .edgePaths .path {
+    .mermaid .edgePath .path,
+    #mindmap-mermaid .edgePath .path {
       stroke: var(--accent-light) !important;
-      stroke-width: 2.5px !important;
-      stroke-opacity: 0.85 !important;
+      stroke-width: 3px !important;
+      stroke-opacity: 0.8 !important;
     }
-    [data-theme="light"] #mindmap-mermaid .mindmap-edge,
-    [data-theme="light"] #mindmap-mermaid .edgePath .path,
-    [data-theme="light"] #mindmap-mermaid .edgePaths .path {
+    [data-theme="light"] .mermaid .mindmap-edge,
+    [data-theme="light"] #mindmap-mermaid .mindmap-edge {
       stroke: var(--accent) !important;
+      stroke-opacity: 0.6 !important;
     }
   </style>
 </head>
@@ -3039,7 +3085,7 @@
       container.style.cursor = 'grab';
 
       container.onmousedown = (e) => {
-        if (e.target.closest('.mindmap-toolbar') || e.target.closest('.node') || e.target.closest('.mindmap-node')) return;
+        if (e.target.closest('.mindmap-toolbar') || e.target.closest('.node, .mindmap-node, g[class*="node"]')) return;
         isPanningMindmap = true;
         container.style.cursor = 'grabbing';
         startPanX = e.clientX - mindmapPanX;
@@ -3060,9 +3106,9 @@
         }
       };
 
-      // 2. Robust Event Delegation to Nodes (fixes async rendering timing issues)
+      // 2. Robust Event Delegation to Nodes (fixes async rendering timing and dynamic wrapper issues)
       container.onclick = (e) => {
-        const node = e.target.closest('#mindmap-mermaid .node, #mindmap-mermaid .mindmap-node');
+        const node = e.target.closest('.node, .mindmap-node, g[class*="node"]');
         if (node) {
           e.stopPropagation();
           const textEl = node.querySelector('text');
@@ -3074,7 +3120,7 @@
       };
 
       container.ondblclick = (e) => {
-        const node = e.target.closest('#mindmap-mermaid .node, #mindmap-mermaid .mindmap-node');
+        const node = e.target.closest('.node, .mindmap-node, g[class*="node"]');
         if (node) {
           e.stopPropagation();
           const textEl = node.querySelector('text');
