@@ -210,6 +210,7 @@ def generate_quiz(
             vector_store=vector_store,
             ai_client=ai_client,
             userstore=userstore,
+            storage=storage,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

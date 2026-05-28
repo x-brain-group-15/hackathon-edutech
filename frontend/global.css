@@ -1541,10 +1541,16 @@ details pre {
 
 /* ─── Benchmark / Evaluate overflow fix ──────────────────────────────────── */
 /* Grid children không tự thu nhỏ → phải set min-width: 0 toàn bộ chuỗi     */
-#benchmark-section,
+#benchmark-section {
+  grid-column: 1 / -1;
+  min-width: 0;
+  width: 100%;
+  overflow-x: hidden;
+}
 #benchmark-results,
 #benchmark-queries {
   min-width: 0;
+  width: 100%;
   overflow-x: hidden;
 }
 

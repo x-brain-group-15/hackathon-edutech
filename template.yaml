@@ -213,6 +213,15 @@ Resources:
                 Resource:
                   - !Sub "arn:aws:bedrock:${AWS::Region}::foundation-model/*"
 
+              - Sid: MarketplaceAccess
+                Effect: Allow
+                Action:
+                  - 'aws-marketplace:Subscribe'
+                  - 'aws-marketplace:Unsubscribe'
+                  - 'aws-marketplace:ViewSubscriptions'
+                  - 'aws-marketplace:GetEntitlements'
+                Resource: '*'
+
               - Sid: BedrockKBRetrieve
                 Effect: Allow
                 Action:

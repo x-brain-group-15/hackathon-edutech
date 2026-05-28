@@ -3,6 +3,8 @@ import uuid
 import json
 import time
 import logging
+import re
+import hashlib
 import traceback
 from typing import Optional
 
@@ -674,6 +676,196 @@ def _normalize_quiz_items(raw_items, num_questions: int) -> list[dict]:
     return normalized
 
 
+def _is_bedrock_fallback_error(exc: Exception) -> bool:
+    message = str(exc)
+    return (
+        "ThrottlingException" in message
+        or "Too many tokens per day" in message
+        or "Too many requests" in message
+        or "rate exceeded" in message.lower()
+        or "NoCredentialsError" in message
+        or "Unable to locate credentials" in message
+        or "ExpiredToken" in message
+        or "UnrecognizedClientException" in message
+    )
+
+
+def _hash_int(value: str) -> int:
+    return int(hashlib.sha256(value.encode("utf-8")).hexdigest()[:12], 16)
+
+
+def _dedupe_preserve_order(items: list[str]) -> list[str]:
+    seen = set()
+    result = []
+    for item in items:
+        clean = re.sub(r"\s+", " ", item).strip()
+        if not clean:
+            continue
+        key = clean.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(clean)
+    return result
+
+
+def _is_clean_quiz_text(text: str) -> bool:
+    stripped = text.strip()
+    if not stripped:
+        return False
+    blocked_patterns = ("{|", "|-", "||", "cellspacing=", "style=", "_url:", "_source:")
+    if any(pattern in stripped.lower() for pattern in blocked_patterns):
+        return False
+    if sum(1 for char in stripped if char == "|") >= 2:
+        return False
+    return True
+
+
+def _deterministic_shuffle(items: list[str], seed: str) -> list[str]:
+    return sorted(items, key=lambda item: _hash_int(f"{seed}:{item}"))
+
+
+def _spread_select(items: list, limit: int) -> list:
+    if len(items) <= limit:
+        return items
+    selected = []
+    for i in range(limit):
+        idx = round(i * (len(items) - 1) / max(limit - 1, 1))
+        selected.append(items[idx])
+    return selected
+
+
+def _make_options(correct: str, distractor_pool: list[str], seed: str) -> list[str]:
+    distractors = [
+        item for item in _dedupe_preserve_order(distractor_pool)
+        if item.lower() != correct.lower() and _is_clean_quiz_text(item)
+    ]
+    distractors = _deterministic_shuffle(distractors, seed)[:3]
+    generic_distractors = [
+        "It is not the best match for the selected notes.",
+        "It describes an unrelated concept.",
+        "It reverses the relationship described in the notes.",
+        "It is only a formatting detail, not the core idea.",
+    ]
+    for item in generic_distractors:
+        if len(distractors) >= 3:
+            break
+        if item.lower() != correct.lower() and item not in distractors:
+            distractors.append(item)
+
+    options = _deterministic_shuffle([correct, *distractors[:3]], f"options:{seed}")
+    if options[0] == correct and len(options) > 1:
+        swap_idx = (_hash_int(f"swap:{seed}") % (len(options) - 1)) + 1
+        options[0], options[swap_idx] = options[swap_idx], options[0]
+    return options
+
+
+def _extract_quiz_facts(chunks: list[dict]) -> tuple[list[dict], list[str]]:
+    raw_text = "\n".join(chunk.get("text", "") for chunk in chunks)
+    lines = [re.sub(r"\s+", " ", line).strip() for line in raw_text.splitlines()]
+    lines = [line for line in lines if line and _is_clean_quiz_text(line)]
+    sentences = [
+        re.sub(r"\s+", " ", sentence).strip()
+        for sentence in re.split(r"(?<=[.!?])\s+", raw_text)
+        if 35 <= len(sentence.strip()) <= 260 and _is_clean_quiz_text(sentence)
+    ]
+
+    facts = []
+
+    for line in lines:
+        match = re.match(r"^[-*]?\s*([^:|]{2,60}):\s+(.{12,220})$", line)
+        if match:
+            term = match.group(1).strip(" -_*")
+            description = match.group(2).strip(" -_*")
+            if not term.lower().startswith(("http", "source", "url")):
+                facts.append({
+                    "kind": "definition",
+                    "topic": term,
+                    "answer": description,
+                    "question": f"In the selected notes, what does '{term}' refer to?",
+                    "source": line,
+                })
+
+    for sentence in sentences:
+        match = re.match(r"^([A-Z][A-Za-z0-9 /()'\\-]{2,70})\s+(is|are|means|refers to)\s+(.{15,180})$", sentence)
+        if match:
+            topic = match.group(1).strip()
+            answer = sentence.rstrip(".")
+            facts.append({
+                "kind": "concept",
+                "topic": topic,
+                "answer": answer,
+                "question": f"What is the best description of {topic}?",
+                "source": sentence,
+            })
+
+    for sentence in sentences:
+        lowered = sentence.lower()
+        if any(marker in lowered for marker in (" used ", " uses ", " occurs ", " includes ", " produces ", " converts ", " solves ")):
+            topic_match = re.match(r"^(.{3,70}?)(?:\s+is|\s+are|\s+uses|\s+used|\s+occurs|\s+includes|\s+produces|\s+converts|\s+solves)\b", sentence)
+            topic = topic_match.group(1).strip(" .:-") if topic_match else "this concept"
+            facts.append({
+                "kind": "relationship",
+                "topic": topic,
+                "answer": sentence.rstrip("."),
+                "question": f"Which statement best matches the notes about {topic}?",
+                "source": sentence,
+            })
+
+    for sentence in sentences:
+        if sentence not in [fact["answer"] for fact in facts]:
+            keyword = sentence.split(" ", 5)[:5]
+            topic = " ".join(keyword).strip(" .:-")
+            facts.append({
+                "kind": "fact",
+                "topic": topic or "the selected notes",
+                "answer": sentence.rstrip("."),
+                "question": f"Which statement is supported by the selected notes about {topic}?",
+                "source": sentence,
+            })
+
+    facts = [
+        fact for fact in facts
+        if 10 <= len(fact["answer"]) <= 220
+        and len(fact["question"]) <= 180
+        and _is_clean_quiz_text(fact["answer"])
+    ]
+    seen_answers = set()
+    unique_facts = []
+    for fact in facts:
+        key = fact["answer"].lower()
+        if key in seen_answers:
+            continue
+        seen_answers.add(key)
+        unique_facts.append(fact)
+
+    distractor_pool = [fact["answer"] for fact in unique_facts] + sentences
+    return unique_facts, _dedupe_preserve_order(distractor_pool)
+
+
+def _fallback_quiz_from_chunks(chunks: list[dict], num_questions: int) -> list[dict]:
+    facts, distractor_pool = _extract_quiz_facts(chunks)
+    selected_facts = _spread_select(facts, num_questions)
+
+    fallback_items = []
+    for index, fact in enumerate(selected_facts, start=1):
+        correct_answer = fact["answer"][:180].rstrip()
+        seed = f"{index}:{fact['question']}:{correct_answer}"
+        options = _make_options(correct_answer, distractor_pool, seed)
+
+        fallback_items.append({
+            "id": f"fallback-q{index}",
+            "question": fact["question"],
+            "options": options,
+            "correct_answer": correct_answer,
+            "explanation": f"Based on the selected notes: {fact['source'][:220]}",
+        })
+
+    if not fallback_items:
+        raise ValueError("Quiz fallback could not find enough document text to generate questions")
+    return fallback_items
+
+
 def handle_generate_quiz(
     user_id: str,
     num_questions: int,
@@ -681,6 +873,7 @@ def handle_generate_quiz(
     vector_store,
     ai_client,
     userstore,
+    storage=None,
 ) -> list[dict]:
     start_time = time.time()
     num_questions = max(1, min(num_questions, 20))
@@ -704,18 +897,60 @@ def handle_generate_quiz(
         filter=filter_params,
     )
 
-    if not chunks and hasattr(vector_store, "docs"):
-        chunks = []
+    if not chunks and doc_id and storage is not None:
+        docs = userstore.list_docs(user_id)
+        doc = next((d for d in docs if d.get("doc_id") == doc_id), None)
+        if doc:
+            filename = doc.get("filename", "unknown")
+            key = f"{user_id}/{doc_id}/{filename}"
+            try:
+                log_step(
+                    "generate_quiz",
+                    "rehydrate_vector_start",
+                    user_id=user_id,
+                    doc_id=doc_id,
+                    filename=filename,
+                )
+                data = storage.get(key)
+                text = _extract_text(filename, data)
+                if text.strip():
+                    vector_store.ingest(
+                        doc_id=doc_id,
+                        text=text,
+                        metadata={
+                            "user_id": user_id,
+                            "filename": filename,
+                        },
+                    )
+                    chunks = vector_store.search(
+                        "practice quiz exam key concepts definitions examples",
+                        top_k=10,
+                        filter=filter_params,
+                    )
+                log_step(
+                    "generate_quiz",
+                    "rehydrate_vector_done",
+                    user_id=user_id,
+                    doc_id=doc_id,
+                    chunks_found=len(chunks),
+                )
+            except Exception as e:
+                logger.warning(f"Quiz vector rehydrate failed for {doc_id}: {e}")
+
+    if doc_id and hasattr(vector_store, "docs"):
+        local_doc_chunks = []
         for chunk_id, text, metadata in vector_store.docs:
             if all(metadata.get(key) == value for key, value in filter_params.items()):
-                chunks.append({
+                local_doc_chunks.append({
                     "text": text,
                     "doc_id": metadata.get("doc_id", chunk_id),
                     "score": 0.0,
                     "metadata": metadata,
                 })
-            if len(chunks) >= 10:
+            if len(local_doc_chunks) >= 10:
                 break
+        if local_doc_chunks and len(chunks) < len(local_doc_chunks):
+            chunks = local_doc_chunks
 
     log_step(
         "generate_quiz",
@@ -746,10 +981,28 @@ def handle_generate_quiz(
         prompt_chars=len(prompt),
     )
 
-    if hasattr(ai_client, "generate_quiz_from_kb"):
-        response = ai_client.generate_quiz_from_kb(prompt, max_tokens=2048, temperature=0.1)
-    else:
-        response = ai_client.invoke(prompt, max_tokens=2048, temperature=0.1)
+    try:
+        if hasattr(ai_client, "generate_quiz_from_kb"):
+            response = ai_client.generate_quiz_from_kb(prompt, max_tokens=1200, temperature=0.1)
+        else:
+            response = ai_client.invoke(prompt, max_tokens=1200, temperature=0.1)
+    except Exception as e:
+        if not _is_bedrock_fallback_error(e):
+            raise
+        logger.warning(f"Bedrock unavailable during quiz generation; using rule-based fallback: {e}")
+        quiz_items = _fallback_quiz_from_chunks(chunks, num_questions)
+        latency_ms = int((time.time() - start_time) * 1000)
+        log_event(
+            "QUIZ_GENERATED",
+            user_id=user_id,
+            doc_id=doc_id,
+            requested_questions=num_questions,
+            returned_questions=len(quiz_items),
+            chunks_count=len(chunks),
+            latency_ms=latency_ms,
+            status="fallback_throttled",
+        )
+        return quiz_items
 
     raw_items = json.loads(_clean_json_response(response))
     quiz_items = _normalize_quiz_items(raw_items, num_questions)

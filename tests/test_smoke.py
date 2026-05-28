@@ -108,6 +108,127 @@ def test_quiz_generated_from_uploaded_document():
     assert {"id", "question", "options", "correct_answer", "explanation"} <= set(body[0])
 
 
+def test_quiz_falls_back_when_bedrock_is_throttled():
+    from src import handlers
+    from src.adapters.vector import LocalVector
+
+    class ThrottledAI:
+        def generate_quiz_from_kb(self, prompt, **kwargs):
+            raise Exception("ThrottlingException: Too many tokens per day")
+
+    class DummyUserStore:
+        def log_query(self, *args, **kwargs):
+            return None
+
+    vector = LocalVector()
+    vector.ingest(
+        doc_id="throttled-doc",
+        text=(
+            "Photosynthesis occurs in chloroplasts and converts light energy into chemical energy. "
+            "Light reactions split water and release oxygen as a byproduct. "
+            "The Calvin cycle uses carbon dioxide to build sugars."
+        ),
+        metadata={"user_id": "throttled-user", "filename": "lecture.txt"},
+    )
+
+    quiz = handlers.handle_generate_quiz(
+        user_id="throttled-user",
+        num_questions=3,
+        doc_id="throttled-doc",
+        vector_store=vector,
+        ai_client=ThrottledAI(),
+        userstore=DummyUserStore(),
+    )
+
+    assert len(quiz) == 3
+    assert quiz[0]["correct_answer"] in quiz[0]["options"]
+    assert len({item["question"] for item in quiz}) == len(quiz)
+    assert any(item["options"].index(item["correct_answer"]) != 0 for item in quiz)
+    assert "Based on the selected notes" in quiz[0]["explanation"]
+
+
+def test_quiz_falls_back_when_bedrock_credentials_are_missing():
+    from src import handlers
+    from src.adapters.vector import LocalVector
+
+    class MissingCredentialsAI:
+        def generate_quiz_from_kb(self, prompt, **kwargs):
+            raise Exception("NoCredentialsError: Unable to locate credentials")
+
+    class DummyUserStore:
+        def log_query(self, *args, **kwargs):
+            return None
+
+    vector = LocalVector()
+    vector.ingest(
+        doc_id="missing-credentials-doc",
+        text=(
+            "Machine learning is a subset of artificial intelligence. "
+            "Gradient descent is used to minimize a loss function. "
+            "Backpropagation computes gradients through a neural network. "
+            "Training data is used to fit model parameters. "
+            "Evaluation data measures how well a model generalizes."
+        ),
+        metadata={"user_id": "missing-credentials-user", "filename": "ml.txt"},
+    )
+
+    quiz = handlers.handle_generate_quiz(
+        user_id="missing-credentials-user",
+        num_questions=5,
+        doc_id="missing-credentials-doc",
+        vector_store=vector,
+        ai_client=MissingCredentialsAI(),
+        userstore=DummyUserStore(),
+    )
+
+    assert len(quiz) == 5
+    assert len({item["question"] for item in quiz}) == 5
+    assert any(item["options"].index(item["correct_answer"]) != 0 for item in quiz)
+
+
+def test_quiz_fallback_uses_full_local_doc_when_search_returns_partial_chunks():
+    from src import handlers
+    from src.adapters.vector import LocalVector
+
+    class MissingCredentialsAI:
+        def generate_quiz_from_kb(self, prompt, **kwargs):
+            raise Exception("NoCredentialsError: Unable to locate credentials")
+
+    class DummyUserStore:
+        def log_query(self, *args, **kwargs):
+            return None
+
+    vector = LocalVector()
+    vector.ingest(
+        doc_id="math-doc",
+        text=(
+            "Mathematics is the study of numbers, shapes, and patterns. "
+            "Numbers: including how things can be counted. "
+            "Structure: including how things are organized. "
+            "Place: where things are and spatial arrangement. "
+            "Change: how things become different. "
+            "Applied math is useful for solving real-world problems. "
+            "Deduction is a way to prove new truths using old truths."
+        ),
+        metadata={"user_id": "math-user", "filename": "math.txt"},
+        size=80,
+        overlap=0,
+    )
+
+    quiz = handlers.handle_generate_quiz(
+        user_id="math-user",
+        num_questions=5,
+        doc_id="math-doc",
+        vector_store=vector,
+        ai_client=MissingCredentialsAI(),
+        userstore=DummyUserStore(),
+    )
+
+    assert len(quiz) == 5
+    assert len({item["question"] for item in quiz}) == 5
+    assert any(item["options"].index(item["correct_answer"]) != 0 for item in quiz)
+
+
 def test_list_docs_per_user_isolation():
     client.post(
         "/upload",
