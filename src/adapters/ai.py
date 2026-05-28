@@ -72,11 +72,21 @@ class BedrockAI:
 
         if is_account_profile:
             # Account-level inference profiles require account ID in ARN
-            import boto3
-            try:
-                account_id = boto3.client("sts", region_name=self.region).get_caller_identity()["Account"]
-            except Exception:
-                account_id = ""
+            import os
+            account_id = os.environ.get("AWS_ACCOUNT_ID")
+            if not account_id:
+                import boto3
+                from botocore.config import Config
+                try:
+                    # Use a very short timeout (0.5s connect, 1.0s read) so we fail fast if STS is unreachable
+                    sts_config = Config(
+                        connect_timeout=0.5,
+                        read_timeout=1.0,
+                        retries={"max_attempts": 1}
+                    )
+                    account_id = boto3.client("sts", region_name=self.region, config=sts_config).get_caller_identity()["Account"]
+                except Exception:
+                    account_id = ""
             if account_id:
                 return f"arn:aws:bedrock:{self.region}:{account_id}:inference-profile/{model_id}"
             else:

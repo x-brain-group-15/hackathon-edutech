@@ -99,6 +99,7 @@ Globals:
     Environment:
       Variables:
         # These are passed directly to src/config.py via os.getenv()
+        AWS_ACCOUNT_ID: !Ref "AWS::AccountId"
         AI_BACKEND: !Ref AiBackend
         AI_MODEL_ID: !Ref AiModelId
         AI_MODEL_FALLBACKS: "anthropic.claude-sonnet-4-5-20250929-v1:0,amazon.nova-2-lite-v1:0,amazon.nova-lite-v1:0,anthropic.claude-haiku-4-5-20251001-v1:0,anthropic.claude-sonnet-4-6,amazon.nova-pro-v1:0,anthropic.claude-3-haiku-20240307-v1:0"
