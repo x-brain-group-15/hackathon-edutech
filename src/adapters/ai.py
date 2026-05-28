@@ -20,8 +20,15 @@ class BedrockAI:
         self.init_error = None
         try:
             import boto3
-            self.runtime = boto3.client("bedrock-runtime", region_name=region)
-            self.agent_runtime = boto3.client("bedrock-agent-runtime", region_name=region)
+            from botocore.config import Config
+            # Use short connect (2.0s) and read (6.0s) timeouts to avoid hanging Lambda
+            config_boto = Config(
+                connect_timeout=2.0,
+                read_timeout=6.0,
+                retries={"max_attempts": 1}
+            )
+            self.runtime = boto3.client("bedrock-runtime", region_name=region, config=config_boto)
+            self.agent_runtime = boto3.client("bedrock-agent-runtime", region_name=region, config=config_boto)
         except Exception as e:
             self.init_error = e
 
@@ -98,6 +105,12 @@ class BedrockAI:
             except Exception as e:
                 logger.warning(f"invoke failed with model {model_id}: {e}")
                 last_error = e
+                # Connection or endpoint reachability issues mean the whole Bedrock service is unreachable.
+                # Abort the model loop early to prevent compounding timeouts and immediately fall back.
+                err_name = type(e).__name__.lower()
+                if "connect" in err_name or "endpoint" in err_name or "connection" in err_name:
+                    logger.warning("Unreachable Bedrock endpoint detected. Aborting model loop for immediate fallback.")
+                    break
 
         logger.warning(f"All Bedrock models failed. Falling back to local AI invoke. Last error: {last_error}")
         return self.local_fallback.invoke(prompt, **kwargs)
@@ -163,6 +176,12 @@ class BedrockAI:
             except Exception as e:
                 logger.warning(f"retrieve_and_generate failed with model {model_id}: {e}")
                 last_error = e
+                # Connection or endpoint reachability issues mean the whole Bedrock service is unreachable.
+                # Abort the model loop early to prevent compounding timeouts and immediately fall back.
+                err_name = type(e).__name__.lower()
+                if "connect" in err_name or "endpoint" in err_name or "connection" in err_name:
+                    logger.warning("Unreachable Bedrock agent endpoint detected. Aborting model loop for immediate fallback.")
+                    break
 
         logger.warning(f"All Bedrock models failed for retrieve_and_generate. Falling back to local RAG logic. Last error: {last_error}")
         return self._local_rag_fallback(query, kb_id, last_error)

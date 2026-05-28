@@ -333,3 +333,36 @@ def test_bedrock_ai_falls_back_to_local_ai():
     assert "answer" in res
     assert "photosynthesis" in res["answer"].lower() or "local" in res["answer"].lower()
 
+
+def test_bedrock_ai_short_circuit_on_connection_error():
+    import time
+    from src.adapters.ai import BedrockAI
+    import botocore.exceptions
+    
+    # 1. Instantiate BedrockAI
+    ai = BedrockAI(region="us-east-1", model_id="dummy-model")
+    
+    # 2. Mock runtime.converse to throw a ConnectTimeoutError
+    original_converse = ai.runtime.converse
+    
+    def mock_converse(*args, **kwargs):
+        raise botocore.exceptions.ConnectTimeoutError(
+            endpoint_url="https://bedrock.amazonaws.com",
+            connection_timeout=2.0
+        )
+        
+    ai.runtime.converse = mock_converse
+    
+    start_time = time.time()
+    ans = ai.invoke("Practice quiz generator for photosynthesis")
+    duration = time.time() - start_time
+    
+    # Ensure it falls back to LocalAI successfully
+    assert "local-q1" in ans or "chloroplasts" in ans.lower()
+    # Ensure it short-circuited immediately (in less than 1.0s) instead of looping over all 8 models
+    assert duration < 1.0
+    
+    # Restore
+    ai.runtime.converse = original_converse
+
+
