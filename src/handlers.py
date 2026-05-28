@@ -109,6 +109,29 @@ LECTURE NOTES:
 {context}
 """
 
+QUIZ_PROMPT = """You are a practice quiz generator for a student.
+Create exactly {num_questions} multiple-choice questions from ONLY the lecture-note context below.
+
+Return STRICTLY a raw JSON array. Do not include markdown fences, labels, commentary, or text before or after the JSON.
+Each array item must match this schema:
+{{
+  "id": "short-stable-id",
+  "question": "question text",
+  "options": ["option A", "option B", "option C", "option D"],
+  "correct_answer": "the exact option text that is correct",
+  "explanation": "brief explanation grounded in the context"
+}}
+
+Rules:
+- Use 4 options per question.
+- Exactly one option must match correct_answer.
+- Do not invent facts outside the context.
+- Keep questions clear and testable.
+
+LECTURE-NOTE CONTEXT:
+{context}
+"""
+
 def _put_cloudwatch_metric(metric_name: str, value: float, unit: str, aws_region: str, status: str = "Success"):
     """Real-world scenario: Put custom metrics to CloudWatch to monitor AI operations."""
     try:
@@ -602,6 +625,157 @@ def handle_recent_queries(user_id: str, userstore, limit: int = 10) -> dict:
     )
 
     return {"user_id": user_id, "queries": queries}
+
+
+def _clean_json_response(response: str) -> str:
+    clean_json = response.strip()
+    if clean_json.startswith("```json"):
+        clean_json = clean_json[7:]
+    elif clean_json.startswith("```"):
+        clean_json = clean_json[3:]
+    if clean_json.endswith("```"):
+        clean_json = clean_json[:-3]
+    return clean_json.strip()
+
+
+def _normalize_quiz_items(raw_items, num_questions: int) -> list[dict]:
+    if not isinstance(raw_items, list):
+        raise ValueError("Quiz model response must be a JSON array")
+
+    normalized = []
+    for index, item in enumerate(raw_items[:num_questions], start=1):
+        if not isinstance(item, dict):
+            continue
+
+        options = item.get("options") or []
+        if not isinstance(options, list):
+            continue
+        options = [str(option).strip() for option in options if str(option).strip()]
+        if len(options) < 2:
+            continue
+
+        correct_answer = item.get("correct_answer", item.get("answer"))
+        if isinstance(correct_answer, int):
+            correct_answer = options[correct_answer] if 0 <= correct_answer < len(options) else ""
+        correct_answer = str(correct_answer or "").strip()
+        if correct_answer not in options:
+            continue
+
+        normalized.append({
+            "id": str(item.get("id") or f"q{index}"),
+            "question": str(item.get("question") or "").strip(),
+            "options": options[:4],
+            "correct_answer": correct_answer,
+            "explanation": str(item.get("explanation") or "").strip(),
+        })
+
+    if not normalized:
+        raise ValueError("Quiz model response did not contain valid quiz items")
+    return normalized
+
+
+def handle_generate_quiz(
+    user_id: str,
+    num_questions: int,
+    doc_id: Optional[str],
+    vector_store,
+    ai_client,
+    userstore,
+) -> list[dict]:
+    start_time = time.time()
+    num_questions = max(1, min(num_questions, 20))
+
+    filter_params = {"user_id": user_id}
+    if doc_id:
+        filter_params["doc_id"] = doc_id
+
+    log_step(
+        "generate_quiz",
+        "vector_search_start",
+        user_id=user_id,
+        doc_id=doc_id,
+        top_k=10,
+        num_questions=num_questions,
+    )
+
+    chunks = vector_store.search(
+        "practice quiz exam key concepts definitions examples",
+        top_k=10,
+        filter=filter_params,
+    )
+
+    if not chunks and hasattr(vector_store, "docs"):
+        chunks = []
+        for chunk_id, text, metadata in vector_store.docs:
+            if all(metadata.get(key) == value for key, value in filter_params.items()):
+                chunks.append({
+                    "text": text,
+                    "doc_id": metadata.get("doc_id", chunk_id),
+                    "score": 0.0,
+                    "metadata": metadata,
+                })
+            if len(chunks) >= 10:
+                break
+
+    log_step(
+        "generate_quiz",
+        "vector_search_done",
+        user_id=user_id,
+        doc_id=doc_id,
+        chunks_found=len(chunks),
+    )
+
+    if not chunks:
+        raise ValueError("No document chunks found. Upload a document before generating a quiz.")
+
+    context = "\n\n".join(
+        f"[chunk {i + 1}] {chunk['text']}"
+        for i, chunk in enumerate(chunks)
+    )
+
+    prompt = QUIZ_PROMPT.format(
+        num_questions=num_questions,
+        context=context,
+    )
+
+    log_step(
+        "generate_quiz",
+        "ai_generate_start",
+        user_id=user_id,
+        doc_id=doc_id,
+        prompt_chars=len(prompt),
+    )
+
+    if hasattr(ai_client, "generate_quiz_from_kb"):
+        response = ai_client.generate_quiz_from_kb(prompt, max_tokens=2048, temperature=0.1)
+    else:
+        response = ai_client.invoke(prompt, max_tokens=2048, temperature=0.1)
+
+    raw_items = json.loads(_clean_json_response(response))
+    quiz_items = _normalize_quiz_items(raw_items, num_questions)
+
+    latency_ms = int((time.time() - start_time) * 1000)
+    try:
+        userstore.log_query(
+            user_id=user_id,
+            query=f"Generate practice quiz ({len(quiz_items)} questions)",
+            answer=json.dumps(quiz_items, ensure_ascii=False),
+        )
+    except Exception:
+        pass
+
+    log_event(
+        "QUIZ_GENERATED",
+        user_id=user_id,
+        doc_id=doc_id,
+        requested_questions=num_questions,
+        returned_questions=len(quiz_items),
+        chunks_count=len(chunks),
+        latency_ms=latency_ms,
+        status="success",
+    )
+
+    return quiz_items
 
 
 def handle_delete_doc(

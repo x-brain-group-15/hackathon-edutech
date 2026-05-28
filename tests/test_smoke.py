@@ -80,6 +80,34 @@ def test_query_without_upload_handles_empty_index():
     assert "answer" in r.json()
 
 
+def test_quiz_generated_from_uploaded_document():
+    upload_res = client.post(
+        "/upload",
+        files={
+            "file": (
+                "quiz_lec.txt",
+                b"Photosynthesis occurs in chloroplasts. Light reactions split water and release oxygen.",
+                "text/plain",
+            )
+        },
+        headers={"X-User-Id": "quiz-user"},
+    )
+    assert upload_res.status_code == 200
+    doc_id = upload_res.json()["doc_id"]
+
+    quiz_res = client.post(
+        "/quiz",
+        json={"num_questions": 2, "doc_id": doc_id},
+        headers={"X-User-Id": "quiz-user"},
+    )
+
+    assert quiz_res.status_code == 200, quiz_res.text
+    body = quiz_res.json()
+    assert isinstance(body, list)
+    assert body
+    assert {"id", "question", "options", "correct_answer", "explanation"} <= set(body[0])
+
+
 def test_list_docs_per_user_isolation():
     client.post(
         "/upload",

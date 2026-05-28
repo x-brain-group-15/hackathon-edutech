@@ -3,6 +3,7 @@
 Interface:
     invoke(prompt, **kwargs) -> str
     retrieve_and_generate(query, kb_id="") -> dict with {"answer": str, "citations": list}
+    generate_quiz_from_kb(prompt, **kwargs) -> str
 """
 from typing import Any
 
@@ -89,6 +90,14 @@ class BedrockAI:
 
         raise last_error
 
+    def generate_quiz_from_kb(self, prompt: str, **kwargs: Any) -> str:
+        """Generate quiz JSON through Bedrock Converse API."""
+        return self.invoke(
+            prompt,
+            max_tokens=kwargs.get("max_tokens", 2048),
+            temperature=kwargs.get("temperature", 0.1),
+        )
+
     def retrieve_and_generate(self, query: str, kb_id: str = "") -> dict:
         if not kb_id:
             raise ValueError("VECTOR_BEDROCK_KB_ID must be set for Bedrock KB retrieve_and_generate")
@@ -148,6 +157,25 @@ class LocalAI:
 
     def invoke(self, prompt: str, **kwargs: Any) -> str:
         prompt_lower = prompt.lower()
+        if "practice quiz generator" in prompt_lower:
+            return """
+            [
+              {
+                "id": "local-q1",
+                "question": "Where does photosynthesis occur?",
+                "options": ["In chloroplasts", "In ribosomes", "In mitochondria", "In the nucleus"],
+                "correct_answer": "In chloroplasts",
+                "explanation": "The provided notes identify chloroplasts as the site of photosynthesis."
+              },
+              {
+                "id": "local-q2",
+                "question": "What do light reactions split during photosynthesis?",
+                "options": ["Water", "Glucose", "Carbon dioxide", "Chlorophyll"],
+                "correct_answer": "Water",
+                "explanation": "The notes state that light reactions split water and release oxygen."
+              }
+            ]
+            """
         if "cornell note-taking format" in prompt_lower:
             return """
             {
@@ -201,3 +229,6 @@ class LocalAI:
             ),
             "citations": [],
         }
+
+    def generate_quiz_from_kb(self, prompt: str, **kwargs: Any) -> str:
+        return self.invoke(prompt, **kwargs)

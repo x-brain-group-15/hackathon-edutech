@@ -10,7 +10,7 @@ The choice is yours. Code stays the same.
 """
 from pathlib import Path
 
-from fastapi import FastAPI, File, Header, HTTPException, Request, UploadFile
+from fastapi import Body, FastAPI, File, Header, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -186,6 +186,36 @@ class FlashcardRequest(BaseModel):
     limit: int = 5
     doc_id: str | None = None
 
+
+class QuizRequest(BaseModel):
+    num_questions: int = 5
+    doc_id: str | None = None
+
+
+@app.post("/quiz")
+def generate_quiz(
+    req: QuizRequest | None = Body(default=None),
+    x_user_id: str | None = Header(default=None),
+    num_questions: int = 5,
+    doc_id: str | None = None,
+) -> list[dict]:
+    user_id = _resolve_user_id(x_user_id)
+    requested_count = req.num_questions if req else num_questions
+    requested_doc_id = req.doc_id if req and req.doc_id else doc_id
+    try:
+        return handlers.handle_generate_quiz(
+            user_id=user_id,
+            num_questions=requested_count,
+            doc_id=requested_doc_id,
+            vector_store=vector_store,
+            ai_client=ai_client,
+            userstore=userstore,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}")
+
 @app.post("/flashcards")
 def generate_flashcards(req: FlashcardRequest, x_user_id: str | None = Header(default=None)) -> dict:
     user_id = _resolve_user_id(x_user_id)
@@ -250,3 +280,7 @@ if config.serve_frontend:
         """Convenience: serves frontend/index.html at /. Set SERVE_FRONTEND=false
         if you deploy the frontend separately (CloudFront+S3, Amplify, ALB)."""
         return FileResponse(FRONTEND_DIR / "index.html")
+
+    @app.get("/global.css")
+    def global_css() -> FileResponse:
+        return FileResponse(FRONTEND_DIR / "global.css", media_type="text/css")
