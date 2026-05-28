@@ -328,6 +328,18 @@ Resources:
             ApiId: !Ref StudyBotHttpApi
             Path: /docs/{doc_id}/cornell
             Method: POST
+        GenerateQuiz:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref StudyBotHttpApi
+            Path: /quiz
+            Method: POST
+        GetQuiz:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref StudyBotHttpApi
+            Path: /quiz/{doc_id}
+            Method: GET
 
   # --------------------------------------------------------------------------
   # 3b. Lambda — Upload & Document management (I/O-heavy)
