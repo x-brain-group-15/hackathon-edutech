@@ -11,9 +11,11 @@ from typing import Any
 class BedrockAI:
     """Real Amazon Bedrock client. Uses Converse API for invoke; bedrock-agent-runtime for RAG with fallbacks."""
 
-    def __init__(self, region: str, model_id: str):
+    def __init__(self, region: str, model_id: str, model_fallbacks: str = ""):
         self.region = region
         self.model_id = model_id
+        # Parse fallback list from comma-separated env string, filter empty strings
+        self.model_fallbacks = [m.strip() for m in model_fallbacks.split(",") if m.strip()] if model_fallbacks else []
         self.local_fallback = LocalAI()
         self.runtime = None
         self.agent_runtime = None
@@ -95,17 +97,8 @@ class BedrockAI:
 
         max_tokens = kwargs.get("max_tokens", 1024)
         
-        # Fallback list in user-specified priority order
-        models_to_try = [
-            self.model_id,
-            "anthropic.claude-sonnet-4-5-20250929-v1:0",
-            "amazon.nova-2-lite-v1:0",
-            "amazon.nova-lite-v1:0",
-            "anthropic.claude-haiku-4-5-20251001-v1:0",
-            "anthropic.claude-sonnet-4-6",
-            "amazon.nova-pro-v1:0",
-            "anthropic.claude-3-haiku-20240307-v1:0"
-        ]
+        # Primary model first, then fallbacks from env (AI_MODEL_FALLBACKS)
+        models_to_try = [self.model_id] + self.model_fallbacks
 
         last_error = None
         for model_id in models_to_try:
@@ -127,6 +120,7 @@ class BedrockAI:
                 err_name = type(e).__name__.lower()
                 if "connect" in err_name or "endpoint" in err_name or "connection" in err_name:
                     logger.warning("Unreachable Bedrock endpoint detected. Aborting model loop for immediate fallback.")
+                    break
                     break
 
         logger.warning(f"All Bedrock models failed. Falling back to local AI invoke. Last error: {last_error}")
@@ -151,17 +145,8 @@ class BedrockAI:
         if not kb_id:
             raise ValueError("VECTOR_BEDROCK_KB_ID must be set for Bedrock KB retrieve_and_generate")
 
-        # Fallback list in user-specified priority order
-        models_to_try = [
-            self.model_id,
-            "anthropic.claude-sonnet-4-5-20250929-v1:0",
-            "amazon.nova-2-lite-v1:0",
-            "amazon.nova-lite-v1:0",
-            "anthropic.claude-haiku-4-5-20251001-v1:0",
-            "anthropic.claude-sonnet-4-6",
-            "amazon.nova-pro-v1:0",
-            "anthropic.claude-3-haiku-20240307-v1:0"
-        ]
+        # Primary model first, then fallbacks from env (AI_MODEL_FALLBACKS)
+        models_to_try = [self.model_id] + self.model_fallbacks
 
         last_error = None
         for model_id in models_to_try:

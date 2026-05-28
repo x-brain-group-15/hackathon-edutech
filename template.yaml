@@ -101,6 +101,7 @@ Globals:
         # These are passed directly to src/config.py via os.getenv()
         AI_BACKEND: !Ref AiBackend
         AI_MODEL_ID: !Ref AiModelId
+        AI_MODEL_FALLBACKS: "anthropic.claude-sonnet-4-5-20250929-v1:0,amazon.nova-2-lite-v1:0,amazon.nova-lite-v1:0,anthropic.claude-haiku-4-5-20251001-v1:0,anthropic.claude-sonnet-4-6,amazon.nova-pro-v1:0,anthropic.claude-3-haiku-20240307-v1:0"
         STORAGE_BACKEND: s3
         STORAGE_BUCKET: !Ref StorageBucket
         FLASHCARD_BUCKET: !Ref FlashcardBucket
@@ -300,7 +301,7 @@ Resources:
       CodeUri: .
       Role: !GetAtt StudyBotLambdaRole.Arn
       MemorySize: 512
-      Timeout: 60
+      Timeout: 240
       Description: "StudyBot — Query & AI features (Bedrock RAG, flashcards, mindmap, cornell)"
       VpcConfig:
         SecurityGroupIds: [!Ref LambdaSecurityGroup]
