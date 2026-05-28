@@ -25,3 +25,4 @@ pypdf>=4.0                 # PDF text extraction in handle_upload
 
 # ---- Config ----
 python-dotenv>=1.0         # loads .env if present (won't error if absent)
+groq>=0.4.0 # Groq API client for fallback when Bedrock fails
