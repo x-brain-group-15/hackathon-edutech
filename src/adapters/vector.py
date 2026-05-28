@@ -78,16 +78,27 @@ class BedrockKBVector:
                 kwargs["retrievalConfiguration"]["vectorSearchConfiguration"]["filter"] = {
                     "andAll": filter_list
                 }
-        resp = self.agent_runtime.retrieve(**kwargs)
-        return [
-            {
-                "text": r.get("content", {}).get("text", ""),
-                "doc_id": r.get("metadata", {}).get("doc_id", ""),
-                "score": r.get("score", 0.0),
-                "metadata": r.get("metadata", {}),
-            }
-            for r in resp.get("retrievalResults", [])
-        ]
+        try:
+            resp = self.agent_runtime.retrieve(**kwargs)
+            return [
+                {
+                    "text": r.get("content", {}).get("text", ""),
+                    "doc_id": r.get("metadata", {}).get("doc_id", ""),
+                    "score": r.get("score", 0.0),
+                    "metadata": r.get("metadata", {}),
+                }
+                for r in resp.get("retrievalResults", [])
+            ]
+        except Exception as e:
+            import logging
+            logger = logging.getLogger("StudyBot")
+            logger.warning(f"Bedrock KB retrieve failed, falling back to local search: {e}")
+            from src.adapters.factory import _local_vector_singleton
+            if _local_vector_singleton is not None:
+                return _local_vector_singleton.search(query, top_k=top_k, filter=filter)
+            else:
+                local_v = LocalVector()
+                return local_v.search(query, top_k=top_k, filter=filter)
 
 
 class LocalVector:
