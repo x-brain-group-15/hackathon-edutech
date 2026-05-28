@@ -666,6 +666,29 @@ Truy vấn lỗi đánh giá trả về 0 record matched, nghĩa là không có 
 
 - Quá trình benchmark sử dụng một tập câu hỏi thăm dò nhỏ, do đó đây không phải là một đánh giá học thuật toàn diện. Nó vẫn tốt hơn những tuyên bố không đo lường được và đủ để giải thích hành vi chunking/truy xuất trong quá trình hỏi đáp (Q&A).
 
+## 6.7 CloudWatch Dashboard và Alarms
+
+**Dashboard StudyBot-G15**
+
+![Dashboard StudyBot-G15](19_cloudwatch_dashboard.jpg)
+
+Dashboard `StudyBot-G15` tổng hợp 3 widget theo dõi toàn bộ lớp compute:
+- **Lambda Invocations & Errors**: theo dõi số lần gọi và lỗi của cả 3 function `studybot-query-G15`, `studybot-upload-G15`, `studybot-core-G15` theo thời gian thực.
+- **Lambda Duration (avg ms)**: đo thời gian xử lý trung bình của từng function, giúp phát hiện function nào bị chậm bất thường.
+- **API Gateway Requests**: đếm số request vào hệ thống, đối chiếu với Lambda invocations để phát hiện request bị drop.
+
+**Alarm — Query Errors**
+
+![Alarm Query Errors](20_alarm_query_errors.jpg)
+
+Alarm `StudyBot-G15-QueryErrors` theo dõi Lambda `studybot-query-G15`. Ngưỡng: `Errors >= 1` trong 5 phút. Trạng thái hiện tại: **OK** — xác nhận không có lỗi RAG query nào trong thời gian gần nhất. Khi alarm chuyển ALARM, SNS topic `StudyBot-G15-Alarm-Topic` gửi email cảnh báo ngay cho nhóm.
+
+**Alarm — Upload Errors**
+
+![Alarm Upload Errors](21_alarm_upload_errors.jpg)
+
+Alarm `StudyBot-G15-UploadErrors` theo dõi Lambda `studybot-upload-G15`. Ngưỡng: `Errors >= 1` trong 5 phút. Trạng thái hiện tại: **OK** — xác nhận pipeline upload PDF đang hoạt động ổn định.
+
 ## 7. Bài Học Rút Ra
 
 StudyBot đã dạy chúng tôi rằng phần khó nhất của "trò chuyện với PDF" không phải là tải file lên; mà là làm cho câu trả lời bám sát nội dung, có thể đo lường được, và đủ rẻ để chạy liên tục. Kiến trúc serverless cho phép chúng tôi di chuyển nhanh chóng: S3 xử lý tài liệu, DynamoDB quản lý trạng thái người dùng, Lambda xử lý logic sản phẩm, và Bedrock cung cấp lớp AI. Quyết định kỹ thuật tốt nhất là thêm các tính năng định hướng bằng chứng từ sớm, đặc biệt là đánh giá RAG và các số liệu CloudWatch, vì chúng cung cấp cho chúng tôi những con số thay vì những tuyên bố mơ hồ.
