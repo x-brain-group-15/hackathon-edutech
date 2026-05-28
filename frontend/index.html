@@ -5,7 +5,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title id="page-title">StudyBot — AI Study Buddy</title>
-  <link rel="stylesheet" href="global.css">
+  <link rel="stylesheet" href="./global.css">
   <script>
     // ---------- Early Theme & Language Initialization ----------
     (function () {
@@ -266,9 +266,11 @@
             <span class="meta" data-i18n="flashcardMeta"></span>
           </div>
           <div class="flashcard-shell">
-            
+
             <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
-              <input type="text" id="flashcard-topic" data-i18n-placeholder="flashcardTopicPlaceholder" placeholder="Enter topic for AI..." style="flex: 1; padding: 0.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--bg); color: var(--text);">
+              <input type="text" id="flashcard-topic" data-i18n-placeholder="flashcardTopicPlaceholder"
+                placeholder="Enter topic for AI..."
+                style="flex: 1; padding: 0.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--bg); color: var(--text);">
               <button class="primary" onclick="generateFlashcards()" id="btn-generate-flashcards">Generate AI</button>
             </div>
             <div class="flashcard-deck" data-i18n="flashcardDeck"></div>
@@ -414,44 +416,44 @@
     // ============================================================================
     function $(id) { return document.getElementById(id); }
 
-function toggleStrategyFields() {
-  const strat = $('chunk-strategy').value;
-  if (strat === 'fixed') {
-    $('field-size').style.display = 'block';
-    $('field-overlap').style.display = 'block';
-    $('field-threshold').style.display = 'none';
-  } else if (strat === 'semantic') {
-    $('field-size').style.display = 'none';
-    $('field-overlap').style.display = 'none';
-    $('field-threshold').style.display = 'block';
-  } else {
-    $('field-size').style.display = 'none';
-    $('field-overlap').style.display = 'none';
-    $('field-threshold').style.display = 'none';
-  }
-}
+    function toggleStrategyFields() {
+      const strat = $('chunk-strategy').value;
+      if (strat === 'fixed') {
+        $('field-size').style.display = 'block';
+        $('field-overlap').style.display = 'block';
+        $('field-threshold').style.display = 'none';
+      } else if (strat === 'semantic') {
+        $('field-size').style.display = 'none';
+        $('field-overlap').style.display = 'none';
+        $('field-threshold').style.display = 'block';
+      } else {
+        $('field-size').style.display = 'none';
+        $('field-overlap').style.display = 'none';
+        $('field-threshold').style.display = 'none';
+      }
+    }
 
-// ============================================================================
-// Backend status
-// ============================================================================
-async function loadStatus() {
-  const res = await call('/health');
-  if (!res.ok) {
-    $('status-pills').innerHTML = `<span class="pill error">${t('statusOffline')}</span>`;
-    return;
-  }
-  
-  const statusHtml = Object.entries(res.body.backends)
-    .map(([k, v]) => {
-      const label = v === 'local' ? t('statusLocal') : t('statusRemote');
-      return `<span class="pill ${v === 'local' ? 'local' : 'remote'}">${k}: ${label}</span>`;
-    })
-    .join('');
-    
-  const tenantBadgeHtml = `<span class="pill" style="border-color: rgba(var(--accent-rgb), 0.3); background: rgba(var(--accent-rgb), 0.1); color: var(--accent);">${t('statusTenant')}: ${ACTIVE_TENANT}</span>`;
-  
-  $('status-pills').innerHTML = tenantBadgeHtml + statusHtml;
-}
+    // ============================================================================
+    // Backend status
+    // ============================================================================
+    async function loadStatus() {
+      const res = await call('/health');
+      if (!res.ok) {
+        $('status-pills').innerHTML = `<span class="pill error">${t('statusOffline')}</span>`;
+        return;
+      }
+
+      const statusHtml = Object.entries(res.body.backends)
+        .map(([k, v]) => {
+          const label = v === 'local' ? t('statusLocal') : t('statusRemote');
+          return `<span class="pill ${v === 'local' ? 'local' : 'remote'}">${k}: ${label}</span>`;
+        })
+        .join('');
+
+      const tenantBadgeHtml = `<span class="pill" style="border-color: rgba(var(--accent-rgb), 0.3); background: rgba(var(--accent-rgb), 0.1); color: var(--accent);">${t('statusTenant')}: ${ACTIVE_TENANT}</span>`;
+
+      $('status-pills').innerHTML = tenantBadgeHtml + statusHtml;
+    }
 
     function logDebug(label, data) {
       const lines = $('debug-log').textContent === 'No requests yet.' ? [] : $('debug-log').textContent.split('\n');
@@ -469,54 +471,54 @@ async function loadStatus() {
       return { ok: r.ok, status: r.status, body };
     }
 
-async function doUpload(file) {
-  const MAX_SIZE_MB = 10;
-  const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024;
-  if (file.size > MAX_SIZE_BYTES) {
-    const sizeInMB = (file.size / (1024 * 1024)).toFixed(1);
-    const errorMsg = t('fileTooLarge', {size: sizeInMB, max: MAX_SIZE_MB});
-    toast(errorMsg, 'error');
-    $('upload-result').innerHTML = `
+    async function doUpload(file) {
+      const MAX_SIZE_MB = 10;
+      const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024;
+      if (file.size > MAX_SIZE_BYTES) {
+        const sizeInMB = (file.size / (1024 * 1024)).toFixed(1);
+        const errorMsg = t('fileTooLarge', { size: sizeInMB, max: MAX_SIZE_MB });
+        toast(errorMsg, 'error');
+        $('upload-result').innerHTML = `
       <p style="color:var(--error); margin:0.8rem 0 0; font-size: 0.88rem; font-weight: 500;">
         ${errorMsg}
       </p>`;
-    return;
-  }
+        return;
+      }
 
-  $('upload-result').innerHTML = `
+      $('upload-result').innerHTML = `
     <p class="muted" style="margin:0.8rem 0 0; font-size: 0.88rem; display: flex; align-items: center; gap: 0.5rem;">
       <span class="spinner"></span> 
-      ${t('uploading', {filename: file.name, size: (file.size/1024).toFixed(1)})}
+      ${t('uploading', { filename: file.name, size: (file.size / 1024).toFixed(1) })}
     </p>`;
-    
-  const fd = new FormData();
-  fd.append('file', file);
 
-  const strategy = $('chunk-strategy').value;
-  const size = $('chunk-size').value;
-  const overlap = $('chunk-overlap').value;
-  const threshold = $('chunk-threshold').value;
+      const fd = new FormData();
+      fd.append('file', file);
 
-  let queryParams = `?strategy=${strategy}`;
-  if (strategy === 'fixed') {
-    queryParams += `&size=${size}&overlap=${overlap}`;
-  } else if (strategy === 'semantic') {
-    queryParams += `&threshold=${threshold}`;
-  }
+      const strategy = $('chunk-strategy').value;
+      const size = $('chunk-size').value;
+      const overlap = $('chunk-overlap').value;
+      const threshold = $('chunk-threshold').value;
 
-  const res = await call(`/upload${queryParams}`, {method: 'POST', body: fd});
-  
-  if (!res.ok) {
-    toast(t('uploadFailed', {detail: res.body.detail || res.status}), 'error');
-    $('upload-result').innerHTML = `
+      let queryParams = `?strategy=${strategy}`;
+      if (strategy === 'fixed') {
+        queryParams += `&size=${size}&overlap=${overlap}`;
+      } else if (strategy === 'semantic') {
+        queryParams += `&threshold=${threshold}`;
+      }
+
+      const res = await call(`/upload${queryParams}`, { method: 'POST', body: fd });
+
+      if (!res.ok) {
+        toast(t('uploadFailed', { detail: res.body.detail || res.status }), 'error');
+        $('upload-result').innerHTML = `
       <p style="color:var(--error); margin:0.8rem 0 0; font-size: 0.88rem; font-weight: 500;">
         ${res.body.detail || t('uploadFailedShort')}
       </p>`;
-    return;
-  }
-  
-  const b = res.body;
-  $('upload-result').innerHTML = `
+        return;
+      }
+
+      const b = res.body;
+      $('upload-result').innerHTML = `
     <div class="upload-success-alert">
       <div class="upload-success-title">
         <svg style="width:16px;height:16px;" viewBox="0 0 20 20" fill="currentColor">
@@ -524,28 +526,28 @@ async function doUpload(file) {
         </svg>
         <strong>${b.filename}</strong>
       </div>
-      <div>${t('uploadSuccessChars', {chars: b.chars_extracted.toLocaleString()})}${t('uploadChunkPrefix')}<code>${strategy}</code>${t('uploadChunkSuffix')}</div>
-      <div class="upload-success-meta">${t('uploadSuccessDoc', {docId: b.doc_id})}</div>
+      <div>${t('uploadSuccessChars', { chars: b.chars_extracted.toLocaleString() })}${t('uploadChunkPrefix')}<code>${strategy}</code>${t('uploadChunkSuffix')}</div>
+      <div class="upload-success-meta">${t('uploadSuccessDoc', { docId: b.doc_id })}</div>
     </div>`;
-    
-  toast(t('uploadedToast', {filename: b.filename}), 'success');
 
-  window.lastDocId = b.doc_id;
-  window.lastDocName = b.filename;
+      toast(t('uploadedToast', { filename: b.filename }), 'success');
 
-  refresh();
-}
+      window.lastDocId = b.doc_id;
+      window.lastDocName = b.filename;
 
-// ============================================================================
-// AI Chat Premium Messenger logic
-// ============================================================================
-function renderWelcomeMessage() {
-  const card = $('answer-card');
-  if (card.getAttribute('data-has-messages') === 'true') {
-    return;
-  }
-  card.classList.add('visible');
-  card.innerHTML = `
+      refresh();
+    }
+
+    // ============================================================================
+    // AI Chat Premium Messenger logic
+    // ============================================================================
+    function renderWelcomeMessage() {
+      const card = $('answer-card');
+      if (card.getAttribute('data-has-messages') === 'true') {
+        return;
+      }
+      card.classList.add('visible');
+      card.innerHTML = `
     <div class="chat-bubble ai">
       <div class="bubble-avatar">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 18px; height: 18px;">
@@ -558,21 +560,21 @@ function renderWelcomeMessage() {
       </div>
     </div>
   `;
-}
+    }
 
-async function ask() {
-  const q = $('question').value.trim();
-  if (!q) { toast(t('toastAskEmpty'), 'warn'); return; }
-  $('answer-card').setAttribute('data-has-messages', 'true');
-  
-  $('question').value = '';
-  
-  const prevAns = $('answer-text');
-  if (prevAns) prevAns.removeAttribute('id');
-  const prevCit = $('citations');
-  if (prevCit) prevCit.removeAttribute('id');
-  
-  const userBubbleHtml = `
+    async function ask() {
+      const q = $('question').value.trim();
+      if (!q) { toast(t('toastAskEmpty'), 'warn'); return; }
+      $('answer-card').setAttribute('data-has-messages', 'true');
+
+      $('question').value = '';
+
+      const prevAns = $('answer-text');
+      if (prevAns) prevAns.removeAttribute('id');
+      const prevCit = $('citations');
+      if (prevCit) prevCit.removeAttribute('id');
+
+      const userBubbleHtml = `
     <div class="chat-bubble user">
       <div class="bubble-avatar">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -586,9 +588,9 @@ async function ask() {
       </div>
     </div>
   `;
-  $('answer-card').insertAdjacentHTML('beforeend', userBubbleHtml);
-  
-  const aiBubbleHtml = `
+      $('answer-card').insertAdjacentHTML('beforeend', userBubbleHtml);
+
+      const aiBubbleHtml = `
     <div class="chat-bubble ai">
       <div class="bubble-avatar">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 18px; height: 18px;">
@@ -608,35 +610,35 @@ async function ask() {
       </div>
     </div>
   `;
-  $('answer-card').insertAdjacentHTML('beforeend', aiBubbleHtml);
-  
-  $('answer-card').scrollTop = $('answer-card').scrollHeight;
-  
-  $('ask-btn').disabled = true;
-  const res = await call('/query', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({question: q}),
-  });
-  $('ask-btn').disabled = false;
-  
-  if (!res.ok) {
-    $('answer-text').innerHTML = `<span style="color:var(--error); font-weight: 500;">${res.body.detail || t('errorQuery')}</span>`;
-    $('answer-card').scrollTop = $('answer-card').scrollHeight;
-    return;
-  }
-  
-  $('answer-text').textContent = res.body.answer;
-  const c = res.body.citations || [];
-  if (c.length) {
-    $('citations').innerHTML = `
+      $('answer-card').insertAdjacentHTML('beforeend', aiBubbleHtml);
+
+      $('answer-card').scrollTop = $('answer-card').scrollHeight;
+
+      $('ask-btn').disabled = true;
+      const res = await call('/query', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: q }),
+      });
+      $('ask-btn').disabled = false;
+
+      if (!res.ok) {
+        $('answer-text').innerHTML = `<span style="color:var(--error); font-weight: 500;">${res.body.detail || t('errorQuery')}</span>`;
+        $('answer-card').scrollTop = $('answer-card').scrollHeight;
+        return;
+      }
+
+      $('answer-text').textContent = res.body.answer;
+      const c = res.body.citations || [];
+      if (c.length) {
+        $('citations').innerHTML = `
       <div class="citations-title">
         <svg style="width:12px;height:12px;vertical-align:middle;" viewBox="0 0 20 20" fill="currentColor">
           <path fill-rule="evenodd" d="M12.586 4.586a2 2 0 112.828 2.828l-3 3a2 2 0 01-2.828 0 1 1 0 00-1.414 1.414 4 4 0 005.656 0l3-3a4 4 0 00-5.656-5.656l-1.5 1.5a1 1 0 101.414 1.414l1.5-1.5zm-5 5a2 2 0 012.828 0 1 1 0 101.414-1.414 4 4 0 00-5.656 0l-3 3a4 4 0 105.656 5.656l1.5-1.5a1 1 0 10-1.414-1.414l-1.5 1.5a2 2 0 11-2.828-2.828l3-3z" clip-rule="evenodd"/>
         </svg>
         ${t('citationsTitle')}
       </div>` +
-      c.map(x => `
+          c.map(x => `
         <div class="citation">
           <div class="head">
             <span>
@@ -644,386 +646,386 @@ async function ask() {
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                 <polyline points="14 2 14 8 20 8"></polyline>
               </svg>
-              ${t('citationChunk', {chunk: x.chunk})}
+              ${t('citationChunk', { chunk: x.chunk })}
             </span>
-            <span class="score">${t('citationScore', {score: (x.score || 0).toFixed(1)})}</span>
+            <span class="score">${t('citationScore', { score: (x.score || 0).toFixed(1) })}</span>
           </div>
           <div class="body">${(x.text || '').replace(/</g, '&lt;')}</div>
         </div>
       `).join('');
-  } else {
-    $('citations').innerHTML = `<div class="muted" style="font-size:0.82rem; margin-top:0.6rem; text-align: center;">${t('citationsNone')}</div>`;
-  }
-  
-  setTimeout(() => {
-    $('answer-card').scrollTo({
-      top: $('answer-card').scrollHeight,
-      behavior: 'smooth'
-    });
-  }, 50);
-}
+      } else {
+        $('citations').innerHTML = `<div class="muted" style="font-size:0.82rem; margin-top:0.6rem; text-align: center;">${t('citationsNone')}</div>`;
+      }
+
+      setTimeout(() => {
+        $('answer-card').scrollTo({
+          top: $('answer-card').scrollHeight,
+          behavior: 'smooth'
+        });
+      }, 50);
+    }
 
     $('question').addEventListener('keydown', e => { if (e.key === 'Enter') ask(); });
 
-// ============================================================================
-// Quiz Sprint
-// ============================================================================
-const QUIZ_BANK = {
-  en: [
-    {
-      id: 'bio-photosynthesis',
-      question: 'Which process turns light energy into chemical energy in plants?',
-      options: ['Photosynthesis', 'Respiration', 'Evaporation', 'Fermentation'],
-      answer: 0,
-      explanation: 'Photosynthesis converts light energy into chemical energy stored in glucose.'
-    },
-    {
-      id: 'net-ip',
-      question: 'In networking, what does IP stand for?',
-      options: ['Internet Protocol', 'Interface Packet', 'Integrated Port', 'Internal Process'],
-      answer: 0,
-      explanation: 'IP stands for Internet Protocol, the addressing system for routing data.'
-    },
-    {
-      id: 'cs-cache',
-      question: 'What is the main purpose of a CPU cache?',
-      options: ['Store frequently used data for faster access', 'Increase disk capacity', 'Create backups', 'Convert analog signals'],
-      answer: 0,
-      explanation: 'Caches keep frequently used data closer to the CPU to reduce latency.'
-    },
-    {
-      id: 'math-derivative',
-      question: 'In calculus, a derivative describes:',
-      options: ['The rate of change of a function', 'The area under a curve', 'The sum of a series', 'The length of a vector'],
-      answer: 0,
-      explanation: 'Derivatives measure instantaneous rate of change or slope.'
-    },
-    {
-      id: 'net-osi',
-      question: 'Which OSI model layer handles routing between networks?',
-      options: ['Network layer', 'Data link layer', 'Transport layer', 'Application layer'],
-      answer: 0,
-      explanation: 'The network layer is responsible for routing and forwarding.'
-    },
-    {
-      id: 'physics-energy',
-      question: 'Energy cannot be created or destroyed is the:',
-      options: ['Law of conservation of energy', 'Law of gravity', 'Law of inertia', 'Law of entropy'],
-      answer: 0,
-      explanation: 'The conservation of energy states total energy remains constant.'
+    // ============================================================================
+    // Quiz Sprint
+    // ============================================================================
+    const QUIZ_BANK = {
+      en: [
+        {
+          id: 'bio-photosynthesis',
+          question: 'Which process turns light energy into chemical energy in plants?',
+          options: ['Photosynthesis', 'Respiration', 'Evaporation', 'Fermentation'],
+          answer: 0,
+          explanation: 'Photosynthesis converts light energy into chemical energy stored in glucose.'
+        },
+        {
+          id: 'net-ip',
+          question: 'In networking, what does IP stand for?',
+          options: ['Internet Protocol', 'Interface Packet', 'Integrated Port', 'Internal Process'],
+          answer: 0,
+          explanation: 'IP stands for Internet Protocol, the addressing system for routing data.'
+        },
+        {
+          id: 'cs-cache',
+          question: 'What is the main purpose of a CPU cache?',
+          options: ['Store frequently used data for faster access', 'Increase disk capacity', 'Create backups', 'Convert analog signals'],
+          answer: 0,
+          explanation: 'Caches keep frequently used data closer to the CPU to reduce latency.'
+        },
+        {
+          id: 'math-derivative',
+          question: 'In calculus, a derivative describes:',
+          options: ['The rate of change of a function', 'The area under a curve', 'The sum of a series', 'The length of a vector'],
+          answer: 0,
+          explanation: 'Derivatives measure instantaneous rate of change or slope.'
+        },
+        {
+          id: 'net-osi',
+          question: 'Which OSI model layer handles routing between networks?',
+          options: ['Network layer', 'Data link layer', 'Transport layer', 'Application layer'],
+          answer: 0,
+          explanation: 'The network layer is responsible for routing and forwarding.'
+        },
+        {
+          id: 'physics-energy',
+          question: 'Energy cannot be created or destroyed is the:',
+          options: ['Law of conservation of energy', 'Law of gravity', 'Law of inertia', 'Law of entropy'],
+          answer: 0,
+          explanation: 'The conservation of energy states total energy remains constant.'
+        }
+      ],
+      vi: [
+        {
+          id: 'bio-photosynthesis',
+          question: 'Quá trình nào biến đổi năng lượng ánh sáng thành năng lượng hóa học ở thực vật?',
+          options: ['Quang hợp', 'Hô hấp', 'Bay hơi', 'Lên men'],
+          answer: 0,
+          explanation: 'Quang hợp biến năng lượng ánh sáng thành đường và năng lượng hóa học.'
+        },
+        {
+          id: 'net-ip',
+          question: 'Trong mạng máy tính, IP viết tắt của gì?',
+          options: ['Internet Protocol', 'Interface Packet', 'Integrated Port', 'Internal Process'],
+          answer: 0,
+          explanation: 'IP là Internet Protocol, hệ thống địa chỉ để định tuyến dữ liệu.'
+        },
+        {
+          id: 'cs-cache',
+          question: 'Mục đích chính của bộ nhớ cache CPU là gì?',
+          options: ['Lưu dữ liệu dùng thường xuyên để truy cập nhanh', 'Tăng dung lượng đĩa', 'Tạo bản sao lưu', 'Chuyển đổi tín hiệu'],
+          answer: 0,
+          explanation: 'Cache giúp CPU truy cập dữ liệu nhanh hơn bằng cách lưu gần bộ xử lý.'
+        },
+        {
+          id: 'math-derivative',
+          question: 'Trong giải tích, đạo hàm mô tả:',
+          options: ['Tốc độ thay đổi của hàm số', 'Diện tích dưới đường cong', 'Tổng của chuỗi', 'Độ dài của vectơ'],
+          answer: 0,
+          explanation: 'Đạo hàm đo tốc độ thay đổi (độ dốc) tại một điểm.'
+        },
+        {
+          id: 'net-osi',
+          question: 'Lớp nào trong mô hình OSI đảm nhiệm định tuyến?',
+          options: ['Lớp mạng', 'Lớp liên kết dữ liệu', 'Lớp vận chuyển', 'Lớp ứng dụng'],
+          answer: 0,
+          explanation: 'Lớp mạng đảm nhiệm định tuyến và chuyển tiếp gói tin.'
+        },
+        {
+          id: 'physics-energy',
+          question: 'Năng lượng không tự sinh ra hoặc mất đi là:',
+          options: ['Định luật bảo toàn năng lượng', 'Định luật trọng lực', 'Định luật quán tính', 'Định luật entropy'],
+          answer: 0,
+          explanation: 'Định luật bảo toàn năng lượng cho biết tổng năng lượng không đổi.'
+        }
+      ]
+    };
+
+    const quizState = {
+      items: [],
+      index: 0,
+      answers: {}
+    };
+
+    function shuffle(list) {
+      const arr = list.slice();
+      for (let i = arr.length - 1; i > 0; i -= 1) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
     }
-  ],
-  vi: [
-    {
-      id: 'bio-photosynthesis',
-      question: 'Quá trình nào biến đổi năng lượng ánh sáng thành năng lượng hóa học ở thực vật?',
-      options: ['Quang hợp', 'Hô hấp', 'Bay hơi', 'Lên men'],
-      answer: 0,
-      explanation: 'Quang hợp biến năng lượng ánh sáng thành đường và năng lượng hóa học.'
-    },
-    {
-      id: 'net-ip',
-      question: 'Trong mạng máy tính, IP viết tắt của gì?',
-      options: ['Internet Protocol', 'Interface Packet', 'Integrated Port', 'Internal Process'],
-      answer: 0,
-      explanation: 'IP là Internet Protocol, hệ thống địa chỉ để định tuyến dữ liệu.'
-    },
-    {
-      id: 'cs-cache',
-      question: 'Mục đích chính của bộ nhớ cache CPU là gì?',
-      options: ['Lưu dữ liệu dùng thường xuyên để truy cập nhanh', 'Tăng dung lượng đĩa', 'Tạo bản sao lưu', 'Chuyển đổi tín hiệu'],
-      answer: 0,
-      explanation: 'Cache giúp CPU truy cập dữ liệu nhanh hơn bằng cách lưu gần bộ xử lý.'
-    },
-    {
-      id: 'math-derivative',
-      question: 'Trong giải tích, đạo hàm mô tả:',
-      options: ['Tốc độ thay đổi của hàm số', 'Diện tích dưới đường cong', 'Tổng của chuỗi', 'Độ dài của vectơ'],
-      answer: 0,
-      explanation: 'Đạo hàm đo tốc độ thay đổi (độ dốc) tại một điểm.'
-    },
-    {
-      id: 'net-osi',
-      question: 'Lớp nào trong mô hình OSI đảm nhiệm định tuyến?',
-      options: ['Lớp mạng', 'Lớp liên kết dữ liệu', 'Lớp vận chuyển', 'Lớp ứng dụng'],
-      answer: 0,
-      explanation: 'Lớp mạng đảm nhiệm định tuyến và chuyển tiếp gói tin.'
-    },
-    {
-      id: 'physics-energy',
-      question: 'Năng lượng không tự sinh ra hoặc mất đi là:',
-      options: ['Định luật bảo toàn năng lượng', 'Định luật trọng lực', 'Định luật quán tính', 'Định luật entropy'],
-      answer: 0,
-      explanation: 'Định luật bảo toàn năng lượng cho biết tổng năng lượng không đổi.'
-    }
-  ]
-};
 
-const quizState = {
-  items: [],
-  index: 0,
-  answers: {}
-};
-
-function shuffle(list) {
-  const arr = list.slice();
-  for (let i = arr.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  return arr;
-}
-
-function initQuiz() {
-  const deck = QUIZ_BANK[currentLang] || QUIZ_BANK.en;
-  quizState.items = shuffle(deck).slice(0, Math.min(5, deck.length));
-  quizState.index = 0;
-  quizState.answers = {};
-  renderQuiz();
-}
-
-function getQuizScore() {
-  return quizState.items.reduce((score, item) => {
-    const answer = quizState.answers[item.id];
-    return score + (answer === item.answer ? 1 : 0);
-  }, 0);
-}
-
-function renderQuiz() {
-  const questionEl = $('quiz-question');
-  const optionsEl = $('quiz-options');
-  const explainEl = $('quiz-explain');
-  const progressEl = $('quiz-progress');
-  const scoreEl = $('quiz-score');
-  const prevBtn = $('quiz-prev');
-  const nextBtn = $('quiz-next');
-
-  if (!quizState.items.length) {
-    questionEl.textContent = '';
-    optionsEl.innerHTML = '';
-    explainEl.textContent = '';
-    progressEl.textContent = '';
-    scoreEl.textContent = '';
-    prevBtn.disabled = true;
-    nextBtn.disabled = true;
-    return;
-  }
-
-  const current = quizState.items[quizState.index];
-  const total = quizState.items.length;
-  const answered = quizState.answers[current.id];
-
-  progressEl.textContent = t('quizProgress', {index: quizState.index + 1, total});
-  scoreEl.textContent = t('quizScore', {score: getQuizScore(), total});
-  questionEl.textContent = current.question;
-
-  optionsEl.innerHTML = current.options.map((opt, idx) => {
-    const isSelected = answered === idx;
-    const hasAnswer = typeof answered === 'number';
-    const isCorrect = hasAnswer && idx === current.answer;
-    const isWrong = hasAnswer && isSelected && idx !== current.answer;
-    const classes = [
-      'quiz-option',
-      isSelected ? 'selected' : '',
-      isCorrect ? 'correct' : '',
-      isWrong ? 'wrong' : ''
-    ].filter(Boolean).join(' ');
-
-    return `<button type="button" class="${classes}" data-index="${idx}"><span>${opt}</span></button>`;
-  }).join('');
-
-  optionsEl.querySelectorAll('button').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const idx = Number(btn.getAttribute('data-index'));
-      quizState.answers[current.id] = idx;
+    function initQuiz() {
+      const deck = QUIZ_BANK[currentLang] || QUIZ_BANK.en;
+      quizState.items = shuffle(deck).slice(0, Math.min(5, deck.length));
+      quizState.index = 0;
+      quizState.answers = {};
       renderQuiz();
-    });
-  });
+    }
 
-  if (typeof answered === 'number') {
-    const isCorrect = answered === current.answer;
-    explainEl.innerHTML = `
+    function getQuizScore() {
+      return quizState.items.reduce((score, item) => {
+        const answer = quizState.answers[item.id];
+        return score + (answer === item.answer ? 1 : 0);
+      }, 0);
+    }
+
+    function renderQuiz() {
+      const questionEl = $('quiz-question');
+      const optionsEl = $('quiz-options');
+      const explainEl = $('quiz-explain');
+      const progressEl = $('quiz-progress');
+      const scoreEl = $('quiz-score');
+      const prevBtn = $('quiz-prev');
+      const nextBtn = $('quiz-next');
+
+      if (!quizState.items.length) {
+        questionEl.textContent = '';
+        optionsEl.innerHTML = '';
+        explainEl.textContent = '';
+        progressEl.textContent = '';
+        scoreEl.textContent = '';
+        prevBtn.disabled = true;
+        nextBtn.disabled = true;
+        return;
+      }
+
+      const current = quizState.items[quizState.index];
+      const total = quizState.items.length;
+      const answered = quizState.answers[current.id];
+
+      progressEl.textContent = t('quizProgress', { index: quizState.index + 1, total });
+      scoreEl.textContent = t('quizScore', { score: getQuizScore(), total });
+      questionEl.textContent = current.question;
+
+      optionsEl.innerHTML = current.options.map((opt, idx) => {
+        const isSelected = answered === idx;
+        const hasAnswer = typeof answered === 'number';
+        const isCorrect = hasAnswer && idx === current.answer;
+        const isWrong = hasAnswer && isSelected && idx !== current.answer;
+        const classes = [
+          'quiz-option',
+          isSelected ? 'selected' : '',
+          isCorrect ? 'correct' : '',
+          isWrong ? 'wrong' : ''
+        ].filter(Boolean).join(' ');
+
+        return `<button type="button" class="${classes}" data-index="${idx}"><span>${opt}</span></button>`;
+      }).join('');
+
+      optionsEl.querySelectorAll('button').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const idx = Number(btn.getAttribute('data-index'));
+          quizState.answers[current.id] = idx;
+          renderQuiz();
+        });
+      });
+
+      if (typeof answered === 'number') {
+        const isCorrect = answered === current.answer;
+        explainEl.innerHTML = `
       <span class="quiz-badge ${isCorrect ? 'good' : 'bad'}">${isCorrect ? t('quizCorrect') : t('quizIncorrect')}</span>
       <span class="quiz-explain-text">${t('quizExplanation')}: ${current.explanation}</span>
     `;
-  } else {
-    explainEl.textContent = '';
-  }
+      } else {
+        explainEl.textContent = '';
+      }
 
-  prevBtn.disabled = quizState.index === 0;
-  nextBtn.disabled = quizState.index >= total - 1;
-}
+      prevBtn.disabled = quizState.index === 0;
+      nextBtn.disabled = quizState.index >= total - 1;
+    }
 
-$('quiz-prev').addEventListener('click', () => {
-  if (quizState.index > 0) {
-    quizState.index -= 1;
-    renderQuiz();
-  }
-});
+    $('quiz-prev').addEventListener('click', () => {
+      if (quizState.index > 0) {
+        quizState.index -= 1;
+        renderQuiz();
+      }
+    });
 
-$('quiz-next').addEventListener('click', () => {
-  if (quizState.index < quizState.items.length - 1) {
-    quizState.index += 1;
-    renderQuiz();
-  }
-});
+    $('quiz-next').addEventListener('click', () => {
+      if (quizState.index < quizState.items.length - 1) {
+        quizState.index += 1;
+        renderQuiz();
+      }
+    });
 
-$('quiz-reset').addEventListener('click', () => {
-  initQuiz();
-});
+    $('quiz-reset').addEventListener('click', () => {
+      initQuiz();
+    });
 
-// ============================================================================
-// Flashcards
-// ============================================================================
-const FLASHCARDS = {
-  en: [
-    {term: 'Photosynthesis', definition: 'Process where plants convert light into chemical energy.'},
-    {term: 'CPU cache', definition: 'Small, fast memory that stores frequently used data.'},
-    {term: 'Derivative', definition: 'Measures the rate of change of a function.'},
-    {term: 'Internet Protocol (IP)', definition: 'Addressing and routing protocol for data packets.'},
-    {term: 'Energy conservation', definition: 'Total energy remains constant in a closed system.'}
-  ],
-  vi: [
-    {term: 'Quang hợp', definition: 'Quá trình thực vật biến đổi ánh sáng thành năng lượng hóa học.'},
-    {term: 'Bộ nhớ cache CPU', definition: 'Bộ nhớ nhỏ, nhanh, lưu dữ liệu dùng thường xuyên.'},
-    {term: 'Đạo hàm', definition: 'Đo tốc độ thay đổi của hàm số tại một điểm.'},
-    {term: 'Internet Protocol (IP)', definition: 'Giao thức địa chỉ và định tuyến gói dữ liệu.'},
-    {term: 'Bảo toàn năng lượng', definition: 'Tổng năng lượng trong hệ kín không đổi.'}
-  ]
-};
+    // ============================================================================
+    // Flashcards
+    // ============================================================================
+    const FLASHCARDS = {
+      en: [
+        { term: 'Photosynthesis', definition: 'Process where plants convert light into chemical energy.' },
+        { term: 'CPU cache', definition: 'Small, fast memory that stores frequently used data.' },
+        { term: 'Derivative', definition: 'Measures the rate of change of a function.' },
+        { term: 'Internet Protocol (IP)', definition: 'Addressing and routing protocol for data packets.' },
+        { term: 'Energy conservation', definition: 'Total energy remains constant in a closed system.' }
+      ],
+      vi: [
+        { term: 'Quang hợp', definition: 'Quá trình thực vật biến đổi ánh sáng thành năng lượng hóa học.' },
+        { term: 'Bộ nhớ cache CPU', definition: 'Bộ nhớ nhỏ, nhanh, lưu dữ liệu dùng thường xuyên.' },
+        { term: 'Đạo hàm', definition: 'Đo tốc độ thay đổi của hàm số tại một điểm.' },
+        { term: 'Internet Protocol (IP)', definition: 'Giao thức địa chỉ và định tuyến gói dữ liệu.' },
+        { term: 'Bảo toàn năng lượng', definition: 'Tổng năng lượng trong hệ kín không đổi.' }
+      ]
+    };
 
-const flashState = {
-  index: 0,
-  flipped: false
-};
+    const flashState = {
+      index: 0,
+      flipped: false
+    };
 
-function getFlashcardDeck() {
-  return FLASHCARDS[currentLang] || FLASHCARDS.en;
-}
+    function getFlashcardDeck() {
+      return FLASHCARDS[currentLang] || FLASHCARDS.en;
+    }
 
-function renderFlashcard() {
-  const deck = getFlashcardDeck();
-  const progressEl = $('flashcard-progress');
-  const cardEl = $('flashcard');
-  const frontEl = $('flashcard-front');
-  const backEl = $('flashcard-back');
-  const prevBtn = $('flashcard-prev');
-  const nextBtn = $('flashcard-next');
-  const flipBtn = $('flashcard-flip');
+    function renderFlashcard() {
+      const deck = getFlashcardDeck();
+      const progressEl = $('flashcard-progress');
+      const cardEl = $('flashcard');
+      const frontEl = $('flashcard-front');
+      const backEl = $('flashcard-back');
+      const prevBtn = $('flashcard-prev');
+      const nextBtn = $('flashcard-next');
+      const flipBtn = $('flashcard-flip');
 
-  if (!deck.length) {
-    progressEl.textContent = '';
-    frontEl.innerHTML = `<span class="flash-label">${t('flashcardFrontLabel')}</span><span class="flash-text muted">${t('flashcardEmptyFront')}</span>`;
-    backEl.innerHTML = `<span class="flash-label">${t('flashcardBackLabel')}</span><span class="flash-text muted">${t('flashcardEmptyBack')}</span>`;
-    cardEl.classList.remove('flipped');
-    cardEl.disabled = true;
-    prevBtn.disabled = true;
-    nextBtn.disabled = true;
-    flipBtn.disabled = true;
-    return;
-  }
+      if (!deck.length) {
+        progressEl.textContent = '';
+        frontEl.innerHTML = `<span class="flash-label">${t('flashcardFrontLabel')}</span><span class="flash-text muted">${t('flashcardEmptyFront')}</span>`;
+        backEl.innerHTML = `<span class="flash-label">${t('flashcardBackLabel')}</span><span class="flash-text muted">${t('flashcardEmptyBack')}</span>`;
+        cardEl.classList.remove('flipped');
+        cardEl.disabled = true;
+        prevBtn.disabled = true;
+        nextBtn.disabled = true;
+        flipBtn.disabled = true;
+        return;
+      }
 
-  if (flashState.index >= deck.length) {
-    flashState.index = 0;
-  }
-  const current = deck[flashState.index];
-  progressEl.textContent = t('flashcardProgress', {index: flashState.index + 1, total: deck.length});
-  frontEl.innerHTML = `<span class="flash-label">${t('flashcardFrontLabel')}</span><span class="flash-text">${current.term}</span>`;
-  backEl.innerHTML = `<span class="flash-label">${t('flashcardBackLabel')}</span><span class="flash-text">${current.definition}</span>`;
-  cardEl.classList.toggle('flipped', flashState.flipped);
-  cardEl.disabled = false;
-  prevBtn.disabled = flashState.index === 0;
-  nextBtn.disabled = flashState.index >= deck.length - 1;
-  flipBtn.disabled = false;
-}
+      if (flashState.index >= deck.length) {
+        flashState.index = 0;
+      }
+      const current = deck[flashState.index];
+      progressEl.textContent = t('flashcardProgress', { index: flashState.index + 1, total: deck.length });
+      frontEl.innerHTML = `<span class="flash-label">${t('flashcardFrontLabel')}</span><span class="flash-text">${current.term}</span>`;
+      backEl.innerHTML = `<span class="flash-label">${t('flashcardBackLabel')}</span><span class="flash-text">${current.definition}</span>`;
+      cardEl.classList.toggle('flipped', flashState.flipped);
+      cardEl.disabled = false;
+      prevBtn.disabled = flashState.index === 0;
+      nextBtn.disabled = flashState.index >= deck.length - 1;
+      flipBtn.disabled = false;
+    }
 
-function flipFlashcard() {
-  flashState.flipped = !flashState.flipped;
-  renderFlashcard();
-}
+    function flipFlashcard() {
+      flashState.flipped = !flashState.flipped;
+      renderFlashcard();
+    }
 
-function moveFlashcard(step) {
-  const deck = getFlashcardDeck();
-  const nextIndex = flashState.index + step;
-  if (nextIndex >= 0 && nextIndex < deck.length) {
-    flashState.index = nextIndex;
-    flashState.flipped = false;
-    renderFlashcard();
-  }
-}
+    function moveFlashcard(step) {
+      const deck = getFlashcardDeck();
+      const nextIndex = flashState.index + step;
+      if (nextIndex >= 0 && nextIndex < deck.length) {
+        flashState.index = nextIndex;
+        flashState.flipped = false;
+        renderFlashcard();
+      }
+    }
 
-$('flashcard').addEventListener('click', flipFlashcard);
-$('flashcard-flip').addEventListener('click', flipFlashcard);
-$('flashcard-prev').addEventListener('click', () => moveFlashcard(-1));
-$('flashcard-next').addEventListener('click', () => moveFlashcard(1));
+    $('flashcard').addEventListener('click', flipFlashcard);
+    $('flashcard-flip').addEventListener('click', flipFlashcard);
+    $('flashcard-prev').addEventListener('click', () => moveFlashcard(-1));
+    $('flashcard-next').addEventListener('click', () => moveFlashcard(1));
 
-// ============================================================================
-// Language Controls
-// ============================================================================
-function initLanguageControls() {
-  document.querySelectorAll('.lang-btn').forEach(btn => {
-    btn.addEventListener('click', () => setLanguage(btn.getAttribute('data-lang')));
-  });
-}
+    // ============================================================================
+    // Language Controls
+    // ============================================================================
+    function initLanguageControls() {
+      document.querySelectorAll('.lang-btn').forEach(btn => {
+        btn.addEventListener('click', () => setLanguage(btn.getAttribute('data-lang')));
+      });
+    }
 
-// ============================================================================
-// RAG Quality Evaluation Benchmark
-// ============================================================================
-async function runBenchmark() {
-  const docId = window.selectedDocId || window.lastDocId;
-  if (!docId) {
-    toast(t('benchmarkNeedDoc'), 'warn');
-    return;
-  }
+    // ============================================================================
+    // RAG Quality Evaluation Benchmark
+    // ============================================================================
+    async function runBenchmark() {
+      const docId = window.selectedDocId || window.lastDocId;
+      if (!docId) {
+        toast(t('benchmarkNeedDoc'), 'warn');
+        return;
+      }
 
-  $('benchmark-btn').disabled = true;
-  $('benchmark-status').innerHTML = `<span class="spinner"></span> ${t('benchmarkStatusRunning')}`;
-  $('benchmark-results').style.display = 'none';
+      $('benchmark-btn').disabled = true;
+      $('benchmark-status').innerHTML = `<span class="spinner"></span> ${t('benchmarkStatusRunning')}`;
+      $('benchmark-results').style.display = 'none';
 
-  const strategy = $('chunk-strategy').value;
-  const size = $('chunk-size').value;
-  const overlap = $('chunk-overlap').value;
-  const threshold = $('chunk-threshold').value;
+      const strategy = $('chunk-strategy').value;
+      const size = $('chunk-size').value;
+      const overlap = $('chunk-overlap').value;
+      const threshold = $('chunk-threshold').value;
 
-  const payload = {
-    strategy: strategy,
-    size: parseInt(size) || 500,
-    overlap: parseInt(overlap) || 100,
-    threshold: parseFloat(threshold) || 0.3
-  };
+      const payload = {
+        strategy: strategy,
+        size: parseInt(size) || 500,
+        overlap: parseInt(overlap) || 100,
+        threshold: parseFloat(threshold) || 0.3
+      };
 
-  const res = await call(`/docs/${docId}/evaluate`, {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify(payload)
-  });
+      const res = await call(`/docs/${docId}/evaluate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
 
-  $('benchmark-btn').disabled = false;
-  $('benchmark-status').textContent = '';
+      $('benchmark-btn').disabled = false;
+      $('benchmark-status').textContent = '';
 
-  if (!res.ok) {
-    toast(t('benchmarkFailed', {detail: res.body.detail || res.status}), 'error');
-    return;
-  }
+      if (!res.ok) {
+        toast(t('benchmarkFailed', { detail: res.body.detail || res.status }), 'error');
+        return;
+      }
 
-  const data = res.body;
+      const data = res.body;
 
-  // Show benchmark results
-  $('benchmark-results').style.display = 'block';
+      // Show benchmark results
+      $('benchmark-results').style.display = 'block';
 
-  // Update cards
-  const m = data.metrics;
-  $('metric-p1').textContent = `${(m.precision_at_1 * 100).toFixed(0)}%`;
-  $('metric-p3').textContent = `${(m.precision_at_3 * 100).toFixed(0)}%`;
-  $('metric-p5').textContent = `${(m.precision_at_5 * 100).toFixed(0)}%`;
-  $('metric-mrr').textContent = m.mrr.toFixed(2);
+      // Update cards
+      const m = data.metrics;
+      $('metric-p1').textContent = `${(m.precision_at_1 * 100).toFixed(0)}%`;
+      $('metric-p3').textContent = `${(m.precision_at_3 * 100).toFixed(0)}%`;
+      $('metric-p5').textContent = `${(m.precision_at_5 * 100).toFixed(0)}%`;
+      $('metric-mrr').textContent = m.mrr.toFixed(2);
 
-  // Populate individual query results
-  $('benchmark-queries').innerHTML = data.queries.map((q, qidx) => {
-    return `
+      // Populate individual query results
+      $('benchmark-queries').innerHTML = data.queries.map((q, qidx) => {
+        return `
       <div style="border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.9rem; background: var(--bg); margin-bottom: 0.5rem;">
         <div style="font-weight: 700; font-size: 0.9rem; margin-bottom: 0.4rem; color: var(--text);">
-          ${t('benchmarkQuestionLabel', {index: qidx + 1, query: q.query})}
+          ${t('benchmarkQuestionLabel', { index: qidx + 1, query: q.query })}
         </div>
         <div style="font-size: 0.74rem; color: var(--muted); margin-bottom: 0.6rem; display: flex; justify-content: space-between;">
           <span>${t('benchmarkTargetKeywords')}: <code>${q.keywords.join(', ')}</code></span>
@@ -1035,7 +1037,7 @@ async function runBenchmark() {
           ${q.retrieved.map(r => `
             <div style="padding: 0.6rem; background: var(--card); border-left: 3px solid ${r.relevant ? 'var(--success)' : 'var(--error)'}; font-size: 0.78rem; border-radius: 0 4px 4px 0; border-top: 1px solid var(--border); border-right: 1px solid var(--border); border-bottom: 1px solid var(--border);">
               <div style="display:flex; justify-content: space-between; font-weight:600; font-size: 0.72rem; color: var(--muted); margin-bottom:0.25rem;">
-                <span>${t('benchmarkChunkLabel', {chunk: r.chunk, score: r.score.toFixed(2)})}</span>
+                <span>${t('benchmarkChunkLabel', { chunk: r.chunk, score: r.score.toFixed(2) })}</span>
                 <span style="color: ${r.relevant ? 'var(--success)' : 'var(--error)'}">${r.relevant ? t('benchmarkRelevant') : t('benchmarkIrrelevant')}</span>
               </div>
               <div style="white-space: pre-wrap; font-family: var(--font-sans); line-height:1.4; color: var(--text);">${r.text.replace(/</g, '&lt;')}</div>
@@ -1044,18 +1046,18 @@ async function runBenchmark() {
         </div>
       </div>
     `;
-  }).join('');
+      }).join('');
 
-  toast(t('benchmarkSuccess'), 'success');
-}
+      toast(t('benchmarkSuccess'), 'success');
+    }
 
-// ============================================================================
-// Doc list
-// ============================================================================
-async function refresh() {
-  const res = await call('/docs/list');
-  if (!res.ok || !res.body.docs || !res.body.docs.length) {
-    $('docs').innerHTML = `
+    // ============================================================================
+    // Doc list
+    // ============================================================================
+    async function refresh() {
+      const res = await call('/docs/list');
+      if (!res.ok || !res.body.docs || !res.body.docs.length) {
+        $('docs').innerHTML = `
       <div class="empty">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 44px; height: 44px; margin-bottom: 0.5rem; opacity: 0.4;">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
@@ -1063,29 +1065,29 @@ async function refresh() {
         </svg>
         <div>${t('libraryEmpty')}</div>
       </div>`;
-    $('benchmark-section').style.display = 'none';
-    return;
-  }
+        $('benchmark-section').style.display = 'none';
+        return;
+      }
 
-  $('benchmark-section').style.display = 'block';
+      $('benchmark-section').style.display = 'block';
 
-  if (!window.lastDocId) {
-    window.lastDocId = res.body.docs[0].doc_id;
-    window.lastDocName = res.body.docs[0].filename;
-  }
+      if (!window.lastDocId) {
+        window.lastDocId = res.body.docs[0].doc_id;
+        window.lastDocName = res.body.docs[0].filename;
+      }
 
-  $('docs').innerHTML = res.body.docs.map(d => {
-    const isSelected = d.doc_id === (window.selectedDocId || window.lastDocId);
-    if (isSelected) {
-      window.selectedDocId = d.doc_id;
-      window.selectedDocName = d.filename;
-    }
+      $('docs').innerHTML = res.body.docs.map(d => {
+        const isSelected = d.doc_id === (window.selectedDocId || window.lastDocId);
+        if (isSelected) {
+          window.selectedDocId = d.doc_id;
+          window.selectedDocName = d.filename;
+        }
 
-    const hint = d.filename.toLowerCase().includes('photosynthesis')
-      ? `<span class="doc-hint">💡 ${t('docRecommended')}</span>`
-      : '';
-      
-    return `
+        const hint = d.filename.toLowerCase().includes('photosynthesis')
+          ? `<span class="doc-hint">💡 ${t('docRecommended')}</span>`
+          : '';
+
+        return `
       <div class="doc-item" style="cursor: pointer; ${isSelected ? 'border-color: var(--accent); background: rgba(var(--accent-rgb), 0.08);' : ''}" onclick="selectDoc('${d.doc_id}', '${d.filename}')">
         <div class="doc-item-left">
           <div class="doc-icon" style="${isSelected ? 'color: var(--accent); background: rgba(var(--accent-rgb), 0.15);' : ''}">
@@ -1102,7 +1104,7 @@ async function refresh() {
               <span class="name-text">${isSelected ? '🔹 ' : ''}${d.filename || d.doc_id}</span>
               ${hint}
             </div>
-            <div class="meta">${t('docMeta', {chars: (d.chars || 0).toLocaleString(), size: (d.size/1024).toFixed(1)})}</div>
+            <div class="meta">${t('docMeta', { chars: (d.chars || 0).toLocaleString(), size: (d.size / 1024).toFixed(1) })}</div>
           </div>
         </div>
         <div class="doc-item-right">
@@ -1118,362 +1120,356 @@ async function refresh() {
         </div>
       </div>
     `;
-  }).join('');
-}
-
-function selectDoc(docId, filename) {
-  window.selectedDocId = docId;
-  window.selectedDocName = filename;
-  toast(t('docSelectedToast', {filename}), 'info');
-  refresh();
-}
-
-async function deleteDocument(docId, filename) {
-  if (!confirm(t('docDeleteConfirm', {filename}))) {
-    return;
-  }
-  
-  toast(t('docDeleteProgress', {filename}), 'info');
-  const res = await call(`/ docs / ${ docId }`, {method: 'DELETE'});
-  
-  if (!res.ok) {
-    toast(t('docDeleteFailed', {detail: res.body.detail || res.status}), 'error');
-    return;
-  }
-  
-  toast(t('docDeleteSuccess', {filename}), 'success');
-  
-  if (window.selectedDocId === docId || window.lastDocId === docId) {
-    window.selectedDocId = null;
-    window.selectedDocName = null;
-    window.lastDocId = null;
-    window.lastDocName = null;
-  }
-  
-  refresh();
-}
-
-function filterDocs() {
-  const query = $('doc-search').value.toLowerCase().trim();
-  const items = document.querySelectorAll('.doc-item');
-  items.forEach(item => {
-    // Search within the name element
-    const nameEl = item.querySelector('.name');
-    if (nameEl) {
-      const name = nameEl.textContent.toLowerCase();
-      if (name.includes(query)) {
-        item.style.display = 'flex';
-      } else {
-        item.style.display = 'none';
-      }
+      }).join('');
     }
-  });
-}
 
-// ============================================================================
-// Boot
-// ============================================================================
-initLanguageControls();
-setLanguage(currentLang);
-  
-// ============================================================================
-// I18N & Flashcard AI Generation
-// ============================================================================
-      // ============================================================================
-      // i18n
-      // ============================================================================
-      const I18N = {
+    function selectDoc(docId, filename) {
+      window.selectedDocId = docId;
+      window.selectedDocName = filename;
+      toast(t('docSelectedToast', { filename }), 'info');
+      refresh();
+    }
+
+    async function deleteDocument(docId, filename) {
+      if (!confirm(t('docDeleteConfirm', { filename }))) {
+        return;
+      }
+
+      toast(t('docDeleteProgress', { filename }), 'info');
+      const res = await call(`/ docs / ${docId}`, { method: 'DELETE' });
+
+      if (!res.ok) {
+        toast(t('docDeleteFailed', { detail: res.body.detail || res.status }), 'error');
+        return;
+      }
+
+      toast(t('docDeleteSuccess', { filename }), 'success');
+
+      if (window.selectedDocId === docId || window.lastDocId === docId) {
+        window.selectedDocId = null;
+        window.selectedDocName = null;
+        window.lastDocId = null;
+        window.lastDocName = null;
+      }
+
+      refresh();
+    }
+
+    function filterDocs() {
+      const query = $('doc-search').value.toLowerCase().trim();
+      const items = document.querySelectorAll('.doc-item');
+      items.forEach(item => {
+        // Search within the name element
+        const nameEl = item.querySelector('.name');
+        if (nameEl) {
+          const name = nameEl.textContent.toLowerCase();
+          if (name.includes(query)) {
+            item.style.display = 'flex';
+          } else {
+            item.style.display = 'none';
+          }
+        }
+      });
+    }
+
+    // ============================================================================
+    // Boot
+    // ============================================================================
+    initLanguageControls();
+    setLanguage(currentLang);
+
+    // ============================================================================
+    // I18N & Flashcard AI Generation
+    // ============================================================================
+    // ============================================================================
+    // i18n
+    // ============================================================================
+    const I18N = {
       en: {
-      pageTitle: 'StudyBot — AI Study Buddy',
-      tagline: 'AI Study Buddy — upload notes, ask questions, get cited answers',
-      statusLoading: 'Loading system status...',
-      statusOffline: 'backend offline',
-      statusTenant: 'tenant',
-      statusLocal: 'local',
-      statusRemote: 'remote',
-      libraryTitle: 'Your Library',
-      refresh: 'Refresh',
-      libraryEmpty: 'No documents yet — upload one above.',
-      uploadTitle: 'Upload a lecture',
-      uploadMeta: 'PDF, TXT, or Markdown',
-      uploadDragStrong: 'Drag a file here',
-      uploadDragOr: 'or',
-      uploadDragBrowse: 'click to browse',
-      uploadHintPrefix: 'Max ~10MB. Try a Wikipedia article from ',
-      uploadHintSuffix: '.',
-      askTitle: 'Ask a question',
-      askMeta: 'Grounded in your uploaded notes',
-      questionPlaceholder: 'Ask your AI buddy about the uploaded notes...',
-      askButton: 'Ask',
-      practiceTitle: 'Practice Studio',
-      practiceSubtitle: 'Quizzes and flashcards built from your notes',
-      practicePill: 'New',
-      quizTitle: 'Quiz Sprint',
-      quizMeta: 'Tap through questions',
-      quizDeck: 'Adaptive mini-quiz',
-      quizPrev: 'Previous',
-      quizReset: 'Reset',
-      quizNext: 'Next',
-      flashcardTitle: 'Flashcards',
-      flashcardMeta: 'Flip to recall',
-      flashcardDeck: 'Memory deck',
-      flashcardTip: 'Space your review',
-      flashcardPrev: 'Prev',
-      flashcardFlip: 'Flip',
-      flashcardNext: 'Next',
-      debugSummary: 'Raw API responses (debug)',
-      languageGroup: 'Language switcher',
-      toggleThemeTitle: 'Toggle light/dark theme',
-      themeSwitched: 'Switched to {mode} mode',
-      themeLight: 'light',
-      themeDark: 'dark',
-      toastAskEmpty: 'Type a question first',
-      fileTooLarge: 'File is too large ({size} MB). Maximum size allowed is {max}MB.',
-      uploading: 'Uploading {filename} ({size} KB)...',
-      uploadFailed: 'Upload failed: {detail}',
-      uploadFailedShort: 'Upload failed',
-      uploadSuccessChars: '{chars} chars extracted & indexed',
-      uploadSuccessDoc: 'doc_id: {docId}',
-      uploadedToast: 'Uploaded {filename}',
-      welcomeMessage: 'Hello! I am your AI Study Buddy. Upload your lecture notes on the left, then ask me anything
-      about them. I will research the content and give you answers with detailed citations.',
-      labelYou: 'You',
-      labelBot: 'StudyBot',
-      errorQuery: 'Error occurred while querying the notes.',
-      citationsTitle: 'Citations from your documents',
-      citationChunk: 'chunk {chunk}',
-      citationScore: 'score {score}',
-      citationsNone: 'No citations matched.',
-      docMeta: '{chars} chars · {size} KB',
-      debugEmpty: 'No requests yet.',
-      quizProgress: 'Question {index} of {total}',
-      quizScore: 'Score {score}/{total}',
-      quizCorrect: 'Correct',
-      quizIncorrect: 'Incorrect',
-      quizExplanation: 'Explanation',
-      flashcardProgress: 'Card {index} of {total}',
-      flashcardFrontLabel: 'Term',
-      flashcardBackLabel: 'Definition',
-      flashcardAria: 'Flip flashcard',
-      flashcardTopicPlaceholder: 'Enter topic for AI...',
-      flashcardEmptyFront: 'No cards yet',
-      flashcardEmptyBack: 'Add one below',
-      docSearchPlaceholder: '🔍 Search library...',
-      docSearchLabel: 'Search documents',
-      chunkingSummary: 'Chunking settings',
-      chunkingStrategyLabel: 'Chunking strategy',
-      chunkingStrategyFixed: 'Fixed-size (sentence-aware)',
-      chunkingStrategyStructural: 'Structural (Markdown headers)',
-      chunkingStrategySemantic: 'Local semantic (Jaccard)',
-      chunkingSizeLabel: 'Chunk size (characters)',
-      chunkingOverlapLabel: 'Overlap (characters)',
-      chunkingThresholdLabel: 'Semantic distance threshold',
-      uploadChunkPrefix: ' (using ',
-      uploadChunkSuffix: ' chunking)',
-      benchmarkTitle: 'RAG Quality Dashboard',
-      benchmarkMeta: 'Evaluate chunking quality',
-      benchmarkIntroPrefix: 'We automatically run ',
-      benchmarkIntroStrong: '5 test questions',
-      benchmarkIntroSuffix: ' about Photosynthesis, compare retrieved context with ground-truth keywords, and score
-      retrieval accuracy. Adjust chunking in Step 1 and rerun to see accuracy changes in real time.',
-      benchmarkRunButton: 'Run benchmark evaluation',
-      benchmarkStatusRunning: 'Running benchmark evaluation...',
-      benchmarkMetricsTitle: 'RAG quality metrics',
-      benchmarkMetricP1: 'Top-1 accuracy',
-      benchmarkMetricP3: 'Top-3 accuracy',
-      benchmarkMetricP5: 'Top-5 accuracy',
-      benchmarkMetricMrr: 'Mean reciprocal rank',
-      benchmarkDetailsTitle: 'Retrieval details for 5 test questions',
-      benchmarkNeedDoc: 'Please upload or select a document first.',
-      benchmarkFailed: 'Evaluation failed: {detail}',
-      benchmarkSuccess: 'Evaluation completed successfully.',
-      benchmarkQuestionLabel: 'Q{index}: {query}',
-      benchmarkTargetKeywords: 'Target keywords',
-      benchmarkMrrLabel: 'MRR',
-      benchmarkP3Label: 'P@3',
-      benchmarkChunkLabel: 'Chunk {chunk} (Score: {score})',
-      benchmarkRelevant: '✓ Relevant (match)',
-      benchmarkIrrelevant: '✗ Irrelevant (no match)',
-      docRecommended: 'Recommended',
-      docActive: 'Active',
-      docSelect: 'Select',
-      docDelete: 'Delete',
-      docDeleteTitle: 'Delete document',
-      docSelectedToast: 'Selected document: {filename}',
-      docDeleteConfirm: 'Are you sure you want to delete "{filename}"? This will delete the file from storage and clear
-      its vector index.',
-      docDeleteProgress: 'Deleting {filename}...',
-      docDeleteFailed: 'Delete failed: {detail}',
-      docDeleteSuccess: 'Deleted {filename}'
+        pageTitle: 'StudyBot — AI Study Buddy',
+        tagline: 'AI Study Buddy — upload notes, ask questions, get cited answers',
+        statusLoading: 'Loading system status...',
+        statusOffline: 'backend offline',
+        statusTenant: 'tenant',
+        statusLocal: 'local',
+        statusRemote: 'remote',
+        libraryTitle: 'Your Library',
+        refresh: 'Refresh',
+        libraryEmpty: 'No documents yet — upload one above.',
+        uploadTitle: 'Upload a lecture',
+        uploadMeta: 'PDF, TXT, or Markdown',
+        uploadDragStrong: 'Drag a file here',
+        uploadDragOr: 'or',
+        uploadDragBrowse: 'click to browse',
+        uploadHintPrefix: 'Max ~10MB. Try a Wikipedia article from ',
+        uploadHintSuffix: '.',
+        askTitle: 'Ask a question',
+        askMeta: 'Grounded in your uploaded notes',
+        questionPlaceholder: 'Ask your AI buddy about the uploaded notes...',
+        askButton: 'Ask',
+        practiceTitle: 'Practice Studio',
+        practiceSubtitle: 'Quizzes and flashcards built from your notes',
+        practicePill: 'New',
+        quizTitle: 'Quiz Sprint',
+        quizMeta: 'Tap through questions',
+        quizDeck: 'Adaptive mini-quiz',
+        quizPrev: 'Previous',
+        quizReset: 'Reset',
+        quizNext: 'Next',
+        flashcardTitle: 'Flashcards',
+        flashcardMeta: 'Flip to recall',
+        flashcardDeck: 'Memory deck',
+        flashcardTip: 'Space your review',
+        flashcardPrev: 'Prev',
+        flashcardFlip: 'Flip',
+        flashcardNext: 'Next',
+        debugSummary: 'Raw API responses (debug)',
+        languageGroup: 'Language switcher',
+        toggleThemeTitle: 'Toggle light/dark theme',
+        themeSwitched: 'Switched to {mode} mode',
+        themeLight: 'light',
+        themeDark: 'dark',
+        toastAskEmpty: 'Type a question first',
+        fileTooLarge: 'File is too large ({size} MB). Maximum size allowed is {max}MB.',
+        uploading: 'Uploading {filename} ({size} KB)...',
+        uploadFailed: 'Upload failed: {detail}',
+        uploadFailedShort: 'Upload failed',
+        uploadSuccessChars: '{chars} chars extracted & indexed',
+        uploadSuccessDoc: 'doc_id: {docId}',
+        uploadedToast: 'Uploaded {filename}',
+        welcomeMessage: 'Hello! I am your AI Study Buddy. Upload your lecture notes on the left, then ask me anything about them. I will research the content and give you answers with detailed citations.',
+        labelYou: 'You',
+        labelBot: 'StudyBot',
+        errorQuery: 'Error occurred while querying the notes.',
+        citationsTitle: 'Citations from your documents',
+        citationChunk: 'chunk {chunk}',
+        citationScore: 'score {score}',
+        citationsNone: 'No citations matched.',
+        docMeta: '{chars} chars · {size} KB',
+        debugEmpty: 'No requests yet.',
+        quizProgress: 'Question {index} of {total}',
+        quizScore: 'Score {score}/{total}',
+        quizCorrect: 'Correct',
+        quizIncorrect: 'Incorrect',
+        quizExplanation: 'Explanation',
+        flashcardProgress: 'Card {index} of {total}',
+        flashcardFrontLabel: 'Term',
+        flashcardBackLabel: 'Definition',
+        flashcardAria: 'Flip flashcard',
+        flashcardTopicPlaceholder: 'Enter topic for AI...',
+        flashcardEmptyFront: 'No cards yet',
+        flashcardEmptyBack: 'Add one below',
+        docSearchPlaceholder: '🔍 Search library...',
+        docSearchLabel: 'Search documents',
+        chunkingSummary: 'Chunking settings',
+        chunkingStrategyLabel: 'Chunking strategy',
+        chunkingStrategyFixed: 'Fixed-size (sentence-aware)',
+        chunkingStrategyStructural: 'Structural (Markdown headers)',
+        chunkingStrategySemantic: 'Local semantic (Jaccard)',
+        chunkingSizeLabel: 'Chunk size (characters)',
+        chunkingOverlapLabel: 'Overlap (characters)',
+        chunkingThresholdLabel: 'Semantic distance threshold',
+        uploadChunkPrefix: ' (using ',
+        uploadChunkSuffix: ' chunking)',
+        benchmarkTitle: 'RAG Quality Dashboard',
+        benchmarkMeta: 'Evaluate chunking quality',
+        benchmarkIntroPrefix: 'We automatically run ',
+        benchmarkIntroStrong: '5 test questions',
+        benchmarkIntroSuffix: ' about Photosynthesis, compare retrieved context with ground-truth keywords, and score retrieval accuracy. Adjust chunking in Step 1 and rerun to see accuracy changes in real time.',
+        benchmarkRunButton: 'Run benchmark evaluation',
+        benchmarkStatusRunning: 'Running benchmark evaluation...',
+        benchmarkMetricsTitle: 'RAG quality metrics',
+        benchmarkMetricP1: 'Top-1 accuracy',
+        benchmarkMetricP3: 'Top-3 accuracy',
+        benchmarkMetricP5: 'Top-5 accuracy',
+        benchmarkMetricMrr: 'Mean reciprocal rank',
+        benchmarkDetailsTitle: 'Retrieval details for 5 test questions',
+        benchmarkNeedDoc: 'Please upload or select a document first.',
+        benchmarkFailed: 'Evaluation failed: {detail}',
+        benchmarkSuccess: 'Evaluation completed successfully.',
+        benchmarkQuestionLabel: 'Q{index}: {query}',
+        benchmarkTargetKeywords: 'Target keywords',
+        benchmarkMrrLabel: 'MRR',
+        benchmarkP3Label: 'P@3',
+        benchmarkChunkLabel: 'Chunk {chunk} (Score: {score})',
+        benchmarkRelevant: '✓ Relevant (match)',
+        benchmarkIrrelevant: '✗ Irrelevant (no match)',
+        docRecommended: 'Recommended',
+        docActive: 'Active',
+        docSelect: 'Select',
+        docDelete: 'Delete',
+        docDeleteTitle: 'Delete document',
+        docSelectedToast: 'Selected document: {filename}',
+        docDeleteConfirm: 'Are you sure you want to delete "{filename}"? This will delete the file from storage and clear its vector index.',
+        docDeleteProgress: 'Deleting {filename}...',
+        docDeleteFailed: 'Delete failed: {detail}',
+        docDeleteSuccess: 'Deleted {filename}'
       },
       vi: {
-      pageTitle: 'StudyBot — Trợ lý học tập AI',
-      tagline: 'Trợ lý học tập AI — tải tài liệu, hỏi đáp, nhận câu trả lời kèm trích dẫn',
-      statusLoading: 'Đang tải trạng thái hệ thống...',
-      statusOffline: 'backend không hoạt động',
-      statusTenant: 'tenant',
-      statusLocal: 'cục bộ',
-      statusRemote: 'từ xa',
-      libraryTitle: 'Thư viện của bạn',
-      refresh: 'Làm mới',
-      libraryEmpty: 'Chưa có tài liệu — hãy tải lên ở trên.',
-      uploadTitle: 'Tải bài giảng',
-      uploadMeta: 'PDF, TXT, hoặc Markdown',
-      uploadDragStrong: 'Kéo file vào đây',
-      uploadDragOr: 'hoặc',
-      uploadDragBrowse: 'bấm để chọn file',
-      uploadHintPrefix: 'Tối đa ~10MB. Thử một bài Wikipedia trong ',
-      uploadHintSuffix: '.',
-      askTitle: 'Đặt câu hỏi',
-      askMeta: 'Nền tảng từ ghi chú của bạn',
-      questionPlaceholder: 'Hỏi trợ lý AI về nội dung vừa tải lên...',
-      askButton: 'Hỏi',
-      practiceTitle: 'Phòng luyện tập',
-      practiceSubtitle: 'Quiz và flashcard từ ghi chú của bạn',
-      practicePill: 'Mới',
-      quizTitle: 'Quiz Tăng Tốc',
-      quizMeta: 'Trả lời từng câu',
-      quizDeck: 'Bộ quiz linh hoạt',
-      quizPrev: 'Quay lại',
-      quizReset: 'Làm lại',
-      quizNext: 'Tiếp theo',
-      flashcardTitle: 'Flashcard',
-      flashcardMeta: 'Lật để nhớ',
-      flashcardDeck: 'Bộ thẻ ghi nhớ',
-      flashcardTip: 'Ôn lại theo chu kỳ',
-      flashcardPrev: 'Trước',
-      flashcardFlip: 'Lật thẻ',
-      flashcardNext: 'Tiếp',
-      debugSummary: 'Phản hồi API (debug)',
-      languageGroup: 'Chọn ngôn ngữ',
-      toggleThemeTitle: 'Chuyển giao diện sáng/tối',
-      themeSwitched: 'Đã chuyển sang chế độ {mode}',
-      themeLight: 'sáng',
-      themeDark: 'tối',
-      toastAskEmpty: 'Hãy nhập câu hỏi trước',
-      fileTooLarge: 'File vượt quá dung lượng cho phép ({size} MB). Dung lượng tối đa là {max}MB.',
-      uploading: 'Đang tải {filename} ({size} KB)...',
-      uploadFailed: 'Tải lên thất bại: {detail}',
-      uploadFailedShort: 'Tải lên thất bại',
-      uploadSuccessChars: '{chars} ký tự đã được tách và lập chỉ mục',
-      uploadSuccessDoc: 'doc_id: {docId}',
-      uploadedToast: 'Đã tải {filename}',
-      welcomeMessage: 'Xin chào! Tôi là trợ lý học tập AI. Hãy tải bài giảng ở bên trái, sau đó đặt bất kỳ câu hỏi nào.
-      Tôi sẽ trả lời và trích dẫn chi tiết.',
-      labelYou: 'Bạn',
-      labelBot: 'StudyBot',
-      errorQuery: 'Đã xảy ra lỗi khi truy vấn ghi chú.',
-      citationsTitle: 'Trích dẫn từ tài liệu của bạn',
-      citationChunk: 'phần {chunk}',
-      citationScore: 'điểm {score}',
-      citationsNone: 'Không tìm thấy trích dẫn phù hợp.',
-      docMeta: '{chars} ký tự · {size} KB',
-      debugEmpty: 'Chưa có yêu cầu nào.',
-      quizProgress: 'Câu {index} / {total}',
-      quizScore: 'Điểm {score}/{total}',
-      quizCorrect: 'Đúng',
-      quizIncorrect: 'Sai',
-      quizExplanation: 'Giải thích',
-      flashcardProgress: 'Thẻ {index} / {total}',
-      flashcardFrontLabel: 'Khái niệm',
-      flashcardBackLabel: 'Định nghĩa',
-      flashcardAria: 'Lật flashcard',
-      flashcardTopicPlaceholder: 'Nhập chủ đề cho AI...',
-      flashcardEmptyFront: 'Chưa có thẻ nào',
-      flashcardEmptyBack: 'Hãy thêm thẻ mới',
-      docSearchPlaceholder: '🔍 Tìm tài liệu...',
-      docSearchLabel: 'Tìm kiếm tài liệu',
-      chunkingSummary: 'Cấu hình tách',
-      chunkingStrategyLabel: 'Chiến lược chunking',
-      chunkingStrategyFixed: 'Kích thước cố định (theo câu)',
-      chunkingStrategyStructural: 'Cấu trúc (tiêu đề Markdown)',
-      chunkingStrategySemantic: 'Ngữ nghĩa cục bộ (Jaccard)',
-      chunkingSizeLabel: 'Kích thước chunk (ký tự)',
-      chunkingOverlapLabel: 'Overlap gối đầu (ký tự)',
-      chunkingThresholdLabel: 'Ngưỡng khoảng cách ngữ nghĩa',
-      uploadChunkPrefix: ' (dùng ',
-      uploadChunkSuffix: ' chunking)',
-      benchmarkTitle: 'Bảng chất lượng RAG',
-      benchmarkMeta: 'Đánh giá chất lượng tách',
-      benchmarkIntroPrefix: 'Hệ thống tự động chạy ',
-      benchmarkIntroStrong: '5 câu hỏi kiểm thử',
-      benchmarkIntroSuffix: ' về quang hợp, đối chiếu ngữ cảnh truy xuất với từ khóa chuẩn để chấm độ chính xác. Hãy
-      chỉnh cấu hình tách ở Bước 1 và chạy lại để xem độ chính xác thay đổi theo thời gian thực.',
-      benchmarkRunButton: 'Chạy đánh giá benchmark',
-      benchmarkStatusRunning: 'Đang chạy đánh giá benchmark...',
-      benchmarkMetricsTitle: 'Chỉ số chất lượng RAG',
-      benchmarkMetricP1: 'Độ chính xác top-1',
-      benchmarkMetricP3: 'Độ chính xác top-3',
-      benchmarkMetricP5: 'Độ chính xác top-5',
-      benchmarkMetricMrr: 'Thứ hạng trung bình',
-      benchmarkDetailsTitle: 'Chi tiết truy xuất 5 câu hỏi kiểm thử',
-      benchmarkNeedDoc: 'Vui lòng tải lên hoặc chọn tài liệu trước.',
-      benchmarkFailed: 'Đánh giá thất bại: {detail}',
-      benchmarkSuccess: 'Đánh giá hoàn tất.',
-      benchmarkQuestionLabel: 'Câu {index}: {query}',
-      benchmarkTargetKeywords: 'Từ khóa mục tiêu',
-      benchmarkMrrLabel: 'MRR',
-      benchmarkP3Label: 'P@3',
-      benchmarkChunkLabel: 'Chunk {chunk} (Điểm: {score})',
-      benchmarkRelevant: '✓ Phù hợp (khớp)',
-      benchmarkIrrelevant: '✗ Không phù hợp (không khớp)',
-      docRecommended: 'Nên dùng',
-      docActive: 'Đang chọn',
-      docSelect: 'Chọn',
-      docDelete: 'Xóa',
-      docDeleteTitle: 'Xóa tài liệu',
-      docSelectedToast: 'Đã chọn tài liệu: {filename}',
-      docDeleteConfirm: 'Bạn chắc chắn muốn xóa "{filename}"? Thao tác này sẽ xóa file khỏi bộ nhớ và làm sạch chỉ mục
-      vector.',
-      docDeleteProgress: 'Đang xóa {filename}...',
-      docDeleteFailed: 'Xóa thất bại: {detail}',
-      docDeleteSuccess: 'Đã xóa {filename}'
+        pageTitle: 'StudyBot — Trợ lý học tập AI',
+        tagline: 'Trợ lý học tập AI — tải tài liệu, hỏi đáp, nhận câu trả lời kèm trích dẫn',
+        statusLoading: 'Đang tải trạng thái hệ thống...',
+        statusOffline: 'backend không hoạt động',
+        statusTenant: 'tenant',
+        statusLocal: 'cục bộ',
+        statusRemote: 'từ xa',
+        libraryTitle: 'Thư viện của bạn',
+        refresh: 'Làm mới',
+        libraryEmpty: 'Chưa có tài liệu — hãy tải lên ở trên.',
+        uploadTitle: 'Tải bài giảng',
+        uploadMeta: 'PDF, TXT, hoặc Markdown',
+        uploadDragStrong: 'Kéo file vào đây',
+        uploadDragOr: 'hoặc',
+        uploadDragBrowse: 'bấm để chọn file',
+        uploadHintPrefix: 'Tối đa ~10MB. Thử một bài Wikipedia trong ',
+        uploadHintSuffix: '.',
+        askTitle: 'Đặt câu hỏi',
+        askMeta: 'Nền tảng từ ghi chú của bạn',
+        questionPlaceholder: 'Hỏi trợ lý AI về nội dung vừa tải lên...',
+        askButton: 'Hỏi',
+        practiceTitle: 'Phòng luyện tập',
+        practiceSubtitle: 'Quiz và flashcard từ ghi chú của bạn',
+        practicePill: 'Mới',
+        quizTitle: 'Quiz Tăng Tốc',
+        quizMeta: 'Trả lời từng câu',
+        quizDeck: 'Bộ quiz linh hoạt',
+        quizPrev: 'Quay lại',
+        quizReset: 'Làm lại',
+        quizNext: 'Tiếp theo',
+        flashcardTitle: 'Flashcard',
+        flashcardMeta: 'Lật để nhớ',
+        flashcardDeck: 'Bộ thẻ ghi nhớ',
+        flashcardTip: 'Ôn lại theo chu kỳ',
+        flashcardPrev: 'Trước',
+        flashcardFlip: 'Lật thẻ',
+        flashcardNext: 'Tiếp',
+        debugSummary: 'Phản hồi API (debug)',
+        languageGroup: 'Chọn ngôn ngữ',
+        toggleThemeTitle: 'Chuyển giao diện sáng/tối',
+        themeSwitched: 'Đã chuyển sang chế độ {mode}',
+        themeLight: 'sáng',
+        themeDark: 'tối',
+        toastAskEmpty: 'Hãy nhập câu hỏi trước',
+        fileTooLarge: 'File vượt quá dung lượng cho phép ({size} MB). Dung lượng tối đa là {max}MB.',
+        uploading: 'Đang tải {filename} ({size} KB)...',
+        uploadFailed: 'Tải lên thất bại: {detail}',
+        uploadFailedShort: 'Tải lên thất bại',
+        uploadSuccessChars: '{chars} ký tự đã được tách và lập chỉ mục',
+        uploadSuccessDoc: 'doc_id: {docId}',
+        uploadedToast: 'Đã tải {filename}',
+        welcomeMessage: 'Xin chào! Tôi là trợ lý học tập AI. Hãy tải bài giảng ở bên trái, sau đó đặt bất kỳ câu hỏi nào. Tôi sẽ trả lời và trích dẫn chi tiết.',
+        labelYou: 'Bạn',
+        labelBot: 'StudyBot',
+        errorQuery: 'Đã xảy ra lỗi khi truy vấn ghi chú.',
+        citationsTitle: 'Trích dẫn từ tài liệu của bạn',
+        citationChunk: 'phần {chunk}',
+        citationScore: 'điểm {score}',
+        citationsNone: 'Không tìm thấy trích dẫn phù hợp.',
+        docMeta: '{chars} ký tự · {size} KB',
+        debugEmpty: 'Chưa có yêu cầu nào.',
+        quizProgress: 'Câu {index} / {total}',
+        quizScore: 'Điểm {score}/{total}',
+        quizCorrect: 'Đúng',
+        quizIncorrect: 'Sai',
+        quizExplanation: 'Giải thích',
+        flashcardProgress: 'Thẻ {index} / {total}',
+        flashcardFrontLabel: 'Khái niệm',
+        flashcardBackLabel: 'Định nghĩa',
+        flashcardAria: 'Lật flashcard',
+        flashcardTopicPlaceholder: 'Nhập chủ đề cho AI...',
+        flashcardEmptyFront: 'Chưa có thẻ nào',
+        flashcardEmptyBack: 'Hãy thêm thẻ mới',
+        docSearchPlaceholder: '🔍 Tìm tài liệu...',
+        docSearchLabel: 'Tìm kiếm tài liệu',
+        chunkingSummary: 'Cấu hình tách',
+        chunkingStrategyLabel: 'Chiến lược chunking',
+        chunkingStrategyFixed: 'Kích thước cố định (theo câu)',
+        chunkingStrategyStructural: 'Cấu trúc (tiêu đề Markdown)',
+        chunkingStrategySemantic: 'Ngữ nghĩa cục bộ (Jaccard)',
+        chunkingSizeLabel: 'Kích thước chunk (ký tự)',
+        chunkingOverlapLabel: 'Overlap gối đầu (ký tự)',
+        chunkingThresholdLabel: 'Ngưỡng khoảng cách ngữ nghĩa',
+        uploadChunkPrefix: ' (dùng ',
+        uploadChunkSuffix: ' chunking)',
+        benchmarkTitle: 'Bảng chất lượng RAG',
+        benchmarkMeta: 'Đánh giá chất lượng tách',
+        benchmarkIntroPrefix: 'Hệ thống tự động chạy ',
+        benchmarkIntroStrong: '5 câu hỏi kiểm thử',
+        benchmarkIntroSuffix: ' về quang hợp, đối chiếu ngữ cảnh truy xuất với từ khóa chuẩn để chấm độ chính xác. Hãy chỉnh cấu hình tách ở Bước 1 và chạy lại để xem độ chính xác thay đổi theo thời gian thực.',
+        benchmarkRunButton: 'Chạy đánh giá benchmark',
+        benchmarkStatusRunning: 'Đang chạy đánh giá benchmark...',
+        benchmarkMetricsTitle: 'Chỉ số chất lượng RAG',
+        benchmarkMetricP1: 'Độ chính xác top-1',
+        benchmarkMetricP3: 'Độ chính xác top-3',
+        benchmarkMetricP5: 'Độ chính xác top-5',
+        benchmarkMetricMrr: 'Thứ hạng trung bình',
+        benchmarkDetailsTitle: 'Chi tiết truy xuất 5 câu hỏi kiểm thử',
+        benchmarkNeedDoc: 'Vui lòng tải lên hoặc chọn tài liệu trước.',
+        benchmarkFailed: 'Đánh giá thất bại: {detail}',
+        benchmarkSuccess: 'Đánh giá hoàn tất.',
+        benchmarkQuestionLabel: 'Câu {index}: {query}',
+        benchmarkTargetKeywords: 'Từ khóa mục tiêu',
+        benchmarkMrrLabel: 'MRR',
+        benchmarkP3Label: 'P@3',
+        benchmarkChunkLabel: 'Chunk {chunk} (Điểm: {score})',
+        benchmarkRelevant: '✓ Phù hợp (khớp)',
+        benchmarkIrrelevant: '✗ Không phù hợp (không khớp)',
+        docRecommended: 'Nên dùng',
+        docActive: 'Đang chọn',
+        docSelect: 'Chọn',
+        docDelete: 'Xóa',
+        docDeleteTitle: 'Xóa tài liệu',
+        docSelectedToast: 'Đã chọn tài liệu: {filename}',
+        docDeleteConfirm: 'Bạn chắc chắn muốn xóa "{filename}"? Thao tác này sẽ xóa file khỏi bộ nhớ và làm sạch chỉ mục vector.',
+        docDeleteProgress: 'Đang xóa {filename}...',
+        docDeleteFailed: 'Xóa thất bại: {detail}',
+        docDeleteSuccess: 'Đã xóa {filename}'
       }
-      };
+    };
 
-      let currentLang = document.documentElement.getAttribute('data-lang') || 'en';
+    let currentLang = document.documentElement.getAttribute('data-lang') || 'en';
 
-      function t(key, vars = {}) {
+    function t(key, vars = {}) {
       const dict = I18N[currentLang] || I18N.en;
       let str = dict[key] || I18N.en[key] || key;
       Object.keys(vars).forEach(k => {
-      str = str.replace(new RegExp(`\\{${k}\\}`, 'g'), vars[k]);
+        str = str.replace(new RegExp(`\\{${k}\\}`, 'g'), vars[k]);
       });
       return str;
-      }
+    }
 
-      function applyI18n() {
+    function applyI18n() {
       document.documentElement.lang = currentLang;
       document.documentElement.setAttribute('data-lang', currentLang);
       document.title = t('pageTitle');
 
       document.querySelectorAll('[data-i18n]').forEach(el => {
-      const key = el.getAttribute('data-i18n');
-      el.textContent = t(key);
+        const key = el.getAttribute('data-i18n');
+        el.textContent = t(key);
       });
 
       document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
-      const key = el.getAttribute('data-i18n-placeholder');
-      el.setAttribute('placeholder', t(key));
+        const key = el.getAttribute('data-i18n-placeholder');
+        el.setAttribute('placeholder', t(key));
       });
 
       document.querySelectorAll('[data-i18n-title]').forEach(el => {
-      const key = el.getAttribute('data-i18n-title');
-      el.setAttribute('title', t(key));
+        const key = el.getAttribute('data-i18n-title');
+        el.setAttribute('title', t(key));
       });
 
       document.querySelectorAll('[data-i18n-aria]').forEach(el => {
-      const key = el.getAttribute('data-i18n-aria');
-      el.setAttribute('aria-label', t(key));
+        const key = el.getAttribute('data-i18n-aria');
+        el.setAttribute('aria-label', t(key));
       });
 
       const debugLog = $('debug-log');
       if (debugLog && debugLog.getAttribute('data-empty') === 'true') {
-      debugLog.textContent = t('debugEmpty');
+        debugLog.textContent = t('debugEmpty');
       }
-      }
+    }
 
-      function setLanguage(lang) {
+    function setLanguage(lang) {
       currentLang = I18N[lang] ? lang : 'en';
       localStorage.setItem('studybot-lang', currentLang);
       applyI18n();
@@ -1485,67 +1481,67 @@ setLanguage(currentLang);
       flashState.index = 0;
       flashState.flipped = false;
       renderFlashcard();
-      }
+    }
 
-      function updateLangButtons() {
+    function updateLangButtons() {
       document.querySelectorAll('.lang-btn').forEach(btn => {
-      const isActive = btn.getAttribute('data-lang') === currentLang;
-      btn.classList.toggle('active', isActive);
-      btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+        const isActive = btn.getAttribute('data-lang') === currentLang;
+        btn.classList.toggle('active', isActive);
+        btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
       });
+    }
+
+    // ============================================================================
+    // Light/Dark Theme Switcher
+
+
+    async function generateFlashcards() {
+      const topic = $('flashcard-topic').value.trim();
+      if (!topic) {
+        toast('Please enter a topic first', 'warn');
+        return;
       }
 
-      // ============================================================================
-      // Light/Dark Theme Switcher
+      $('btn-generate-flashcards').disabled = true;
+      $('btn-generate-flashcards').innerHTML = '<span class="spinner"></span>';
 
+      const docId = window.selectedDocId || window.lastDocId;
+      const payload = {
+        topic: topic,
+        limit: 5,
+        doc_id: docId || null
+      };
 
-async function generateFlashcards() {
-  const topic = $('flashcard-topic').value.trim();
-  if (!topic) {
-    toast('Please enter a topic first', 'warn');
-    return;
-  }
-  
-  $('btn-generate-flashcards').disabled = true;
-  $('btn-generate-flashcards').innerHTML = '<span class="spinner"></span>';
-  
-  const docId = window.selectedDocId || window.lastDocId;
-  const payload = {
-    topic: topic,
-    limit: 5,
-    doc_id: docId || null
-  };
-  
-  const res = await call('/flashcards', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify(payload)
-  });
-  
-  $('btn-generate-flashcards').disabled = false;
-  $('btn-generate-flashcards').textContent = 'Generate AI';
-  
-  if (!res.ok) {
-    toast('Failed to generate flashcards', 'error');
-    return;
-  }
-  
-  const newCards = res.body.flashcards;
-  if (newCards && newCards.length > 0) {
-    FLASHCARDS[currentLang] = newCards.map(c => ({term: c.front, definition: c.back}));
-    flashState.index = 0;
-    flashState.flipped = false;
-    renderFlashcard();
-    toast('Flashcards generated!', 'success');
-  } else {
-    toast('No flashcards generated.', 'warn');
-  }
-}
+      const res = await call('/flashcards', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
 
-document.addEventListener('DOMContentLoaded', () => {
-    applyI18n();
-});
-</script>
+      $('btn-generate-flashcards').disabled = false;
+      $('btn-generate-flashcards').textContent = 'Generate AI';
+
+      if (!res.ok) {
+        toast('Failed to generate flashcards', 'error');
+        return;
+      }
+
+      const newCards = res.body.flashcards;
+      if (newCards && newCards.length > 0) {
+        FLASHCARDS[currentLang] = newCards.map(c => ({ term: c.front, definition: c.back }));
+        flashState.index = 0;
+        flashState.flipped = false;
+        renderFlashcard();
+        toast('Flashcards generated!', 'success');
+      } else {
+        toast('No flashcards generated.', 'warn');
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      applyI18n();
+    });
+  </script>
 </body>
 
 </html>

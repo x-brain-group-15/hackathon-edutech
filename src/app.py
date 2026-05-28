@@ -212,3 +212,7 @@ if config.serve_frontend:
         """Convenience: serves frontend/index.html at /. Set SERVE_FRONTEND=false
         if you deploy the frontend separately (CloudFront+S3, Amplify, ALB)."""
         return FileResponse(FRONTEND_DIR / "index.html")
+
+    @app.get("/global.css")
+    def css() -> FileResponse:
+        return FileResponse(FRONTEND_DIR / "global.css")
