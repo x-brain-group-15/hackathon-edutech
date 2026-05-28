@@ -574,7 +574,31 @@ def handle_query(
                 citations_count=len(citations)
             )
 
+            # If Bedrock returns zero citations, treat it as an undesired/low-quality answer
+            # and immediately fall back to Groq (via ai_client.invoke / BedrockAI.invoke logic).
+            # For Groq to work well, we reconstruct a prompt using local vector chunks.
+            if len(citations) == 0:
+                logger.warning("Bedrock citations_count=0; switching to Groq fallback via invoke.")
+                try:
+                    chunks = _search_chunks(question, top_k=5)
+                    context = "\n\n".join(
+                        f"[chunk {i+1}] {c['text']}"
+                        for i, c in enumerate(chunks)
+                    )
+                except Exception as le:
+                    logger.warning(f"Local context rebuild failed for Groq fallback: {le}")
+                    context = ""
+
+                prompt = PROMPT_TEMPLATE.format(
+                    context=context,
+                    question=question
+                )
+
+                answer = ai_client.invoke(prompt, max_tokens=512)
+                citations = []
+
         else:
+
             log_step(
                 "rag_query",
                 "vector_search_start",
