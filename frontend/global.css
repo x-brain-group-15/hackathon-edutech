@@ -498,6 +498,14 @@ body {
   border: 1px solid rgba(var(--accent-rgb), 0.15);
 }
 
+.card-header .step .step-icon {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  display: block;
+}
+
+
 .card-header .meta {
   color: var(--muted);
   font-size: 0.8rem;
@@ -1735,6 +1743,18 @@ details pre {
   align-items: center;
   gap: 0.5rem;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.tab-icon {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+.tab-btn:hover .tab-icon {
+  transform: scale(1.1);
 }
 
 [data-theme="light"] .tab-btn {

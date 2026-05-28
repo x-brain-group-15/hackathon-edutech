@@ -422,35 +422,68 @@
             id="btn-tab-chat"
             onclick="switchTab('tab-chat')"
           >
-            💬 Chat & Socratic
+            <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+            </svg>
+            Chat & Socratic
           </button>
           <button
             class="tab-btn"
             id="btn-tab-cornell"
             onclick="switchTab('tab-cornell')"
           >
-            📝 Cornell Guide
+            <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+              <polyline points="10 9 9 9 8 9"></polyline>
+            </svg>
+            Cornell Guide
           </button>
           <button
             class="tab-btn"
             id="btn-tab-mindmap"
             onclick="switchTab('tab-mindmap')"
           >
-            📊 Mind-Map
+            <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"></circle>
+              <circle cx="19" cy="5" r="2.5"></circle>
+              <circle cx="5" cy="19" r="2.5"></circle>
+              <circle cx="19" cy="19" r="2.5"></circle>
+              <circle cx="5" cy="5" r="2.5"></circle>
+              <line x1="12" y1="12" x2="19" y2="5"></line>
+              <line x1="12" y1="12" x2="5" y2="19"></line>
+              <line x1="12" y1="12" x2="19" y2="19"></line>
+              <line x1="12" y1="12" x2="5" y2="5"></line>
+            </svg>
+            Mind-Map
           </button>
           <button
             class="tab-btn"
             id="btn-tab-leitner"
             onclick="switchTab('tab-leitner')"
           >
-            🎮 Leitner Arena
+            <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="6" y1="12" x2="10" y2="12"></line>
+              <line x1="8" y1="10" x2="8" y2="14"></line>
+              <line x1="15" y1="13" x2="15.01" y2="13"></line>
+              <line x1="18" y1="11" x2="18.01" y2="11"></line>
+              <rect x="2" y="6" width="20" height="12" rx="3"></rect>
+            </svg>
+            Leitner Arena
           </button>
           <button
             class="tab-btn"
             id="btn-tab-quiz"
             onclick="switchTab('tab-quiz')"
           >
-            ✍️ Practice Quiz
+            <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+              <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+              <path d="M9 14l2 2 4-4"></path>
+            </svg>
+            Practice Quiz
           </button>
         </div>
 
@@ -459,7 +492,11 @@
           <section class="card">
             <div class="card-header">
               <div class="card-title-group">
-                <span class="step">💬</span>
+                <span class="step">
+                  <svg class="step-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                  </svg>
+                </span>
                 <h2 data-i18n="askTitle"></h2>
               </div>
               <span class="meta" data-i18n="askMeta"></span>
@@ -468,7 +505,10 @@
             <!-- Socratic Tutor Switcher -->
             <div class="socratic-wrapper">
               <div class="socratic-info">
-                <span style="font-size: 1.25rem">🧠</span>
+                <svg class="socratic-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 24px; height: 24px; color: var(--accent); flex-shrink: 0;">
+                  <path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96-.44 2.5 2.5 0 0 1 0-3.12 3 3 0 0 1 0-4.88 2.5 2.5 0 0 1 0-3.12A2.5 2.5 0 0 1 9.5 2z"></path>
+                  <path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96-.44 2.5 2.5 0 0 0 0-3.12 3 3 0 0 0 0-4.88 2.5 2.5 0 0 0 0-3.12A2.5 2.5 0 0 0 14.5 2z"></path>
+                </svg>
                 <div>
                   <div class="socratic-title">Socratic Tutor Mode</div>
                   <div class="socratic-subtitle">
@@ -525,7 +565,15 @@
           <section class="card">
             <div class="card-header">
               <div class="card-title-group">
-                <span class="step">📝</span>
+                <span class="step">
+                  <svg class="step-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                    <polyline points="10 9 9 9 8 9"></polyline>
+                  </svg>
+                </span>
                 <h2>Cornell Notes Study Guide</h2>
               </div>
               <button
@@ -585,7 +633,19 @@
           <section class="card">
             <div class="card-header">
               <div class="card-title-group">
-                <span class="step">📊</span>
+                <span class="step">
+                  <svg class="step-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <circle cx="19" cy="5" r="2.5"></circle>
+                    <circle cx="5" cy="19" r="2.5"></circle>
+                    <circle cx="19" cy="19" r="2.5"></circle>
+                    <circle cx="5" cy="5" r="2.5"></circle>
+                    <line x1="12" y1="12" x2="19" y2="5"></line>
+                    <line x1="12" y1="12" x2="5" y2="19"></line>
+                    <line x1="12" y1="12" x2="19" y2="19"></line>
+                    <line x1="12" y1="12" x2="5" y2="5"></line>
+                  </svg>
+                </span>
                 <h2>Interactive Mind-Map</h2>
               </div>
               <button
@@ -649,7 +709,15 @@
           <section class="card">
             <div class="card-header">
               <div class="card-title-group">
-                <span class="step">🎮</span>
+                <span class="step">
+                  <svg class="step-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="6" y1="12" x2="10" y2="12"></line>
+                    <line x1="8" y1="10" x2="8" y2="14"></line>
+                    <line x1="15" y1="13" x2="15.01" y2="13"></line>
+                    <line x1="18" y1="11" x2="18.01" y2="11"></line>
+                    <rect x="2" y="6" width="20" height="12" rx="3"></rect>
+                  </svg>
+                </span>
                 <h2>Leitner active Recall Arena</h2>
               </div>
               <div style="display: flex; gap: 0.5rem">
@@ -803,7 +871,13 @@
           <section class="card practice-card quiz-card">
             <div class="card-header">
               <div class="card-title-group">
-                <span class="step">✍️</span>
+                <span class="step">
+                  <svg class="step-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+                    <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+                    <path d="M9 14l2 2 4-4"></path>
+                  </svg>
+                </span>
                 <h2 data-i18n="quizTitle"></h2>
               </div>
               <span class="meta" data-i18n="quizMeta"></span>
@@ -906,7 +980,13 @@
         <section class="card" id="benchmark-section" style="display: none">
           <div class="card-header">
             <div class="card-title-group">
-              <span class="step">📊</span>
+              <span class="step">
+                <svg class="step-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="18" y1="20" x2="18" y2="10"></line>
+                  <line x1="12" y1="20" x2="12" y2="4"></line>
+                  <line x1="6" y1="20" x2="6" y2="14"></line>
+                </svg>
+              </span>
               <h2 data-i18n="benchmarkTitle"></h2>
             </div>
             <span class="meta" data-i18n="benchmarkMeta"></span>
