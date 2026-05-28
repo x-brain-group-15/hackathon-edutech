@@ -1,6 +1,6 @@
 # W7 Evidence Pack - StudyBot / AI Study Buddy
 
-> Status: draft for final submission. Replace every `TODO` with the real deployed value and add screenshots under `docs/evidence/`.
+> Status: draft for final submission. Replace every `TODO` with the real deployed value and add screenshots under ``.
 
 ## 1. Cover
 
@@ -18,8 +18,8 @@
 | Demo video | TODO: `docs/demo.mp4` or YouTube unlisted link |
 
 Required screenshots for this section:
-- `docs/evidence/01_live_url_loaded.png` - trainer-visible HTTPS app loaded in browser.
-- `docs/evidence/02_repo_readme.png` - public GitHub repo with README, architecture, setup, teardown.
+- `01_live_url_loaded.png` - trainer-visible HTTPS app loaded in browser.
+- `02_repo_readme.png` - public GitHub repo with README, architecture, setup, teardown.
 
 ## 2. Pitch and Vision
 
@@ -28,15 +28,15 @@ StudyBot helps students turn lecture materials into active study assets. A learn
 Target users are university students, self-learners, and exam-prep learners who already have notes but lose time converting them into revision workflows. The project matters because the useful product is not just "chat with PDF"; it is a study loop: upload, ask, generate, review, and return later with state preserved.
 
 Required screenshots:
-- `docs/evidence/03_upload_flow.png` - file selected/uploaded successfully.
-- `docs/evidence/04_ai_answer_with_context.png` - Q&A answer generated from uploaded document.
-- `docs/evidence/05_flashcards_or_quiz.png` - generated flashcards/quiz visible in UI.
+- `03_upload_flow.png` - file selected/uploaded successfully.
+- `04_ai_answer_with_context.png` - Q&A answer generated from uploaded document.
+- `05_flashcards_or_quiz.png` - generated flashcards/quiz visible in UI.
 
 ## 3. Architecture
 
 ### Final Diagram
 
-Final architecture diagram: TODO: add image at `docs/evidence/architecture.png`.
+Final architecture diagram: TODO: add image at `architecture.png`.
 
 The deployed architecture is serverless:
 
@@ -71,6 +71,102 @@ The deployed architecture is serverless:
 2. DynamoDB vs RDS: chose DynamoDB because user state and document metadata are simple access patterns. Accepted weaker ad-hoc querying.
 3. Bedrock KB vs direct InvokeModel: chose KB for grounded retrieval. Kept direct/local fallback because KB setup and ingestion can be the riskiest demo dependency.
 
+### Upload PDF and Content Extraction Flow
+
+PDF upload is the main entry point for StudyBot. A learner selects a PDF/TXT/MD file in the frontend, the browser calls `POST /upload` through API Gateway, Lambda `studybot-upload` receives the file, stores the original object, extracts learning content, ingests text into retrieval, saves document metadata under the current `user_id`, and returns a `doc_id` to the UI.
+
+Real flow:
+
+```text
+Frontend selects PDF
+-> POST /upload with X-User-Id
+-> Lambda stores original file in S3/local storage
+-> If PDF: run hybrid PDF extraction
+-> Store extracted_text.txt and extracted image/chart assets
+-> Ingest text into vector store / retrieval fallback
+-> Save document metadata into userstore/DynamoDB
+-> Emit DOCUMENT_UPLOAD and PROCESS_STEP logs to CloudWatch
+-> Return doc_id, location, chars_extracted, extraction metadata to frontend
+```
+
+**Hybrid PDF extraction strategy**
+
+The team does not OCR/Textract the whole PDF by default because many exported slide PDFs already contain a readable text layer. The current pipeline:
+
+1. Reads page text layers with `pypdf`.
+2. Counts image objects on each page to detect visual-heavy slides.
+3. Extracts image/chart assets through the same storage adapter as the original file.
+4. Skips images smaller than `8KB` to avoid storing low-value logos/icons/masks.
+5. Deduplicates images with SHA-256 across the whole document.
+6. Ingests text-layer content directly when a page has enough text.
+7. Marks text-poor pages with images as `needs_ocr_or_textract`.
+8. Returns normalized text, page-level metadata, and S3/local URIs for visual assets.
+
+Strategy name in response metadata:
+
+```text
+hybrid_text_layer_plus_image_assets_then_page_level_ocr
+```
+
+**Stored object layout**
+
+Example for `user_id = test-user-001`, any generated `doc_id`, and `W6_Operations.pdf`:
+
+```text
+Original PDF:
+test-user-001/{doc_id}/W6_Operations.pdf
+
+Bedrock KB metadata:
+test-user-001/{doc_id}/W6_Operations.pdf.metadata.json
+
+Extracted plain text:
+test-user-001/{doc_id}/extracted_text.txt
+
+Filtered image/chart assets:
+test-user-001/{doc_id}/extracted-assets/page_001_image_001.png
+```
+
+With `STORAGE_BACKEND=local`, locations are returned as `file://...`. With `STORAGE_BACKEND=s3`, locations are returned as `s3://bucket/...`.
+
+**Upload response metadata**
+
+```json
+{
+  "doc_id": "generated-doc-id",
+  "filename": "W6_Operations.pdf",
+  "size": 7497312,
+  "chars_extracted": 5671,
+  "location": "s3://studybot-uploads/test-user-001/generated-doc-id/W6_Operations.pdf",
+  "extraction": {
+    "page_count": 20,
+    "chars_extracted": 5671,
+    "images_extracted": 27,
+    "pages_requiring_ocr": [20],
+    "pages_with_images_or_charts": [1, 2, 3],
+    "pages_with_table_like_content": [],
+    "strategy": "hybrid_text_layer_plus_image_assets_then_page_level_ocr",
+    "asset_prefix": "test-user-001/generated-doc-id/extracted-assets"
+  }
+}
+```
+
+**Test evidence**
+
+| Test file | Page count | Chars extracted | Images extracted | Pages requiring OCR/Textract | Conclusion |
+|---|---:|---:|---:|---|---|
+| `tests/W6_Operations_Hardening_&_Cost-Aware_Cloud_-_Nhóm_15.pptx.pdf` | 20 | 5671 | 27 | `[20]` | Visual-heavy slide PDF; only page 20 needs OCR/Textract. |
+| `tests/SCA_KLTN_Nhom30_3.ProjectUserStrory.pdf` | 25 | about 36,000 | 2 | `[]` | Clean text-layer PDF; no OCR needed. |
+
+For the W6 file, image filtering reduced `83` raw image objects to `43` after size filtering, then `27` after size filtering plus deduplication. This reduces noisy stored assets while preserving useful slide visuals for downstream retrieval.
+
+**Repo evidence**
+
+- `docs/pdf_extraction.md` - hybrid extraction strategy, output shape, trade-off, and test results.
+- `src/pdf_extractor.py` - implementation for PDF parsing, `8KB` image filtering, SHA-256 deduplication, and OCR/Textract flags.
+- `src/handlers.py` - upload integration: original file, `.metadata.json`, `extracted_text.txt`, extracted assets, vector ingest, and user metadata.
+- `lambda_upload.py` - Lambda/FastAPI `POST /upload` route.
+- `tests/test_pdf_extractor.py` - metadata test for a text-poor PDF.
+
 ### End-to-End Processing Flow
 
 This is the real application flow the demo should prove, not only a service list.
@@ -83,9 +179,9 @@ This is the real application flow the demo should prove, not only a service list
 4. API Gateway routes lightweight requests such as `/health`, `/docs/list`, and `/queries/recent` to `studybot-core`.
 
 Evidence to capture:
-- `docs/evidence/01_live_url_loaded.png` - CloudFront URL in browser.
-- `docs/evidence/07_api_gateway_routes.png` - API Gateway routes mapped to Lambda.
-- `docs/evidence/09_cloudformation_stack_outputs.png` - deployed API URL and stack outputs.
+- `01_live_url_loaded.png` - CloudFront URL in browser.
+- `07_api_gateway_routes.png` - API Gateway routes mapped to Lambda.
+- `09_cloudformation_stack_outputs.png` - deployed API URL and stack outputs.
 
 #### Flow 2 - Upload and index a learning document
 
@@ -98,11 +194,13 @@ Evidence to capture:
 7. If Bedrock Knowledge Base is configured, the document content is prepared for retrieval/indexing; otherwise the local keyword retrieval fallback can still support demo Q&A.
 8. Lambda writes logs and metrics to CloudWatch.
 
+For PDFs, Lambda does not OCR the entire file upfront. It uses `pypdf` for the text layer first, extracts image/chart assets to `extracted-assets`, skips images under `8KB`, deduplicates images with SHA-256, and marks only text-poor visual pages as `needs_ocr_or_textract`. The W6 test showed 20 pages, 5671 characters, 27 image assets after filtering/deduplication, and only page 20 requiring OCR/Textract.
+
 Evidence to capture:
-- `docs/evidence/03_upload_flow.png` - upload success in UI.
-- `docs/evidence/36_s3_uploaded_document.png` - uploaded object in S3.
-- `docs/evidence/26_dynamodb_items.png` - document metadata in DynamoDB.
-- `docs/evidence/22_log_insights_query.png` - upload log lines in CloudWatch.
+- `03_upload_flow.png` - upload success in UI.
+- `36_s3_uploaded_document.png` - uploaded object in S3.
+- `26_dynamodb_items.png` - document metadata in DynamoDB.
+- `22_log_insights_query.png` - upload log lines in CloudWatch.
 
 #### Flow 3 - Ask a grounded question with RAG
 
@@ -116,10 +214,10 @@ Evidence to capture:
 8. Lambda stores recent query state in DynamoDB and publishes latency metrics such as `SocraticQueryLatency`.
 
 Evidence to capture:
-- `docs/evidence/04_ai_answer_with_context.png` - answer visible in UI.
-- `docs/evidence/24_bedrock_model_answer.png` - real Bedrock-backed answer.
-- `docs/evidence/23_custom_metrics.png` - `SocraticQueryLatency` custom metric.
-- `docs/evidence/27_docs_list_persistence.png` - prior document/query still visible.
+- `04_ai_answer_with_context.png` - answer visible in UI.
+- `24_bedrock_model_answer.png` - real Bedrock-backed answer.
+- `23_custom_metrics.png` - `SocraticQueryLatency` custom metric.
+- `27_docs_list_persistence.png` - prior document/query still visible.
 
 #### Flow 4 - Generate flashcards and quizzes
 
@@ -133,9 +231,9 @@ Evidence to capture:
 8. UI renders the generated study set; a later `GET /quiz/{doc_id}` can reload saved quiz state.
 
 Evidence to capture:
-- `docs/evidence/05_flashcards_or_quiz.png` - generated study set in UI.
-- `docs/evidence/37_s3_quiz_json.png` - saved quiz JSON object in S3.
-- `docs/evidence/23_custom_metrics.png` - `FlashcardGenerationLatency` or `FlashcardGenerationSuccess`.
+- `05_flashcards_or_quiz.png` - generated study set in UI.
+- `37_s3_quiz_json.png` - saved quiz JSON object in S3.
+- `23_custom_metrics.png` - `FlashcardGenerationLatency` or `FlashcardGenerationSuccess`.
 
 #### Flow 5 - Return later and verify persistence
 
@@ -145,15 +243,15 @@ Evidence to capture:
 4. UI shows previous uploaded documents, recent query state, and saved quizzes. Flashcards should be shown as generated-on-demand unless S3 flashcard persistence is completed.
 
 Evidence to capture:
-- `docs/evidence/28_fresh_session_persistence.png` - fresh session still shows prior data.
-- `docs/evidence/26_dynamodb_items.png` - persisted document/user records.
-- `docs/evidence/37_s3_quiz_json.png` - persisted quiz artifact.
+- `28_fresh_session_persistence.png` - fresh session still shows prior data.
+- `26_dynamodb_items.png` - persisted document/user records.
+- `37_s3_quiz_json.png` - persisted quiz artifact.
 
 Required screenshots:
-- `docs/evidence/06_architecture_diagram.png`
-- `docs/evidence/07_api_gateway_routes.png`
-- `docs/evidence/08_lambda_functions.png`
-- `docs/evidence/09_cloudformation_stack_outputs.png`
+- `06_architecture_diagram.png`
+- `07_api_gateway_routes.png`
+- `08_lambda_functions.png`
+- `09_cloudformation_stack_outputs.png`
 
 ## 4. Cost Discipline
 
@@ -161,9 +259,9 @@ Required screenshots:
 
 | Time | Screenshot | Notes |
 |---|---|---|
-| Day 1 EOD - 2026-05-28 | `docs/evidence/cost_day1_eod.png` | TODO: total, top services |
-| Day 2 EOD - 2026-05-29 | `docs/evidence/cost_day2_eod.png` | TODO: total, top services |
-| Demo morning - 2026-05-30 | `docs/evidence/cost_demo_morning.png` | TODO: final pre-demo total |
+| Day 1 EOD - 2026-05-28 | `cost_day1_eod.png` | TODO: total, top services |
+| Day 2 EOD - 2026-05-29 | `cost_day2_eod.png` | TODO: total, top services |
+| Demo morning - 2026-05-30 | `cost_demo_morning.png` | TODO: final pre-demo total |
 
 ### Top Cost Drivers
 
@@ -181,10 +279,10 @@ Required screenshots:
 - The architecture avoids NAT Gateway and uses S3/DynamoDB gateway endpoints plus Bedrock interface endpoints.
 
 Required screenshots:
-- `docs/evidence/10_budget_alert.png` - AWS Budget and SNS subscription confirmed.
-- `docs/evidence/11_cost_anomaly_detection.png` - Cost Anomaly Detection enabled.
-- `docs/evidence/12_cost_guard_lambda.png` - Cost Guard Lambda and environment variables.
-- `docs/evidence/13_cost_explorer_by_service.png` - cost grouped by service.
+- `10_budget_alert.png` - AWS Budget and SNS subscription confirmed.
+- `11_cost_anomaly_detection.png` - Cost Anomaly Detection enabled.
+- `12_cost_guard_lambda.png` - Cost Guard Lambda and environment variables.
+- `13_cost_explorer_by_service.png` - cost grouped by service.
 
 ## 5. Security
 
@@ -213,11 +311,11 @@ The Lambda execution role `studybot-lambda-role-G15` is scoped to the app resour
 - Uploaded documents and generated study artifacts are stored in S3 under scoped prefixes.
 
 Required screenshots:
-- `docs/evidence/14_iam_lambda_role_policy.png`
-- `docs/evidence/15_vpc_private_subnet.png`
-- `docs/evidence/16_vpc_endpoints.png`
-- `docs/evidence/17_s3_block_public_access.png`
-- `docs/evidence/18_bedrock_model_access.png`
+- `14_iam_lambda_role_policy.png`
+- `15_vpc_private_subnet.png`
+- `16_vpc_endpoints.png`
+- `17_s3_block_public_access.png`
+- `18_bedrock_model_access.png`
 
 ## 6. Monitoring
 
@@ -227,11 +325,11 @@ Evidence to capture:
 
 | Evidence | What to show |
 |---|---|
-| `docs/evidence/19_cloudwatch_dashboard.png` | Dashboard `StudyBot-G15` with Lambda invocations/errors/duration and API Gateway requests. |
-| `docs/evidence/20_alarm_query_errors.png` | Alarm `StudyBot-G15-QueryErrors` in OK or ALARM state, not INSUFFICIENT_DATA. |
-| `docs/evidence/21_alarm_upload_errors.png` | Alarm `StudyBot-G15-UploadErrors` in OK or ALARM state. |
-| `docs/evidence/22_log_insights_query.png` | Real Log Insights results from Lambda logs. |
-| `docs/evidence/23_custom_metrics.png` | Namespace `StudyBot`, e.g. `FlashcardGenerationLatency`, `FlashcardGenerationSuccess`, `SocraticQueryLatency`. |
+| `19_cloudwatch_dashboard.png` | Dashboard `StudyBot-G15` with Lambda invocations/errors/duration and API Gateway requests. |
+| `20_alarm_query_errors.png` | Alarm `StudyBot-G15-QueryErrors` in OK or ALARM state, not INSUFFICIENT_DATA. |
+| `21_alarm_upload_errors.png` | Alarm `StudyBot-G15-UploadErrors` in OK or ALARM state. |
+| `22_log_insights_query.png` | Real Log Insights results from Lambda logs. |
+| `23_custom_metrics.png` | Namespace `StudyBot`, e.g. `FlashcardGenerationLatency`, `FlashcardGenerationSuccess`, `SocraticQueryLatency`. |
 
 Suggested Log Insights query:
 
@@ -242,7 +340,167 @@ fields @timestamp, @message
 | limit 50
 ```
 
-## 6.5 Measurement and Decisions
+### 6.1 Structured Logging and CloudWatch Logs Insights
+
+The team implemented structured JSON logging in Lambda with Python `logging` and `json.dumps(...)`. Helper functions `log_event()` and `log_step()` make each log record queryable in CloudWatch Logs Insights instead of relying on free-form text.
+
+Log event types currently emitted:
+
+- `DOCUMENT_UPLOAD`
+- `UPLOAD_ERROR`
+- `RAG_QUERY`
+- `RAG_ERROR`
+- `PROCESS_STEP`
+- `EVALUATE_RESULT`
+- `EVALUATE_ERROR`
+
+**Logging code evidence**
+
+![Structured logging helper](log_code.jpg)
+
+This screenshot shows `log_event()` and `log_step()` emitting records with `event_type` plus metadata such as `operation`, `step`, `user_id`, `doc_id`, and `filename`.
+
+**Log group evidence**
+
+![CloudWatch log group](log_group.jpg)
+
+The `/aws/lambda/studybot-api-G15` log group confirms real Lambda logs are collected by CloudWatch Logs. Retention is configured for 3 days to fit the hackathon demo and cost-control window.
+
+**Structured JSON log evidence**
+
+![Structured JSON log](json_log.jpg)
+
+The sample log shows a `PROCESS_STEP` event from the upload flow with `operation: upload`, `step: upload_start`, `user_id`, `doc_id`, `filename`, and `size`.
+
+### 6.2 Upload Monitoring Queries
+
+CloudWatch Logs Insights queries monitor successful document uploads and upload failures.
+
+**Successful uploads**
+
+![Document upload Logs Insights](document_upload.jpg)
+
+```sql
+fields @timestamp, user_id, filename, size
+| filter event_type = "DOCUMENT_UPLOAD"
+| sort size desc
+| limit 10
+```
+
+This query tracks uploaded documents, largest files, and real ingestion activity from the demo user.
+
+**Upload errors**
+
+![Upload error Logs Insights](document_upload_error.jpg)
+
+```sql
+fields @timestamp, user_id, filename, error_type, error_message
+| filter event_type = "UPLOAD_ERROR"
+| sort @timestamp desc
+| limit 20
+```
+
+The evidence captures `NameError: name 'io' is not defined` for some PDF uploads. This is useful failure-mode evidence because it shows the team can debug ingestion failures, not only demonstrate the happy path.
+
+### 6.3 RAG Usage, Latency, and Error Queries
+
+**RAG query count by user**
+
+![RAG query Logs Insights](rag_query.jpg)
+
+```sql
+fields @timestamp, user_id, question
+| filter event_type = "RAG_QUERY"
+| stats count(*) as total_queries by user_id
+| sort total_queries desc
+```
+
+The result shows demo user `test-user-001` with `16` RAG queries, which measures feature adoption.
+
+**RAG latency**
+
+![RAG latency Logs Insights](rag_latency.jpg)
+
+```sql
+fields latency_ms
+| filter event_type = "RAG_QUERY"
+| stats avg(latency_ms) as avg_latency,
+        max(latency_ms) as max_latency,
+        min(latency_ms) as min_latency
+```
+
+Measured result: `avg_latency = 847.2 ms`, `max_latency = 1970 ms`, `min_latency = 373 ms`. These numbers prove the RAG feature is not only callable but also measured operationally.
+
+**RAG errors**
+
+![RAG error Logs Insights](rag_error.jpg)
+
+```sql
+fields @timestamp, user_id, question, error_type, error_message
+| filter event_type = "RAG_ERROR"
+| sort @timestamp desc
+| limit 20
+```
+
+The result shows `ThrottlingException` from Bedrock `RetrieveAndGenerate` and one Converse error caused by too many tokens. This evidence documents quota/token failure modes for the demo.
+
+### 6.4 Lambda Process Tracing
+
+`PROCESS_STEP` logs trace Lambda execution step by step: upload, list docs, query received, Bedrock retrieval/generation, query history save, and request completion.
+
+![Process step Logs Insights](process_step.jpg)
+
+```sql
+fields @timestamp, operation, step, user_id, doc_id, question
+| filter event_type = "PROCESS_STEP"
+| sort @timestamp desc
+| limit 50
+```
+
+The results include steps such as `query_received`, `bedrock_retrieve_generate_start`, `bedrock_retrieve_generate_done`, `save_query_history_start`, and `save_query_history_done`, which helps locate where a request became slow or failed.
+
+### 6.5 Retrieval Evaluation Metrics
+
+The system logs retrieval evaluation results to measure RAG quality with Precision@K, Recall@K, and MRR.
+
+**Evaluation result**
+
+![Evaluate result Logs Insights](evaluate_result.jpg)
+
+```sql
+fields filename,
+       strategy_used,
+       precision_at_1,
+       precision_at_3,
+       precision_at_5,
+       recall_at_1,
+       recall_at_3,
+       recall_at_5,
+       mrr
+| filter event_type = "EVALUATE_RESULT"
+| sort mrr desc
+```
+
+Sample result:
+
+| File | Strategy | Precision@1 | Precision@3 | Precision@5 | Recall@1 | Recall@3 | Recall@5 | MRR |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| `wiki_04_photosynthesis.txt` | fixed | 0.4 | 0.4667 | 0.4 | 0.4 | 0.6 | 0.8 | 0.55 |
+| `Requirements_Checklist.pdf` | fixed | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 |
+
+**Evaluation errors**
+
+![Evaluate error Logs Insights](evaluate_error.jpg)
+
+```sql
+fields @timestamp, doc_id, error_type, error_message
+| filter event_type = "EVALUATE_ERROR"
+| sort @timestamp desc
+```
+
+The evaluation-error query returned 0 matched records, meaning no `EVALUATE_ERROR` was present in the captured evidence window.
+
+## 6.6 Measurement and Decisions
 
 ### Decision 1: Use Claude 3.5 Sonnet for final demo quality, with Haiku as the lower-cost alternative
 
@@ -260,8 +518,8 @@ fields @timestamp, @message
 
 **Evidence**
 
-- `docs/evidence/24_bedrock_model_answer.png`
-- `docs/evidence/25_model_cost_comparison.png`
+- `24_bedrock_model_answer.png`
+- `25_model_cost_comparison.png`
 - CloudWatch custom metric: `SocraticQueryLatency`.
 
 **Trade-off accepted**
@@ -284,9 +542,9 @@ fields @timestamp, @message
 
 **Evidence**
 
-- `docs/evidence/26_dynamodb_items.png`
-- `docs/evidence/27_docs_list_persistence.png`
-- `docs/evidence/28_fresh_session_persistence.png`
+- `26_dynamodb_items.png`
+- `27_docs_list_persistence.png`
+- `28_fresh_session_persistence.png`
 
 **Trade-off accepted**
 
@@ -308,9 +566,9 @@ fields @timestamp, @message
 
 **Evidence**
 
-- `docs/evidence/16_vpc_endpoints.png`
-- `docs/evidence/29_no_nat_gateway.png`
-- `docs/evidence/30_private_route_table.png`
+- `16_vpc_endpoints.png`
+- `29_no_nat_gateway.png`
+- `30_private_route_table.png`
 
 **Trade-off accepted**
 
@@ -333,7 +591,7 @@ fields @timestamp, @message
 
 **Evidence**
 
-- `docs/evidence/31_rag_evaluation_metrics.png`
+- `31_rag_evaluation_metrics.png`
 - `tests/test_evaluation.py`
 - UI metrics panel in `frontend/index.html`.
 
@@ -375,19 +633,24 @@ sam delete --stack-name sam-app --region ap-southeast-1
 9. Run Cost Explorer after teardown and capture confirmation.
 
 Required teardown screenshots:
-- `docs/evidence/32_stack_deleted.png`
-- `docs/evidence/33_s3_buckets_empty_or_deleted.png`
-- `docs/evidence/34_bedrock_kb_deleted_or_final_state.png`
-- `docs/evidence/35_cost_after_teardown.png`
+- `32_stack_deleted.png`
+- `33_s3_buckets_empty_or_deleted.png`
+- `34_bedrock_kb_deleted_or_final_state.png`
+- `35_cost_after_teardown.png`
 
 ## Screenshot Capture Checklist
 
-Use this checklist while building and demoing. Put all images in `docs/evidence/`.
+Use this checklist while building and demoing. Put all images in ``.
 
 | File | Screenshot to capture | AWS/UI location |
 |---|---|---|
 | `01_live_url_loaded.png` | Public HTTPS app loads | Browser |
 | `03_upload_flow.png` | Upload success | StudyBot UI |
+| `docs/pdf_extraction.md` | Hybrid PDF extraction technical evidence | Repo docs |
+| `src/pdf_extractor.py` | PDF extraction, image filtering, deduplication, OCR/Textract flags | Repo source |
+| `src/handlers.py` | Upload integration into storage/vector/userstore | Repo source |
+| `lambda_upload.py` | Lambda `POST /upload` route | Repo source |
+| `tests/test_pdf_extractor.py` | Text-poor PDF metadata test | Repo tests |
 | `04_ai_answer_with_context.png` | Q&A answer from uploaded doc | StudyBot UI |
 | `05_flashcards_or_quiz.png` | Flashcard or quiz generated | StudyBot UI |
 | `06_architecture_diagram.png` | Final deployed architecture | Diagram export |
@@ -406,6 +669,17 @@ Use this checklist while building and demoing. Put all images in `docs/evidence/
 | `20_alarm_query_errors.png` | Query alarm OK/ALARM | CloudWatch Alarms |
 | `22_log_insights_query.png` | Log Insights query results | CloudWatch Logs Insights |
 | `23_custom_metrics.png` | StudyBot custom metrics | CloudWatch Metrics |
+| `log_code.jpg` | Structured logging code: `log_event()` / `log_step()` | Lambda source code |
+| `log_group.jpg` | Log group `/aws/lambda/studybot-api-G15` | CloudWatch Logs |
+| `json_log.jpg` | Real JSON log with `event_type`, `user_id`, `doc_id` | CloudWatch Logs |
+| `document_upload.jpg` | `DOCUMENT_UPLOAD` query | CloudWatch Logs Insights |
+| `document_upload_error.jpg` | `UPLOAD_ERROR` query | CloudWatch Logs Insights |
+| `rag_query.jpg` | `RAG_QUERY` count by user | CloudWatch Logs Insights |
+| `rag_latency.jpg` | RAG average/max/min latency query | CloudWatch Logs Insights |
+| `rag_error.jpg` | `RAG_ERROR` query | CloudWatch Logs Insights |
+| `process_step.jpg` | Lambda `PROCESS_STEP` trace query | CloudWatch Logs Insights |
+| `evaluate_result.jpg` | Precision@K/Recall@K/MRR query | CloudWatch Logs Insights |
+| `evaluate_error.jpg` | `EVALUATE_ERROR` query with no errors | CloudWatch Logs Insights |
 | `26_dynamodb_items.png` | Persisted app state | DynamoDB console |
 | `28_fresh_session_persistence.png` | Data still visible in fresh session | Browser |
 | `29_no_nat_gateway.png` | NAT Gateway count is zero | VPC NAT Gateway page |
