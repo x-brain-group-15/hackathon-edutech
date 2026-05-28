@@ -486,6 +486,17 @@
             </svg>
             Practice Quiz
           </button>
+          <button
+            class="tab-btn"
+            id="btn-tab-synth"
+            onclick="switchTab('tab-synth')"
+          >
+            <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"></path>
+              <path d="M12 6v12M6 12h12"></path>
+            </svg>
+            Cognitive Synthesizer
+          </button>
         </div>
 
         <!-- Tab: Chat & Socratic Tutor -->
@@ -541,6 +552,19 @@
                   data-i18n-placeholder="questionPlaceholder"
                   autocomplete="off"
                 />
+                <button
+                  class="ghost"
+                  id="mic-btn"
+                  onclick="toggleVoiceInput()"
+                  style="padding: 0.8rem; border-radius: var(--radius-sm); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s ease; background: var(--bg); color: var(--muted);"
+                  title="Speech-to-Text Voice Input"
+                >
+                  <svg style="width: 16px; height: 16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                    <line x1="12" y1="19" x2="12" y2="22"></line>
+                  </svg>
+                </button>
                 <button class="primary" id="ask-btn" onclick="ask()">
                   <span data-i18n="askButton"></span>
                   <svg
@@ -747,26 +771,30 @@
                 </button>
               </div>
             </div>
-
             <div class="leitner-arena">
               <!-- XP Dashboard -->
               <div class="xp-dashboard">
                 <div class="xp-level-badge" id="xp-level">1</div>
                 <div class="xp-bar-wrapper">
-                  <div class="xp-bar-info">
-                    <span style="color: var(--muted)"
-                      >Experience Points (XP)</span
-                    >
-                    <span
-                      id="xp-text"
-                      style="color: var(--accent); font-weight: 700"
-                      >0 / 100 XP</span
-                    >
+                  <div class="xp-bar-info" style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="color: var(--muted)">Experience Points (XP)</span>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                      <span id="streak-flame" class="streak-badge" style="display: none; animation: pulse-flame 1s infinite alternate; font-weight: 800; font-size: 0.82rem; color: var(--warn); background: var(--warn-light); padding: 2px 6px; border-radius: 8px; border: 1px solid rgba(245,158,11,0.25);">
+                        🔥 <span id="streak-count">0</span>x COMBO!
+                      </span>
+                      <span id="xp-text" style="color: var(--accent); font-weight: 700">0 / 100 XP</span>
+                    </div>
                   </div>
                   <div class="xp-bar-bg">
                     <div class="xp-bar-fill" id="xp-fill"></div>
                   </div>
                 </div>
+              </div>
+
+              <!-- Study Mode Toggles -->
+              <div class="leitner-modes" style="display: flex; gap: 0.5rem; justify-content: center; margin-bottom: 0.2rem;">
+                <button class="pill active" id="mode-srs" onclick="switchLeitnerMode('srs')">⏳ Spaced Repetition (Due)</button>
+                <button class="pill" id="mode-cram" onclick="switchLeitnerMode('cram')">⚡ Cram Mode (All)</button>
               </div>
 
               <!-- Leitner Box distribution bar -->
@@ -821,18 +849,38 @@
                   </div>
                 </button>
 
-                <div class="flashcard-action-bar">
+                <div class="flashcard-action-bar" style="display: flex; gap: 0.4rem; justify-content: center; flex-wrap: wrap; margin-top: 1rem; width: 100%;">
                   <button
                     class="btn-leitner wrong"
-                    onclick="handleLeitnerAnswer(false)"
+                    onclick="handleLeitnerSM2(1)"
+                    style="font-size: 0.8rem; padding: 0.5rem 0.85rem;"
                   >
-                    ❌ Forgot (Box 1)
+                    ❌ Forgot (1)
                   </button>
                   <button
                     class="btn-leitner correct"
-                    onclick="handleLeitnerAnswer(true)"
+                    onclick="handleLeitnerSM2(3)"
+                    style="font-size: 0.8rem; padding: 0.5rem 0.85rem; background: var(--warn-light); border-color: rgba(245,158,11,0.25); color: var(--warn);"
+                    onmouseover="this.style.background='var(--warn)'; this.style.color='white';"
+                    onmouseout="this.style.background='var(--warn-light)'; this.style.color='var(--warn)';"
                   >
-                    ✓ Remembered (+1 Box)
+                    🧠 Hard (3)
+                  </button>
+                  <button
+                    class="btn-leitner correct"
+                    onclick="handleLeitnerSM2(4)"
+                    style="font-size: 0.8rem; padding: 0.5rem 0.85rem; background: rgba(var(--accent-rgb), 0.1); border-color: rgba(var(--accent-rgb), 0.25); color: var(--accent);"
+                    onmouseover="this.style.background='var(--accent)'; this.style.color='white';"
+                    onmouseout="this.style.background='rgba(var(--accent-rgb), 0.1)'; this.style.color='var(--accent)';"
+                  >
+                    🙂 Good (4)
+                  </button>
+                  <button
+                    class="btn-leitner correct"
+                    onclick="handleLeitnerSM2(5)"
+                    style="font-size: 0.8rem; padding: 0.5rem 0.85rem;"
+                  >
+                    🔥 Perfect (5)
                   </button>
                 </div>
               </div>
@@ -939,6 +987,72 @@
                     type="button"
                     data-i18n="quizNext"
                   ></button>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <!-- Tab: Cognitive Synthesizer -->
+        <div class="tab-content" id="tab-synth">
+          <section class="card practice-card quiz-card">
+            <div class="card-header">
+              <div class="card-title-group">
+                <span class="step">
+                  <svg class="step-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"></path>
+                    <path d="M12 6v12M6 12h12"></path>
+                  </svg>
+                </span>
+                <h2>Cognitive Synthesizer</h2>
+              </div>
+              <span class="meta">Multi-Document Consensus & Contradiction Analyzer</span>
+            </div>
+
+            <div class="quiz-shell">
+              <div class="quiz-toolbar" style="display: flex; flex-direction: column; gap: 0.5rem; align-items: stretch; height: auto; padding: 1rem 0;">
+                <div style="font-weight: 600; font-size: 0.95rem;">Select Documents to Synthesize:</div>
+                <div class="synth-grid" id="synth-document-grid">
+                  <!-- Dynamically populated document checkboxes -->
+                </div>
+                <div style="margin-top: 1rem; display: flex; justify-content: flex-end; gap: 10px;">
+                  <button class="primary" id="btn-run-synthesis" onclick="generateCrossSynthesis()" type="button">Synthesize Selected Docs</button>
+                </div>
+              </div>
+
+              <!-- Empty state -->
+              <div class="quiz-empty" id="synth-empty">
+                <span class="muted">Select at least two documents above and click "Synthesize Selected Docs" to generate a comparative analysis.</span>
+              </div>
+
+              <!-- Loader -->
+              <div class="quiz-empty" id="synth-loading" style="display: none; flex-direction: column; align-items: center; justify-content: center;">
+                <div class="spinner" style="width: 40px; height: 40px; border-width: 4px; margin-bottom: 1rem;"></div>
+                <span class="muted">Analyzing documents, extracting core concepts, and synthesizing consensus vs contradictions...</span>
+              </div>
+
+              <!-- Output View -->
+              <div id="synth-result-view" style="display: none;">
+                <div class="synth-table-wrapper">
+                  <table class="synth-table">
+                    <thead>
+                      <tr>
+                        <th style="width: 25%">Concept</th>
+                        <th style="width: 35%">Consensus / Agreement</th>
+                        <th style="width: 40%">Contradictions & Differences</th>
+                      </tr>
+                    </thead>
+                    <tbody id="synth-table-body">
+                      <!-- Dynamic rows -->
+                    </tbody>
+                  </table>
+                </div>
+
+                <div style="margin-top: 1.5rem;">
+                  <h3 style="font-family: var(--font-display); font-weight: 700; margin-bottom: 0.5rem; color: var(--accent);">Unique & Supplementary Insights</h3>
+                  <div class="quiz-explain" id="synth-unique-insights" style="background: rgba(var(--accent-rgb), 0.05); border-left: 4px solid var(--accent); padding: 1rem; border-radius: 8px; font-size: 0.9rem; line-height: 1.6;">
+                    <!-- Unique insights content -->
+                  </div>
                 </div>
               </div>
             </div>
@@ -2013,6 +2127,144 @@
       window.parseMarkdownAndCitations = parseMarkdownAndCitations;
       window.scrollToCitation = scrollToCitation;
 
+      // ============================================================================
+      // Feature 2: Speech-to-Study (STT voice input & TTS synthetic read aloud)
+      // ============================================================================
+      let voiceRecognition = null;
+      let isListening = false;
+
+      function initVoiceRecognition() {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+          console.warn('SpeechRecognition not supported in this browser.');
+          return;
+        }
+        voiceRecognition = new SpeechRecognition();
+        voiceRecognition.continuous = false;
+        voiceRecognition.interimResults = false;
+        
+        // Auto-match user active language
+        voiceRecognition.lang = currentLang === 'vi' ? 'vi-VN' : 'en-US';
+
+        voiceRecognition.onstart = () => {
+          isListening = true;
+          const micBtn = $('mic-btn');
+          if (micBtn) micBtn.classList.add('mic-active');
+          toast('Listening... Speak now!', 'info');
+        };
+
+        voiceRecognition.onerror = (e) => {
+          console.error('Speech recognition error', e);
+          isListening = false;
+          const micBtn = $('mic-btn');
+          if (micBtn) micBtn.classList.remove('mic-active');
+          toast('Voice input error: ' + e.error, 'warn');
+        };
+
+        voiceRecognition.onend = () => {
+          isListening = false;
+          const micBtn = $('mic-btn');
+          if (micBtn) micBtn.classList.remove('mic-active');
+        };
+
+        voiceRecognition.onresult = (event) => {
+          const transcript = event.results[0][0].transcript;
+          const inputEl = $('question');
+          if (inputEl) {
+            inputEl.value = transcript;
+            toast('Recognized: "' + transcript + '"', 'success');
+            // Auto submit query for a seamless voice experience!
+            setTimeout(() => ask(), 800);
+          }
+        };
+      }
+
+      function toggleVoiceInput() {
+        if (!voiceRecognition) {
+          initVoiceRecognition();
+        }
+        if (!voiceRecognition) {
+          toast('Voice input is not supported in your browser.', 'warn');
+          return;
+        }
+
+        if (isListening) {
+          voiceRecognition.stop();
+        } else {
+          voiceRecognition.lang = currentLang === 'vi' ? 'vi-VN' : 'en-US';
+          voiceRecognition.start();
+        }
+      }
+
+      let currentUtterance = null;
+      function speakText(btn) {
+        if (!window.speechSynthesis) {
+          toast('Text-to-speech not supported in this browser.', 'warn');
+          return;
+        }
+
+        // If speaking, cancel it
+        if (window.speechSynthesis.speaking) {
+          window.speechSynthesis.cancel();
+          // Reset all speaker icons to original state
+          document.querySelectorAll('.speaker-btn').forEach(b => {
+            b.style.color = 'var(--muted)';
+          });
+          if (currentUtterance && btn && btn.contains(currentUtterance.btn)) {
+            return;
+          }
+        }
+
+        // Find the adjacent text inside the chat bubble
+        const bubbleContent = btn.closest('.bubble-content');
+        const textEl = bubbleContent.querySelector('.bubble-text');
+        if (!textEl) return;
+
+        // Clean markdown tags and citations from text for reading
+        let textToRead = textEl.textContent || textEl.innerText;
+        textToRead = textToRead.replace(/\[chunk\s+\d+\]/gi, '')
+                               .replace(/\[\d+\]/g, '')
+                               .trim();
+
+        if (!textToRead) return;
+
+        const utterance = new SpeechSynthesisUtterance(textToRead);
+        utterance.btn = btn;
+
+        // Dynamic voice matching by language
+        const voices = window.speechSynthesis.getVoices();
+        let matchedVoice = null;
+        if (currentLang === 'vi') {
+          matchedVoice = voices.find(v => v.lang.includes('vi-VN') || v.lang.includes('vi'));
+        } else {
+          matchedVoice = voices.find(v => v.lang.includes('en-US') || v.lang.includes('en'));
+        }
+        if (matchedVoice) {
+          utterance.voice = matchedVoice;
+        }
+        
+        // Slower pitch for a wise, warm professor persona
+        utterance.rate = currentLang === 'vi' ? 0.95 : 0.9;
+        utterance.pitch = 0.95;
+
+        utterance.onstart = () => {
+          btn.style.color = 'var(--accent)';
+          currentUtterance = utterance;
+        };
+
+        utterance.onend = () => {
+          btn.style.color = 'var(--muted)';
+          currentUtterance = null;
+        };
+
+        utterance.onerror = () => {
+          btn.style.color = 'var(--muted)';
+          currentUtterance = null;
+        };
+
+        window.speechSynthesis.speak(utterance);
+      }
+
       async function ask() {
         const q = $('question').value.trim();
         if (!q) {
@@ -2052,7 +2304,15 @@
         </svg>
       </div>
       <div class="bubble-content">
-        <div class="bubble-sender">${t('labelBot')}</div>
+        <div class="bubble-sender" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+          <span>${t('labelBot')}</span>
+          <button class="speaker-btn" onclick="speakText(this)" style="background: transparent; border: none; padding: 2px; cursor: pointer; color: var(--muted); display: inline-flex; align-items: center;" title="Read Aloud">
+            <svg style="width: 13px; height: 13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+              <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+            </svg>
+          </button>
+        </div>
         <div class="bubble-text" id="answer-text">
           <div class="typing-indicator">
             <div class="typing-dot"></div>
@@ -2625,6 +2885,135 @@
             });
           }
         }
+        if (tabId === 'tab-synth') {
+          renderSynthesisGrid();
+        }
+      }
+
+      // --- Multi-Document Cross-Synthesizer ---
+      function renderSynthesisGrid() {
+        const grid = $('synth-document-grid');
+        if (!grid) return;
+        if (!window.allDocs || window.allDocs.length === 0) {
+          grid.innerHTML = '<div style="grid-column: 1/-1; padding: 1rem; text-align: center;" class="muted">No documents available. Please upload some first.</div>';
+          return;
+        }
+        grid.innerHTML = window.allDocs.map(d => {
+          const isChecked = window.selectedDocIds && window.selectedDocIds.has(d.doc_id) ? 'checked' : '';
+          return `
+            <label class="synth-doc-item">
+              <input type="checkbox" value="${d.doc_id}" ${isChecked} onchange="updateSelectedSynthesisDocs(this)">
+              <span class="name-text" title="${d.filename || d.doc_id}">${d.filename || d.doc_id}</span>
+            </label>
+          `;
+        }).join('');
+      }
+
+      function updateSelectedSynthesisDocs(checkbox) {
+        const docId = checkbox.value;
+        if (checkbox.checked) {
+          if (window.selectedDocIds) window.selectedDocIds.add(docId);
+          if (window.allDocs && window.selectedDocNames) {
+            const doc = window.allDocs.find(d => d.doc_id === docId);
+            if (doc) window.selectedDocNames.set(docId, doc.filename);
+          }
+        } else {
+          if (window.selectedDocIds) {
+            window.selectedDocIds.delete(docId);
+            window.selectedDocNames.delete(docId);
+          }
+        }
+        const firstId = window.selectedDocIds ? [...window.selectedDocIds][0] || null : null;
+        window.selectedDocId = firstId;
+        window.selectedDocName = firstId ? window.selectedDocNames.get(firstId) : null;
+
+        if (quizState.sourceDocId !== firstId) {
+          quizState.sourceDocId = null;
+          initQuiz(null);
+        }
+        updateQuizDocLabel();
+        
+        refresh();
+      }
+
+      function escapeHTML(str) {
+        if (!str) return '';
+        return str
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#039;');
+      }
+
+      async function generateCrossSynthesis() {
+        const grid = $('synth-document-grid');
+        if (!grid) return;
+        const checkedInputs = grid.querySelectorAll('input[type="checkbox"]:checked');
+        const docIds = Array.from(checkedInputs).map(cb => cb.value);
+
+        if (docIds.length < 2) {
+          toast('Vui lòng chọn ít nhất 2 tài liệu để tổng hợp so sánh!', 'warn');
+          return;
+        }
+
+        // Switch UI to loading state
+        $('synth-empty').style.display = 'none';
+        $('synth-result-view').style.display = 'none';
+        $('synth-loading').style.display = 'flex';
+
+        try {
+          const res = await call('/docs/synthesize', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ doc_ids: docIds })
+          });
+
+          if (!res.ok) {
+            throw new Error(res.body.detail || 'Synthesis failed');
+          }
+
+          const data = res.body;
+          const synthesis = data.synthesis;
+          const tableBody = $('synth-table-body');
+          const uniqueContainer = $('synth-unique-insights');
+
+          if (!synthesis || !synthesis.length) {
+            tableBody.innerHTML = `<tr><td colspan="3" style="text-align: center;" class="muted">No concepts extracted.</td></tr>`;
+            uniqueContainer.innerHTML = 'No supplementary insights found.';
+          } else {
+            tableBody.innerHTML = synthesis.map(item => {
+              return `
+                <tr>
+                  <td style="font-weight: 700; color: var(--accent);">${escapeHTML(item.topic || 'General')}</td>
+                  <td>${escapeHTML(item.similarities || 'No consensus noted.')}</td>
+                  <td>${escapeHTML(item.differences || 'No direct discrepancies noted.')}</td>
+                </tr>
+              `;
+            }).join('');
+
+            const uniqueInsightsText = synthesis
+              .map(item => item.supplementary)
+              .filter(s => s && s.trim())
+              .map(s => `<li style="margin-bottom: 0.5rem;">${escapeHTML(s)}</li>`)
+              .join('');
+
+            if (uniqueInsightsText) {
+              uniqueContainer.innerHTML = `<ul style="margin: 0; padding-left: 1.2rem;">${uniqueInsightsText}</ul>`;
+            } else {
+              uniqueContainer.innerHTML = 'Both documents cover comparable scope with no major supplementary nuances.';
+            }
+          }
+
+          $('synth-loading').style.display = 'none';
+          $('synth-result-view').style.display = 'block';
+          toast('Đã hoàn thành so sánh tổng hợp đa tài liệu!', 'success');
+        } catch (err) {
+          console.error(err);
+          $('synth-loading').style.display = 'none';
+          $('synth-empty').style.display = 'flex';
+          toast('Không thể tổng hợp tài liệu: ' + err.message, 'error');
+        }
       }
 
       // --- Cornell Study Guide ---
@@ -2730,6 +3119,160 @@
       }
 
       // --- Interactive Mind-Map ---
+      // --- Interactive Mind-Map Explorer (Zoom, Pan, Sprout) ---
+      let mindmapScale = 1.0;
+      let mindmapPanX = 0;
+      let mindmapPanY = 0;
+      let isPanningMindmap = false;
+      let startPanX = 0;
+      let startPanY = 0;
+
+      function initMindmapInteractivity() {
+        const svg = document.querySelector('#mindmap-mermaid svg');
+        if (!svg) return;
+
+        svg.style.transformOrigin = 'center center';
+        svg.style.transition = 'transform 0.1s ease';
+        applyMindmapTransform();
+
+        // 1. Pan Event Listeners
+        const container = $('mindmap-container');
+        container.style.cursor = 'grab';
+        
+        container.onmousedown = (e) => {
+          if (e.target.closest('.mindmap-toolbar') || e.target.closest('.node')) return;
+          isPanningMindmap = true;
+          container.style.cursor = 'grabbing';
+          startPanX = e.clientX - mindmapPanX;
+          startPanY = e.clientY - mindmapPanY;
+        };
+
+        window.onmousemove = (e) => {
+          if (!isPanningMindmap) return;
+          mindmapPanX = e.clientX - startPanX;
+          mindmapPanY = e.clientY - startPanY;
+          applyMindmapTransform();
+        };
+
+        window.onmouseup = () => {
+          if (isPanningMindmap) {
+            isPanningMindmap = false;
+            container.style.cursor = 'grab';
+          }
+        };
+
+        // 2. Double Click Sprout Event Listeners to Nodes
+        const nodes = document.querySelectorAll('#mindmap-mermaid .node');
+        nodes.forEach(node => {
+          node.style.cursor = 'pointer';
+          node.setAttribute('title', 'Double-click to sprout sub-concepts!');
+          
+          node.ondblclick = (e) => {
+            e.stopPropagation();
+            const textEl = node.querySelector('text');
+            if (textEl) {
+              const concept = textEl.textContent.trim();
+              sproutConcept(concept);
+            }
+          };
+        });
+      }
+
+      function applyMindmapTransform() {
+        const svg = document.querySelector('#mindmap-mermaid svg');
+        if (svg) {
+          svg.style.transform = `translate(${mindmapPanX}px, ${mindmapPanY}px) scale(${mindmapScale})`;
+        }
+      }
+
+      function zoomMindmap(factor) {
+        mindmapScale = Math.max(0.4, Math.min(3.0, mindmapScale * factor));
+        applyMindmapTransform();
+      }
+
+      function resetZoomMindmap() {
+        mindmapScale = 1.0;
+        mindmapPanX = 0;
+        mindmapPanY = 0;
+        applyMindmapTransform();
+      }
+
+      async function sproutConcept(concept) {
+        toast(`Sprouting concept: "${concept}" via AI...`, 'info');
+        
+        // Define a targeted RAG query to fetch subconcepts
+        const prompt = `Give exactly 2 key sub-concepts or details directly related to the concept "${concept}". Provide them in raw Mermaid mindmap branch format, like:
+  Child One
+  Child Two
+Do not return any other text, headers, or explanations. Keep them very short (1-3 words).`;
+
+        const docId = window.selectedDocId || window.lastDocId;
+        const res = await call('/query', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question: prompt, socratic: false }),
+        });
+
+        if (!res.ok) {
+          toast('Failed to sprout concept details', 'error');
+          return;
+        }
+
+        const answer = res.body.answer || '';
+        // Extract lines and filter clean concepts
+        const rawLines = answer.split('\n').map(l => l.replace(/[^a-zA-Z0-9\s]/g, '').trim()).filter(l => l.length > 2);
+        
+        const newLeaves = rawLines.slice(0, 2);
+        if (newLeaves.length === 0) {
+          newLeaves.push('Sub-Concept A', 'Sub-Concept B'); // dynamic fallbacks
+        }
+
+        // Add them to the mindmap code
+        const codeLines = window.lastMindmapCode.split('\n');
+        const conceptClean = concept.replace(/[()\[\]{}]/g, '').toLowerCase().trim();
+        
+        let targetLineIdx = -1;
+        let targetIndent = "    ";
+        for (let i = 0; i < codeLines.length; i++) {
+          const lineClean = codeLines[i].replace(/[()\[\]{}]/g, '').toLowerCase().trim();
+          if (lineClean === conceptClean || lineClean.includes(conceptClean)) {
+            targetLineIdx = i;
+            const match = codeLines[i].match(/^(\s*)/);
+            targetIndent = match ? match[1] : "    ";
+            break;
+          }
+        }
+
+        if (targetLineIdx !== -1) {
+          const indent = targetIndent + "  ";
+          const sproutLines = newLeaves.map(leaf => indent + leaf);
+          codeLines.splice(targetLineIdx + 1, 0, ...sproutLines);
+          
+          const newCode = codeLines.join('\n');
+          window.lastMindmapCode = newCode;
+
+          const container = $('mindmap-container');
+          
+          // Re-render
+          container.innerHTML = `
+            <div class="mindmap-toolbar">
+              <button onclick="zoomMindmap(1.15)">🔍 Zoom In</button>
+              <button onclick="zoomMindmap(0.85)">🔍 Zoom Out</button>
+              <button onclick="resetZoomMindmap()">🔄 Reset</button>
+            </div>
+            <div class="mermaid" id="mindmap-mermaid">${newCode}</div>
+          `;
+
+          if (window.mermaid) {
+            mermaid.init(undefined, document.querySelectorAll('.mermaid'));
+            setTimeout(() => initMindmapInteractivity(), 300);
+          }
+          toast(`Successfully sprouted 2 new child nodes for "${concept}"!`, 'success');
+        } else {
+          toast('Concept node match not found in code cache.', 'warn');
+        }
+      }
+
       async function generateMindmap() {
         const activeDocIds = window.selectedDocIds && window.selectedDocIds.size > 0
           ? [...window.selectedDocIds]
@@ -2761,10 +3304,20 @@
           container.style.display = 'flex';
           $('mindmap-empty').style.display = 'none';
 
-          container.innerHTML = `<div class="mermaid" id="mindmap-mermaid">${code}</div>`;
+          container.innerHTML = `
+            <div class="mindmap-toolbar">
+              <button onclick="zoomMindmap(1.15)">🔍 Zoom In</button>
+              <button onclick="zoomMindmap(0.85)">🔍 Zoom Out</button>
+              <button onclick="resetZoomMindmap()">🔄 Reset</button>
+            </div>
+            <div class="mermaid" id="mindmap-mermaid">${code}</div>
+          `;
 
           if (window.mermaid) {
             mermaid.init(undefined, document.querySelectorAll('.mermaid'));
+            setTimeout(() => {
+              initMindmapInteractivity();
+            }, 300);
           }
           toast('Mind-Map successfully generated!', 'success');
         } catch (err) {
@@ -2841,6 +3394,8 @@
         flipped: false,
         xp: 0,
         level: 1,
+        mode: 'srs', // 'srs' (spaced repetition) or 'cram' (all)
+        streak: 0,
       };
 
       function loadLeitnerState() {
@@ -2851,6 +3406,8 @@
             leitnerState.cards = parsed.cards || [];
             leitnerState.xp = parsed.xp || 0;
             leitnerState.level = parsed.level || 1;
+            leitnerState.mode = parsed.mode || 'srs';
+            leitnerState.streak = parsed.streak || 0;
           } catch (e) {
             console.error('Failed to load Leitner state', e);
           }
@@ -2861,7 +3418,19 @@
             DEFAULT_LEITNER_CARDS[currentLang] || DEFAULT_LEITNER_CARDS.en;
           leitnerState.xp = 0;
           leitnerState.level = 1;
+          leitnerState.mode = 'srs';
+          leitnerState.streak = 0;
         }
+
+        // Initialize missing SM-2 variables on all loaded cards
+        leitnerState.cards = leitnerState.cards.map(c => ({
+          ...c,
+          box: c.box || 1,
+          easiness_factor: c.easiness_factor || 2.5,
+          repetitions: c.repetitions || 0,
+          interval: c.interval || 1,
+          next_review: c.next_review || Date.now(),
+        }));
       }
 
       function saveLeitnerState() {
@@ -2871,8 +3440,21 @@
             cards: leitnerState.cards,
             xp: leitnerState.xp,
             level: leitnerState.level,
+            mode: leitnerState.mode,
+            streak: leitnerState.streak,
           })
         );
+      }
+
+      function switchLeitnerMode(mode) {
+        leitnerState.mode = mode;
+        document.getElementById('mode-srs').classList.toggle('active', mode === 'srs');
+        document.getElementById('mode-cram').classList.toggle('active', mode === 'cram');
+        leitnerState.index = 0;
+        leitnerState.flipped = false;
+        saveLeitnerState();
+        updateLeitnerStats();
+        renderLeitnerCard();
       }
 
       function updateLeitnerStats() {
@@ -2884,6 +3466,16 @@
         for (let i = 1; i <= 5; i++) {
           const el = $(`box-${i}-count`);
           if (el) el.textContent = counts[i];
+        }
+
+        // Streak Flame visual update
+        const streakFlame = $('streak-flame');
+        const streakCount = $('streak-count');
+        if (leitnerState.streak >= 3) {
+          if (streakCount) streakCount.textContent = leitnerState.streak;
+          if (streakFlame) streakFlame.style.display = 'inline-flex';
+        } else {
+          if (streakFlame) streakFlame.style.display = 'none';
         }
 
         const currentLevel = Math.floor(leitnerState.xp / 100) + 1;
@@ -2904,23 +3496,45 @@
         if (xpFillEl) xpFillEl.style.width = `${progress}%`;
       }
 
+      function getActiveLeitnerDeck() {
+        if (leitnerState.mode === 'cram') {
+          return leitnerState.cards;
+        }
+        // Spaced Repetition Mode: show only due cards
+        const now = Date.now();
+        return leitnerState.cards.filter(c => c.next_review <= now);
+      }
+
       function renderLeitnerCard() {
-        const deck = leitnerState.cards;
-        if (!deck.length) {
+        const activeDeck = getActiveLeitnerDeck();
+        if (!activeDeck.length) {
           $('leitner-deck-view').style.display = 'none';
           $('leitner-empty').style.display = 'block';
+          
+          // Show descriptive message if all caught up in SRS mode
+          const emptyText = $('leitner-empty').querySelector('.muted');
+          if (emptyText) {
+            if (leitnerState.cards.length > 0 && leitnerState.mode === 'srs') {
+              emptyText.innerHTML = `🎉 <strong>${t('leitnerEmpty', { defaultValue: 'All caught up!' })}</strong><br/><span style="font-size:0.85rem;margin-top:0.4rem;display:inline-block;">No cards are due for review. Switch to <strong>Cram Mode</strong> to study anytime!</span>`;
+            } else {
+              emptyText.textContent = t('leitnerEmpty', { defaultValue: 'No cards in this box.' });
+            }
+          }
           return;
         }
 
-        if (leitnerState.index >= deck.length) {
+        $('leitner-empty').style.display = 'none';
+        $('leitner-deck-view').style.display = 'block';
+
+        if (leitnerState.index >= activeDeck.length) {
           leitnerState.index = 0;
         }
 
-        const current = deck[leitnerState.index];
+        const current = activeDeck[leitnerState.index];
         $('flashcard-progress').textContent = `Card ${
           leitnerState.index + 1
-        } of ${deck.length}`;
-        $('flashcard-box-num').textContent = current.box;
+        } of ${activeDeck.length}`;
+        $('flashcard-box-num').textContent = `${current.box} (EF: ${current.easiness_factor.toFixed(2)})`;
 
         $(
           'flashcard-front'
@@ -2939,26 +3553,64 @@
         renderLeitnerCard();
       }
 
-      function handleLeitnerAnswer(remembered) {
-        const deck = leitnerState.cards;
-        if (!deck.length) return;
+      function handleLeitnerSM2(q) {
+        const activeDeck = getActiveLeitnerDeck();
+        if (!activeDeck.length) return;
 
-        const current = deck[leitnerState.index];
+        const current = activeDeck[leitnerState.index];
 
-        if (remembered) {
+        // 1. Calculate next Spaced Repetition values using SuperMemo SM-2 algorithm
+        let xpGained = 0;
+        if (q >= 3) {
+          // Correct answer
+          if (current.repetitions === 0) {
+            current.interval = 1;
+          } else if (current.repetitions === 1) {
+            current.interval = 6;
+          } else {
+            current.interval = Math.round(current.interval * current.easiness_factor);
+          }
+          current.repetitions += 1;
           current.box = Math.min(5, current.box + 1);
-          leitnerState.xp += 15;
-          toast(
-            'Remembered! Card promoted to Box ' + current.box + ' (+15 XP)',
-            'success'
-          );
+
+          // Streaks
+          leitnerState.streak += 1;
+          
+          // XP mapping
+          if (q === 5) xpGained = 20;
+          else if (q === 4) xpGained = 15;
+          else xpGained = 10;
+
+          // Double XP streak combo!
+          if (leitnerState.streak >= 3) {
+            xpGained *= 2;
+            toast(`🔥 ${leitnerState.streak}x STREAK COMBO! Double XP! (+${xpGained} XP)`, 'success');
+          } else {
+            toast(`Correct! Card promoted to Box ${current.box} (+${xpGained} XP)`, 'success');
+          }
         } else {
+          // Incorrect answer (Forgot)
+          current.repetitions = 0;
+          current.interval = 1;
           current.box = 1;
-          leitnerState.xp += 5;
-          toast('Forgot! Card demoted to Box 1 (+5 XP)', 'warn');
+          
+          leitnerState.streak = 0;
+          xpGained = 5;
+          toast(`Forgot! Card demoted to Box 1 (+5 XP)`, 'warn');
         }
 
-        leitnerState.index = (leitnerState.index + 1) % deck.length;
+        // Adjust Easiness Factor (EF)
+        const oldEF = current.easiness_factor;
+        const newEF = oldEF + (0.1 - (5 - q) * (0.08 + (5 - q) * 0.02));
+        current.easiness_factor = Math.max(1.3, newEF);
+
+        // Schedule next review time in milliseconds
+        current.next_review = Date.now() + current.interval * 24 * 60 * 60 * 1000;
+
+        leitnerState.xp += xpGained;
+
+        // Move to the next index in the active deck
+        leitnerState.index = (leitnerState.index + 1) % activeDeck.length;
         leitnerState.flipped = false;
 
         saveLeitnerState();
@@ -3022,11 +3674,26 @@
 
         const newCards = res.body.flashcards;
         if (newCards && newCards.length > 0) {
-          FLASHCARDS[currentLang] = newCards.map(c => ({ term: c.front, definition: c.back }));
-          flashState.index = 0;
-          flashState.flipped = false;
-          renderFlashcard();
-          toast('Flashcards generated!', 'success');
+          // Map new cards into Leitner cards: term (front), definition (back), box: 1, and default SM-2 variables
+          const mappedCards = newCards.map(c => ({
+            term: c.front,
+            definition: c.back,
+            box: 1,
+            easiness_factor: 2.5,
+            interval: 1,
+            repetitions: 0,
+            next_review: Date.now(), // immediately due!
+          }));
+          
+          // Prepend to existing Leitner cards
+          leitnerState.cards = mappedCards.concat(leitnerState.cards);
+          leitnerState.index = 0;
+          leitnerState.flipped = false;
+          
+          saveLeitnerState();
+          updateLeitnerStats();
+          renderLeitnerCard();
+          toast('Leitner flashcards generated & added!', 'success');
         } else {
           toast('No flashcards generated.', 'warn');
         }
@@ -3152,6 +3819,8 @@
       async function refresh() {
         const res = await call('/docs/list');
         if (!res.ok || !res.body.docs || !res.body.docs.length) {
+          window.allDocs = [];
+          renderSynthesisGrid();
           $('docs').innerHTML = `
       <div class="empty">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 44px; height: 44px; margin-bottom: 0.5rem; opacity: 0.4;">
@@ -3164,6 +3833,7 @@
           return;
         }
 
+        window.allDocs = res.body.docs;
         $('benchmark-section').style.display = 'block';
 
         if (!window.lastDocId) {
@@ -3257,6 +3927,7 @@
             countBadge.style.display = 'none';
           }
         }
+        renderSynthesisGrid();
       }
 
       function selectDoc(docId, filename) {

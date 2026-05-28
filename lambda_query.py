@@ -178,4 +178,25 @@ def generate_cornell(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class SynthesizeRequest(BaseModel):
+    doc_ids: list[str]
+
+@app.post("/docs/synthesize")
+def synthesize(req: SynthesizeRequest, x_user_id: str | None = Header(default=None)) -> dict:
+    user_id = _uid(x_user_id)
+    if not req.doc_ids:
+        raise HTTPException(status_code=400, detail="No document IDs specified")
+    try:
+        return handlers.handle_cross_synthesis(
+            user_id=user_id,
+            doc_ids=req.doc_ids,
+            storage=storage,
+            ai_client=ai_client,
+        )
+    except Exception as e:
+        logger.error(f"[/docs/synthesize] Unexpected error user={user_id}: {type(e).__name__}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 handler = Mangum(app, lifespan="off")
+
