@@ -2083,16 +2083,23 @@
     }
 
     function scrollToCitation(chunkId) {
-      const el = document.getElementById(`citation-${chunkId}`);
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        // Highlight it briefly with a premium flash effect!
-        el.classList.add('highlight-flash');
-        setTimeout(() => el.classList.remove('highlight-flash'), 1500);
-      } else {
-        toast('Citation source details found below.', 'info');
+      // Find nearest citation .body by chunk label (works with multiple Q&A rounds)
+      const allCitations = document.querySelectorAll('.citation');
+      for (const el of allCitations) {
+        const head = el.querySelector('.head');
+        if (head && head.textContent.includes(`chunk ${chunkId}`)) {
+          const body = el.querySelector('.body');
+          if (body) {
+            body.style.display = 'block';
+            const chevron = el.querySelector('.chevron-icon');
+            if (chevron) chevron.style.transform = 'rotate(180deg)';
+          }
+          el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          break;
+        }
       }
     }
+
 
     window.parseMarkdownAndCitations = parseMarkdownAndCitations;
     window.scrollToCitation = scrollToCitation;
@@ -2404,8 +2411,8 @@
       </div>` +
           c
             .map(
-              (x) => `
-        <div class="citation" id="citation-${x.chunk}" onclick="toggleCitationBody(${x.chunk})">
+              (x, idx) => `
+        <div class="citation" id="citation-${x.chunk}-${idx}" onclick="toggleCitationBody(this)">
           <div class="head">
             <span>
               <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -3140,19 +3147,30 @@
     let startPanX = 0;
     let startPanY = 0;
 
-    function toggleCitationBody(chunkId) {
-      const citEl = document.getElementById(`citation-${chunkId}`);
-      if (citEl) {
-        const body = citEl.querySelector('.body');
-        const chevron = citEl.querySelector('.chevron-icon');
-        if (body.style.display === 'none' || !body.style.display) {
-          body.style.display = 'block';
-          chevron.style.transform = 'rotate(180deg)';
-        } else {
-          body.style.display = 'none';
-          chevron.style.transform = 'rotate(0deg)';
+    function toggleCitationBody(elOrId) {
+      // Accept either a DOM element (from onclick="toggleCitationBody(this)")
+      // or a legacy numeric chunkId for backward compat
+      let citEl;
+      if (elOrId instanceof Element) {
+        citEl = elOrId;
+      } else {
+        // Fallback: find by chunk label text (handles duplicate IDs across messages)
+        const allCitations = document.querySelectorAll('.citation');
+        for (const el of allCitations) {
+          const head = el.querySelector('.head');
+          if (head && head.textContent.includes(`chunk ${elOrId}`)) {
+            citEl = el;
+            break;
+          }
         }
       }
+      if (!citEl) return;
+      const body = citEl.querySelector('.body');
+      const chevron = citEl.querySelector('.chevron-icon');
+      if (!body) return;
+      const isHidden = body.style.display === 'none' || !body.style.display;
+      body.style.display = isHidden ? 'block' : 'none';
+      if (chevron) chevron.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
     }
 
     async function showConceptDetails(concept) {
@@ -3223,8 +3241,8 @@
       const container = $('mindmap-container');
       container.style.cursor = 'grab';
       let panStartX = 0, panStartY = 0;
-      let didDrag = false;                   // true if mouse moved > threshold
-      const DRAG_THRESHOLD = 5;             // px — below this = real click
+      let didDrag = false;
+      const DRAG_THRESHOLD = 5;
 
       container.onmousedown = (e) => {
         if (e.target.closest('.mindmap-toolbar')) return;
@@ -3256,60 +3274,75 @@
         }
       };
 
-      // ── Node click & dblclick — attach directly to each node element ────────
-      // Attaching directly (not via delegation) avoids pan/drag conflict and
-      // ensures SVG sub-elements don't swallow the event.
+      // ── SVG-level event delegation for node click/dblclick ──────────────────
+      // Using delegation on the SVG root is safer than cloneNode on SVG elements
+      // (cloneNode can break SVG namespace + loses reference after DOM swap).
       let selectedNode = null;
 
-      function attachNodeListeners() {
-        const nodes = svg.querySelectorAll('.node, .mindmap-node, g[class*="node"]');
-        nodes.forEach(node => {
-          // Remove old listeners by cloning
-          const fresh = node.cloneNode(true);
-          node.parentNode.replaceChild(fresh, node);
-
-          fresh.style.cursor = 'pointer';
-
-          // Single click — show concept in Study Hub
-          fresh.addEventListener('click', (e) => {
-            if (didDrag) return;            // was a pan, not a click
-            e.stopPropagation();
-
-            // Remove previous selection highlight
-            if (selectedNode) selectedNode.classList.remove('mindmap-node-selected');
-            selectedNode = fresh;
-            fresh.classList.add('mindmap-node-selected');
-
-            // Scroll Study Hub into view on mobile
-            const panel = $('mindmap-learning-panel');
-            if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-
-            // Extract label from <text> or <tspan>
-            const textEl = fresh.querySelector('text');
-            if (textEl) {
-              const concept = Array.from(fresh.querySelectorAll('text'))
-                .map(t => t.textContent.trim()).filter(Boolean).join(' ');
-              if (concept) showConceptDetails(concept);
-            }
-          });
-
-          // Double click — sprout sub-concepts
-          fresh.addEventListener('dblclick', (e) => {
-            e.stopPropagation();
-            const textEl = fresh.querySelector('text');
-            if (textEl) {
-              const concept = Array.from(fresh.querySelectorAll('text'))
-                .map(t => t.textContent.trim()).filter(Boolean).join(' ');
-              if (concept) sproutConcept(concept);
-            }
-          });
-        });
+      // Helper: walk up from event target to find the mindmap node <g>
+      function findNodeGroup(target) {
+        let el = target;
+        while (el && el !== svg) {
+          if (
+            el.tagName === 'g' &&
+            el.classList &&
+            (el.classList.contains('mindmap-node') ||
+             el.classList.contains('node') ||
+             Array.from(el.classList).some(c => c.includes('node')))
+          ) {
+            return el;
+          }
+          el = el.parentElement;
+        }
+        return null;
       }
 
-      attachNodeListeners();
+      // Helper: extract visible label text from a node group
+      function getNodeLabel(nodeGroup) {
+        const texts = Array.from(nodeGroup.querySelectorAll('text, tspan'));
+        const label = texts.map(t => t.textContent.trim()).filter(Boolean).join(' ');
+        return label.replace(/\s+/g, ' ').trim();
+      }
 
-      // Re-attach after any dynamic updates (sprout)
-      window._mindmapReattachListeners = attachNodeListeners;
+      // Apply pointer cursor to all nodes via CSS (no DOM mutation)
+      if (!document.getElementById('_mindmap_cursor_style')) {
+        const s = document.createElement('style');
+        s.id = '_mindmap_cursor_style';
+        s.textContent = '#mindmap-mermaid svg g.mindmap-node, #mindmap-mermaid svg g.node { cursor: pointer !important; }';
+        document.head.appendChild(s);
+      }
+
+      // Single-click delegation on SVG
+      svg.onclick = (e) => {
+        if (didDrag) return;
+        const nodeGroup = findNodeGroup(e.target);
+        if (!nodeGroup) return;
+        e.stopPropagation();
+
+        // Highlight selected
+        if (selectedNode) selectedNode.classList.remove('mindmap-node-selected');
+        selectedNode = nodeGroup;
+        nodeGroup.classList.add('mindmap-node-selected');
+
+        const label = getNodeLabel(nodeGroup);
+        if (label) {
+          const panel = $('mindmap-learning-panel');
+          if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          showConceptDetails(label);
+        }
+      };
+
+      // Double-click delegation on SVG
+      svg.ondblclick = (e) => {
+        const nodeGroup = findNodeGroup(e.target);
+        if (!nodeGroup) return;
+        e.stopPropagation();
+        const label = getNodeLabel(nodeGroup);
+        if (label) sproutConcept(label);
+      };
+
+      // Expose re-attach hook (no-op now since we use delegation, kept for compatibility)
+      window._mindmapReattachListeners = () => {};
     }
 
     function applyMindmapTransform() {
