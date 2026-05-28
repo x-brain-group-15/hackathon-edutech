@@ -53,17 +53,34 @@ class BedrockAI:
             "nova-pro",
         )
         needs_prefix = any(p in model_id for p in NEEDS_PROFILE_PREFIXES)
-        
-        PROFILE_PREFIXES = ("us", "eu", "ap", "apac", "usac", "euac")
-        already_prefixed = any(model_id.startswith(f"{p}.") for p in PROFILE_PREFIXES)
+
+        # Cross-region system profile prefixes (no account ID in ARN)
+        SYSTEM_PROFILE_PREFIXES = ("us.", "eu.", "ap.")
+        # Account-level inference profile prefixes (need account ID in ARN)
+        ACCOUNT_PROFILE_PREFIXES = ("apac.", "usac.", "euac.")
+        ALL_PROFILE_PREFIXES = SYSTEM_PROFILE_PREFIXES + ACCOUNT_PROFILE_PREFIXES
+
+        already_prefixed = any(model_id.startswith(p) for p in ALL_PROFILE_PREFIXES)
 
         if needs_prefix and not already_prefixed:
             model_id = f"{region_group}.{model_id}"
 
-        # If it is a cross-region inference profile (prefixed with us., eu., ap., apac., etc.),
-        # use the ::inference-profile/ ARN format instead of ::foundation-model/
-        is_profile = any(model_id.startswith(f"{p}.") for p in PROFILE_PREFIXES)
-        if is_profile:
+        is_account_profile = any(model_id.startswith(p) for p in ACCOUNT_PROFILE_PREFIXES)
+        is_system_profile = any(model_id.startswith(p) for p in SYSTEM_PROFILE_PREFIXES)
+
+        if is_account_profile:
+            # Account-level inference profiles require account ID in ARN
+            import boto3
+            try:
+                account_id = boto3.client("sts", region_name=self.region).get_caller_identity()["Account"]
+            except Exception:
+                account_id = ""
+            if account_id:
+                return f"arn:aws:bedrock:{self.region}:{account_id}:inference-profile/{model_id}"
+            else:
+                return f"arn:aws:bedrock:{self.region}::inference-profile/{model_id}"
+        elif is_system_profile:
+            # Cross-region system profiles — no account ID
             return f"arn:aws:bedrock:{self.region}::inference-profile/{model_id}"
         else:
             return f"arn:aws:bedrock:{self.region}::foundation-model/{model_id}"
