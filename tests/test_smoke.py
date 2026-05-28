@@ -28,6 +28,18 @@ from src.app import app
 client = TestClient(app)
 
 
+class DummyStorage:
+    """Minimal storage stub — always raises on get so fallback logic is exercised."""
+    def get(self, key):
+        raise FileNotFoundError(f"DummyStorage: {key} not found")
+
+    def put(self, key, data):
+        return key
+
+    def delete(self, key):
+        pass
+
+
 def test_health_returns_ok():
     r = client.get("/health")
     assert r.status_code == 200
@@ -129,11 +141,7 @@ def test_quiz_falls_back_when_bedrock_is_throttled():
         def log_query(self, *args, **kwargs):
             return None
         def list_docs(self, user_id):
-            return [{"doc_id": "throttled-doc", "filename": "lecture.txt"}]
-
-    class DummyStorage:
-        def get(self, key):
-            return DOC_TEXT.encode("utf-8")
+            return []
 
     vector = LocalVector()
     vector.ingest(
@@ -199,11 +207,7 @@ def test_quiz_falls_back_when_bedrock_credentials_are_missing():
         def log_query(self, *args, **kwargs):
             return None
         def list_docs(self, user_id):
-            return [{"doc_id": "missing-credentials-doc", "filename": "ml.txt"}]
-
-    class DummyStorage:
-        def get(self, key):
-            return DOC_TEXT.encode("utf-8")
+            return []
 
     vector = LocalVector()
     vector.ingest(
@@ -249,11 +253,7 @@ def test_quiz_fallback_uses_full_local_doc_when_search_returns_partial_chunks():
         def log_query(self, *args, **kwargs):
             return None
         def list_docs(self, user_id):
-            return [{"doc_id": "math-doc", "filename": "math.txt"}]
-
-    class DummyStorage:
-        def get(self, key):
-            return DOC_TEXT.encode("utf-8")
+            return []
 
     vector = LocalVector()
     vector.ingest(
