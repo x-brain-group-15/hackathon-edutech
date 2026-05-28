@@ -49,6 +49,125 @@
       }
     }
   </script>
+  <style>
+    /* ─── Expandable Accordion Citations ────────────────────────────────────── */
+    .citation {
+      border-radius: var(--radius-sm);
+      margin-top: 0.6rem;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.02);
+      transition: all 0.3s ease;
+      cursor: pointer;
+    }
+    [data-theme="light"] .citation {
+      background: rgba(0, 0, 0, 0.01);
+    }
+    .citation:hover {
+      border-color: rgba(var(--accent-rgb), 0.3);
+      background: rgba(var(--accent-rgb), 0.03);
+    }
+    .citation .body {
+      display: none;
+      margin-top: 0.5rem;
+      border-top: 1px dashed var(--border);
+      padding-top: 0.5rem;
+      color: var(--text);
+      opacity: 0.85;
+      line-height: 1.5;
+    }
+    .chevron-icon {
+      transform: rotate(0deg);
+      transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    /* ─── Mindmap Workspace Layout ────────────────────────────────────────── */
+    #mindmap-workspace {
+      display: none;
+      gap: 1rem;
+      flex-wrap: wrap;
+      margin-top: 0.5rem;
+    }
+    #mindmap-container {
+      flex: 1 1 500px;
+      padding: 1rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: rgba(255, 255, 255, 0.02);
+      overflow: auto;
+      text-align: center;
+      min-height: 450px;
+      max-height: 600px;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    [data-theme="light"] #mindmap-container {
+      background: rgba(255, 255, 255, 0.6);
+    }
+    #mindmap-learning-panel {
+      flex: 0 1 320px;
+      min-width: 280px;
+      padding: 1.25rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--chat-bg);
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      max-height: 600px;
+      overflow-y: auto;
+      box-shadow: var(--shadow);
+    }
+    #mindmap-learning-content {
+      font-size: 0.88rem;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    /* ─── Premium Mermaid Mindmap Visual Customizations ───────────────────── */
+    #mindmap-mermaid svg {
+      background: transparent !important;
+      font-family: var(--font-sans) !important;
+    }
+    #mindmap-mermaid .node rect,
+    #mindmap-mermaid .node circle,
+    #mindmap-mermaid .node ellipse,
+    #mindmap-mermaid .node polygon {
+      fill: var(--accent) !important;
+      stroke: var(--accent-light) !important;
+      stroke-width: 2px !important;
+      filter: drop-shadow(0 4px 8px rgba(var(--accent-rgb), 0.25)) !important;
+      transition: all 0.2s ease-in-out !important;
+    }
+    #mindmap-mermaid .node:hover rect,
+    #mindmap-mermaid .node:hover circle,
+    #mindmap-mermaid .node:hover ellipse,
+    #mindmap-mermaid .node:hover polygon {
+      fill: var(--accent-dark) !important;
+      stroke: var(--accent) !important;
+      filter: drop-shadow(0 6px 12px rgba(var(--accent-rgb), 0.4)) !important;
+    }
+    #mindmap-mermaid .node text {
+      fill: #ffffff !important; /* Force high-contrast white text inside central node/nodes always */
+      font-weight: 700 !important;
+      font-family: var(--font-sans) !important;
+      font-size: 13px !important;
+      letter-spacing: 0.02em !important;
+    }
+    #mindmap-mermaid .mindmap-edge,
+    #mindmap-mermaid .edgePath .path,
+    #mindmap-mermaid .edgePaths .path {
+      stroke: var(--accent-light) !important;
+      stroke-width: 2.5px !important;
+      stroke-opacity: 0.85 !important;
+    }
+    [data-theme="light"] #mindmap-mermaid .mindmap-edge,
+    [data-theme="light"] #mindmap-mermaid .edgePath .path,
+    [data-theme="light"] #mindmap-mermaid .edgePaths .path {
+      stroke: var(--accent) !important;
+    }
+  </style>
 </head>
 
 <body>
@@ -513,20 +632,23 @@
             </button>
           </div>
 
-          <div id="mindmap-container" style="
-                display: none;
-                padding: 1rem;
-                border: 1px solid var(--border);
-                border-radius: var(--radius-sm);
-                background: rgba(255, 255, 255, 0.02);
-                overflow: auto;
-                text-align: center;
-                min-height: 400px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-              ">
-            <div class="mermaid" id="mindmap-mermaid"></div>
+          <div id="mindmap-workspace" style="display: none; gap: 1rem; flex-wrap: wrap;">
+            <div id="mindmap-container">
+              <div class="mermaid" id="mindmap-mermaid"></div>
+            </div>
+            
+            <!-- Learning panel for node detail display -->
+            <div id="mindmap-learning-panel">
+              <h3 style="margin: 0; font-size: 0.95rem; font-weight: 800; color: var(--accent); display: flex; align-items: center; gap: 0.4rem; border-bottom: 2px solid var(--border); padding-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em;">
+                <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 16a1.5 1.5 0 1 1 1.5-1.5A1.5 1.5 0 0 1 12 18zm1.07-5.91a2.3 2.3 0 0 0-.27-.41c-.24-.26-.53-.47-.8-.74A3.07 3.07 0 0 1 11 9.5a1.5 1.5 0 0 1 3 0c0 .4-.1.8-.3 1.1a1 1 0 0 0-.63.49z"></path>
+                </svg>
+                <span>Study Hub</span>
+              </h3>
+              <div id="mindmap-learning-content">
+                💡 Click on any branch or concept in the mindmap to display detailed learning notes here! Double-click a node to sprout new sub-concepts.
+              </div>
+            </div>
           </div>
           <div id="mindmap-empty" class="empty" style="padding: 3rem 1.5rem; text-align: center">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="
@@ -849,6 +971,25 @@
             <span data-i18n="benchmarkIntroPrefix"></span><strong data-i18n="benchmarkIntroStrong"></strong><span
               data-i18n="benchmarkIntroSuffix"></span>
           </p>
+          <div style="margin-bottom: 1.25rem; display: flex; flex-direction: column; gap: 0.4rem; max-width: 450px;">
+            <label for="benchmark-doc-select" style="font-size: 0.8rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em;">Chọn tài liệu để đánh giá (Select Library Source):</label>
+            <select id="benchmark-doc-select" onchange="onBenchmarkDocSelect(this.value)" style="
+              padding: 0.65rem 0.9rem;
+              font-family: var(--font-sans);
+              font-size: 0.88rem;
+              font-weight: 500;
+              color: var(--text);
+              background: var(--chat-bg);
+              border: 1px solid var(--border);
+              border-radius: var(--radius-sm);
+              outline: none;
+              cursor: pointer;
+              transition: all 0.3s ease;
+              box-shadow: var(--shadow-sm);
+            ">
+              <!-- Dynamically populated -->
+            </select>
+          </div>
           <div style="
                 display: flex;
                 gap: 0.75rem;
@@ -2041,19 +2182,48 @@
 
       $('answer-text').innerHTML = parseMarkdownAndCitations(answerText);
 
+      // Reranking metadata header
+      let rerankHtml = '';
+      if (res.body.reranking_metadata && res.body.reranking_metadata.rerank_applied) {
+        const rm = res.body.reranking_metadata;
+        rerankHtml = `
+          <div class="reranking-badge" style="
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.55rem 0.8rem;
+            background: rgba(16, 185, 129, 0.08);
+            border: 1px dashed var(--success);
+            border-radius: var(--radius-sm);
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: var(--success);
+            margin-bottom: 0.75rem;
+            width: 100%;
+            animation: fadeIn 0.35s ease;
+          ">
+            <svg style="width: 14px; height: 14px; flex-shrink: 0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline>
+              <polyline points="16 7 22 7 22 13"></polyline>
+            </svg>
+            <span>Reranking Active: Cohere v3.5 filtered ${rm.original_count} raw chunks down to top ${rm.final_count} most relevant study nodes!</span>
+          </div>
+        `;
+      }
+
       if (c.length) {
-        $('citations').innerHTML =
+        $('citations').innerHTML = rerankHtml +
           `
       <div class="citations-title">
         <svg style="width:12px;height:12px;vertical-align:middle;" viewBox="0 0 20 20" fill="currentColor">
           <path fill-rule="evenodd" d="M12.586 4.586a2 2 0 112.828 2.828l-3 3a2 2 0 01-2.828 0 1 1 0 00-1.414 1.414 4 4 0 005.656 0l3-3a4 4 0 00-5.656-5.656l-1.5 1.5a1 1 0 101.414 1.414l1.5-1.5zm-5 5a2 2 0 012.828 0 1 1 0 101.414-1.414 4 4 0 00-5.656 0l-3 3a4 4 0 105.656 5.656l1.5-1.5a1 1 0 10-1.414-1.414l-1.5 1.5a2 2 0 11-2.828-2.828l3-3z" clip-rule="evenodd"/>
         </svg>
-        ${t('citationsTitle')}
+        ${t('citationsTitle')} (Click to expand)
       </div>` +
           c
             .map(
               (x) => `
-        <div class="citation" id="citation-${x.chunk}">
+        <div class="citation" id="citation-${x.chunk}" onclick="toggleCitationBody(${x.chunk})">
           <div class="head">
             <span>
               <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -2062,9 +2232,14 @@
               </svg>
               ${t('citationChunk', { chunk: x.chunk })}
             </span>
-            <span class="score">${t('citationScore', {
-                score: (x.score || 0).toFixed(1),
+            <div style="display: flex; align-items: center; gap: 0.35rem;">
+              <span class="score">${t('citationScore', {
+                score: (x.score || 0).toFixed(2),
               })}</span>
+              <svg class="chevron-icon" style="width:12px;height:12px;transition: transform 0.2s;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </div>
           </div>
           <div class="body">${(x.text || '').replace(/</g, '&lt;')}</div>
         </div>
@@ -2072,9 +2247,7 @@
             )
             .join('');
       } else {
-        $(
-          'citations'
-        ).innerHTML = `<div class="muted" style="font-size:0.82rem; margin-top:0.6rem; text-align: center;">${t(
+        $('citations').innerHTML = rerankHtml + `<div class="muted" style="font-size:0.82rem; margin-top:0.6rem; text-align: center;">${t(
           'citationsNone'
         )}</div>`;
       }
@@ -2721,11 +2894,19 @@
         // Render Notes
         const notesHtml = data.notes
           .map(
-            (n) => `
-      <div class="cornell-note-point">
-        ${n}
-      </div>
-    `
+            (n) => {
+              let text = '';
+              if (typeof n === 'object' && n !== null) {
+                text = n.note || n.point || n.text || n.content || JSON.stringify(n);
+              } else {
+                text = n;
+              }
+              return `
+                <div class="cornell-note-point">
+                  ${text}
+                </div>
+              `;
+            }
           )
           .join('');
         $('cornell-notes-points').innerHTML =
@@ -2777,6 +2958,63 @@
     let startPanX = 0;
     let startPanY = 0;
 
+    function toggleCitationBody(chunkId) {
+      const citEl = document.getElementById(`citation-${chunkId}`);
+      if (citEl) {
+        const body = citEl.querySelector('.body');
+        const chevron = citEl.querySelector('.chevron-icon');
+        if (body.style.display === 'none' || !body.style.display) {
+          body.style.display = 'block';
+          chevron.style.transform = 'rotate(180deg)';
+        } else {
+          body.style.display = 'none';
+          chevron.style.transform = 'rotate(0deg)';
+        }
+      }
+    }
+
+    async function showConceptDetails(concept) {
+      const panel = $('mindmap-learning-content');
+      if (!panel) return;
+      
+      panel.innerHTML = `
+        <div style="display: flex; flex-direction: column; align-items: center; padding: 2rem 0; text-align: center; gap: 0.75rem;">
+          <span class="spinner" style="width: 24px; height: 24px;"></span>
+          <span style="font-weight: 500; font-size: 0.85rem; color: var(--muted);">Loading details for <strong>${concept}</strong>...</span>
+        </div>
+      `;
+      
+      const prompt = `Bạn là một trợ lý học tập đắc lực. Hãy giải thích ngắn gọn, súc tích (khoảng 3-4 câu) và cực kỳ dễ hiểu về khái niệm "${concept}" dựa trên tài liệu học tập của học sinh. Định dạng câu trả lời bằng Markdown đẹp mắt với các điểm quan trọng được in đậm.`;
+      
+      const docId = window.selectedDocId || window.lastDocId;
+      const activeDocIds = window.selectedDocIds.size > 0 ? [...window.selectedDocIds] : null;
+      const res = await call('/query', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: prompt, socratic: false, doc_ids: activeDocIds }),
+      });
+      
+      if (!res.ok) {
+        panel.innerHTML = `<span style="color: var(--error);">Không thể lấy thông tin chi tiết cho "${concept}". Vui lòng thử lại.</span>`;
+        return;
+      }
+      
+      const answer = res.body.answer || '';
+      panel.innerHTML = `
+        <div style="animation: fadeIn 0.3s ease;">
+          <h4 style="margin: 0 0 0.75rem; font-size: 1.1rem; font-weight: 800; color: var(--accent-2); border-bottom: 2px solid var(--border); padding-bottom: 0.4rem; font-family: var(--font-display);">
+            ${concept}
+          </h4>
+          <div class="learning-markdown-body" style="font-size: 0.9rem; line-height: 1.6; color: var(--text);">
+            ${parseMarkdownAndCitations(answer)}
+          </div>
+          <div style="margin-top: 1rem; padding: 0.5rem 0.75rem; background: rgba(var(--accent-rgb), 0.06); border-left: 3px solid var(--accent); border-radius: 0 4px 4px 0; font-size: 0.82rem; font-weight: 500; color: var(--accent);">
+            💡 Tips: Double-click a node to sprout new sub-concepts!
+          </div>
+        </div>
+      `;
+    }
+
     function initMindmapInteractivity() {
       const svg = document.querySelector('#mindmap-mermaid svg');
       if (!svg) return;
@@ -2811,12 +3049,23 @@
         }
       };
 
-      // 2. Double Click Sprout Event Listeners to Nodes
+      // 2. Click event listeners to Nodes
       const nodes = document.querySelectorAll('#mindmap-mermaid .node');
       nodes.forEach(node => {
         node.style.cursor = 'pointer';
-        node.setAttribute('title', 'Double-click to sprout sub-concepts!');
+        node.setAttribute('title', 'Click to learn concept! Double-click to sprout sub-concepts.');
 
+        // Single click to show detailed learning notes
+        node.onclick = (e) => {
+          e.stopPropagation();
+          const textEl = node.querySelector('text');
+          if (textEl) {
+            const concept = textEl.textContent.trim();
+            showConceptDetails(concept);
+          }
+        };
+
+        // Double click to sprout sub-concepts
         node.ondblclick = (e) => {
           e.stopPropagation();
           const textEl = node.querySelector('text');
@@ -2901,6 +3150,10 @@ Do not return any other text, headers, or explanations. Keep them very short (1-
         const newCode = codeLines.join('\n');
         window.lastMindmapCode = newCode;
 
+        const workspace = $('mindmap-workspace');
+        if (workspace) workspace.style.display = 'flex';
+        $('mindmap-empty').style.display = 'none';
+
         const container = $('mindmap-container');
 
         // Re-render
@@ -2950,10 +3203,12 @@ Do not return any other text, headers, or explanations. Keep them very short (1-
 
         const code = res.body.mindmap;
         window.lastMindmapCode = code; // Cache for theme changes
-        const container = $('mindmap-container');
-        container.style.display = 'flex';
+        
+        const workspace = $('mindmap-workspace');
+        if (workspace) workspace.style.display = 'flex';
         $('mindmap-empty').style.display = 'none';
 
+        const container = $('mindmap-container');
         container.innerHTML = `
             <div class="mindmap-toolbar">
               <button onclick="zoomMindmap(1.15)">🔍 Zoom In</button>
@@ -3379,8 +3634,26 @@ Do not return any other text, headers, or explanations. Keep them very short (1-
     // ============================================================================
     // RAG Quality Evaluation Benchmark
     // ============================================================================
+    function onBenchmarkDocSelect(docId) {
+      window.selectedDocId = docId;
+      if (!window.selectedDocIds.has(docId)) {
+        window.selectedDocIds.clear();
+        window.selectedDocNames.clear();
+        const doc = window.allDocs.find(d => d.doc_id === docId);
+        if (doc) {
+          window.selectedDocIds.add(docId);
+          window.selectedDocNames.set(docId, doc.filename);
+        }
+        window.selectedDocId = docId;
+        window.selectedDocName = doc ? doc.filename : null;
+        if (typeof updateQuizDocLabel === 'function') updateQuizDocLabel();
+        refresh();
+      }
+    }
+
     async function runBenchmark() {
-      const docId = window.selectedDocId || window.lastDocId;
+      const docSelect = $('benchmark-doc-select');
+      const docId = docSelect ? docSelect.value : (window.selectedDocId || window.lastDocId);
       if (!docId) {
         toast(t('benchmarkNeedDoc'), 'warn');
         return;
@@ -3508,6 +3781,14 @@ Do not return any other text, headers, or explanations. Keep them very short (1-
 
       window.allDocs = res.body.docs;
       $('benchmark-section').style.display = 'block';
+
+      // Populate benchmark document select
+      const bSelect = $('benchmark-doc-select');
+      if (bSelect && res.body.docs) {
+        bSelect.innerHTML = res.body.docs
+          .map(d => `<option value="${d.doc_id}" ${d.doc_id === window.selectedDocId ? 'selected' : ''}>${d.filename || d.doc_id}</option>`)
+          .join('');
+      }
 
       if (!window.lastDocId) {
         window.lastDocId = res.body.docs[0].doc_id;

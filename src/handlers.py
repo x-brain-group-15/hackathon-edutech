@@ -103,7 +103,7 @@ CORNELL_PROMPT = """You are a study assistant. Analyze the provided lecture note
 
 Your response must be returned strictly as a JSON object with the following three fields:
 1. "cues": a list of objects, each containing "keyword" (a key question, formula, or cue term) and "association" (what section or concept it points to). Generate at least 5 cues.
-2. "notes": a list of detailed, structured study points (bullet points, structured facts, definitions, or equations) matching the cues on the left. Generate at least 5 points.
+2. "notes": a list of detailed study point strings (e.g., ["string1", "string2", ...]) matching the cues on the left. Each item MUST be a raw flat string, NOT a JSON object. Generate at least 5 points.
 3. "summary": a concise, 2-3 sentence summary summarizing the absolute core takeaway of the entire lecture.
 
 Return the output STRICTLY as a raw JSON object. Do NOT wrap it in markdown code blocks or add any text before or after the JSON.
@@ -507,7 +507,68 @@ def handle_query(
         all_chunks.sort(key=lambda c: c.get("score", 0), reverse=True)
         return all_chunks[:top_k]
 
+    def _ensure_docs_in_local_store(target_doc_ids: Optional[list[str]]):
+        from src.adapters.vector import LocalVector
+        from src.adapters import factory
+        
+        # Resolve which store to load into
+        store_to_use = None
+        if isinstance(vector_store, LocalVector):
+            store_to_use = vector_store
+        else:
+            try:
+                from src.adapters.factory import _local_vector_singleton
+                store_to_use = _local_vector_singleton
+            except Exception:
+                pass
+            if not store_to_use:
+                store_to_use = LocalVector()
+                
+        if not store_to_use:
+            return
+            
+        resolved_ids = target_doc_ids
+        if not resolved_ids:
+            try:
+                docs = userstore.list_docs(user_id)
+                resolved_ids = [d["doc_id"] for d in docs]
+            except Exception:
+                resolved_ids = []
+                
+        storage = factory.make_storage()
+        for did in resolved_ids:
+            already_ingested = any(d[2].get("doc_id") == did for d in store_to_use.docs)
+            if not already_ingested:
+                try:
+                    docs = userstore.list_docs(user_id)
+                    doc = next((d for d in docs if d["doc_id"] == did), None)
+                    filename = doc.get("filename", "document.txt") if doc else "document.txt"
+                    
+                    try:
+                        text_bytes = storage.get(f"{user_id}/{did}/extracted_text.txt")
+                        text = text_bytes.decode("utf-8")
+                    except Exception:
+                        key = f"{user_id}/{did}/{filename}"
+                        text_bytes = storage.get(key)
+                        text = _extract_text(filename, text_bytes)
+                        
+                    if text.strip():
+                        store_to_use.ingest(
+                            doc_id=did,
+                            text=text,
+                            metadata={"user_id": user_id, "doc_id": did, "filename": filename}
+                        )
+                        logger.info(f"Dynamically loaded doc_id={did} into local vector store for query.")
+                except Exception as e:
+                    logger.warning(f"Failed to dynamically load doc_id={did} into local store: {e}")
+
     try:
+        # Pre-seed documents to local store to guarantee retrieval succeeds on stateless Lambda fallbacks
+        _ensure_docs_in_local_store(doc_ids)
+
+        original_count = 0
+        rerank_applied = False
+
         if socratic:
             log_step(
                 "rag_query",
@@ -518,43 +579,14 @@ def handle_query(
             # Retrieve chunks using unified and robust vector search with user isolation
             chunks = []
             top_k_retrieve = config.retrieve_top_k if config.reranking_enabled else 5
-            if vector_backend == "bedrock_kb":
-                try:
-                    ret_res = ai_client.agent_runtime.retrieve(
-                        knowledgeBaseId=bedrock_kb_id,
-                        retrievalQuery={"text": question},
-                        retrievalConfiguration={
-                            "vectorSearchConfiguration": {
-                                "numberOfResults": top_k_retrieve
-                            }
-                        }
-                    )
-                    for i, r in enumerate(ret_res.get("retrievalResults", [])):
-                        loc = r.get("location", {})
-                        doc_id = r.get("metadata", {}).get("doc_id", "knowledge-base")
-                        if loc.get("type") == "S3":
-                            uri = loc.get("s3Location", {}).get("uri", "")
-                            if uri:
-                                doc_id = uri.split("/")[-1]
-                        chunks.append({
-                            "text": r["content"]["text"],
-                            "chunk": i + 1,
-                            "score": r.get("score", 0),
-                            "doc_id": doc_id,
-                        })
-                except Exception as e:
-                    logger.warning(f"Bedrock KB retrieve failed, falling back to local vector: {e}")
-                    try:
-                        chunks = _search_chunks(question, top_k=top_k_retrieve)
-                    except Exception as le:
-                        logger.warning(f"Local vector fallback failed: {le}")
-            else:
-                try:
-                    chunks = _search_chunks(question, top_k=top_k_retrieve)
-                except Exception as e:
-                    logger.warning(f"Local vector search failed: {e}")
+            try:
+                chunks = _search_chunks(question, top_k=top_k_retrieve)
+            except Exception as e:
+                logger.warning(f"Vector search failed in Socratic mode: {e}")
 
-            if config.reranking_enabled:
+            original_count = len(chunks)
+            if config.reranking_enabled and chunks:
+                rerank_applied = True
                 chunks = _rerank_with_cohere(question, chunks, top_k=config.rerank_top_k)
             else:
                 chunks = chunks[:5]
@@ -593,7 +625,16 @@ def handle_query(
             except Exception:
                 pass
 
-            return {"answer": answer, "citations": citations}
+            return {
+                "answer": answer,
+                "citations": citations,
+                "reranking_metadata": {
+                    "rerank_applied": rerank_applied,
+                    "original_count": original_count,
+                    "final_count": len(chunks),
+                    "model": "rerank-v3.5",
+                }
+            }
 
         # Luồng chính RAG
         if vector_backend == "bedrock_kb" and not config.reranking_enabled:
@@ -640,9 +681,9 @@ def handle_query(
             )
 
             # If Bedrock returns zero citations, treat it as an undesired/low-quality answer
-            # and immediately fall back to Groq.
+            # and immediately fall back to local vector search.
             if len(citations) == 0:
-                logger.warning("Bedrock citations_count=0; switching to Groq fallback via invoke.")
+                logger.warning("Bedrock citations_count=0; switching to Groq/Bedrock fallback via unified search.")
                 try:
                     chunks = _search_chunks(question, top_k=5)
                     context = "\n\n".join(
@@ -650,7 +691,7 @@ def handle_query(
                         for i, c in enumerate(chunks)
                     )
                 except Exception as le:
-                    logger.warning(f"Local context rebuild failed for Groq fallback: {le}")
+                    logger.warning(f"Local context rebuild failed for fallback: {le}")
                     context = ""
 
                 prompt = PROMPT_TEMPLATE.format(
@@ -659,7 +700,15 @@ def handle_query(
                 )
 
                 answer = ai_client.invoke(prompt, max_tokens=512)
-                citations = []
+                citations = [
+                    {
+                        "chunk": i + 1,
+                        "doc_id": c.get("doc_id", "knowledge-base"),
+                        "score": c.get("score", 1.0),
+                        "text": c["text"]
+                    }
+                    for i, c in enumerate(chunks)
+                ]
         else:
             # Bật Reranking hoặc dùng Local Vector Backend
             top_k_retrieve = config.retrieve_top_k if config.reranking_enabled else 5
@@ -672,39 +721,10 @@ def handle_query(
             )
 
             chunks = []
-            if vector_backend == "bedrock_kb":
-                # Lấy chunks từ Bedrock KB trước
-                try:
-                    ret_res = ai_client.agent_runtime.retrieve(
-                        knowledgeBaseId=bedrock_kb_id,
-                        retrievalQuery={"text": question},
-                        retrievalConfiguration={
-                            "vectorSearchConfiguration": {
-                                "numberOfResults": top_k_retrieve
-                            }
-                        }
-                    )
-                    for i, r in enumerate(ret_res.get("retrievalResults", [])):
-                        loc = r.get("location", {})
-                        doc_id = r.get("metadata", {}).get("doc_id", "knowledge-base")
-                        if loc.get("type") == "S3":
-                            uri = loc.get("s3Location", {}).get("uri", "")
-                            if uri:
-                                doc_id = uri.split("/")[-1]
-                        chunks.append({
-                            "text": r["content"]["text"],
-                            "doc_id": doc_id,
-                            "score": r.get("score", 0.0),
-                            "metadata": r.get("metadata", {}),
-                        })
-                except Exception as e:
-                    logger.warning(f"Bedrock KB retrieve failed, falling back to local search: {e}")
-                    try:
-                        chunks = _search_chunks(question, top_k=top_k_retrieve)
-                    except Exception as le:
-                        logger.warning(f"Local fallback search failed: {le}")
-            else:
+            try:
                 chunks = _search_chunks(question, top_k=top_k_retrieve)
+            except Exception as e:
+                logger.warning(f"Vector search failed: {e}")
 
             log_step(
                 "rag_query",
@@ -713,8 +733,10 @@ def handle_query(
                 chunks_found=len(chunks)
             )
 
+            original_count = len(chunks)
             # Thực hiện Reranking nếu được bật
-            if config.reranking_enabled:
+            if config.reranking_enabled and chunks:
+                rerank_applied = True
                 chunks = _rerank_with_cohere(question, chunks, top_k=config.rerank_top_k)
             else:
                 chunks = chunks[:5]
@@ -827,7 +849,13 @@ def handle_query(
         return {
             "question": question,
             "answer": answer,
-            "citations": citations
+            "citations": citations,
+            "reranking_metadata": {
+                "rerank_applied": rerank_applied,
+                "original_count": original_count,
+                "final_count": len(chunks),
+                "model": "rerank-v3.5",
+            }
         }
 
     except Exception as e:
