@@ -1090,6 +1090,18 @@ def handle_generate_quiz(
         if not doc_id and effective_doc_ids:
             doc_id = effective_doc_ids[0]
 
+    is_local_env = config.storage_backend == "local" or config.ai_backend == "local"
+
+    if not context.strip():
+        # In local/offline env only: fall back to vector_store in-memory chunks
+        if is_local_env and hasattr(vector_store, "docs") and vector_store.docs:
+            local_doc_chunks = []
+            for chunk_id, text, metadata in vector_store.docs:
+                if metadata.get("user_id") == user_id and (not doc_id or metadata.get("doc_id") == doc_id):
+                    local_doc_chunks.append(text)
+            if local_doc_chunks:
+                context = "\n\n".join(local_doc_chunks)
+
     if not context.strip():
         log_step("generate_quiz", "no_content", user_id=user_id, doc_id=doc_id)
         raise ValueError("No document content found. Upload a document before generating a quiz.")
@@ -1148,6 +1160,22 @@ def handle_generate_quiz(
         else:
             response = ai_client.invoke(prompt, max_tokens=2048, temperature=0.1)
     except Exception as e:
+        # In local/offline env only: fall back to rule-based quiz when AI is unavailable
+        if is_local_env and _is_bedrock_fallback_error(e):
+            logger.warning(f"AI unavailable in local env; using rule-based fallback: {e}")
+            fallback_chunks = [{"text": s} for s in summaries]
+            quiz_items = _fallback_quiz_from_chunks(fallback_chunks, num_questions)
+            latency_ms = int((time.time() - start_time) * 1000)
+            log_event(
+                "QUIZ_GENERATED",
+                user_id=user_id,
+                doc_id=doc_id,
+                requested_questions=num_questions,
+                returned_questions=len(quiz_items),
+                latency_ms=latency_ms,
+                status="fallback_local",
+            )
+            return {"quiz": quiz_items, "saved": False}
         raise
 
     raw_items = json.loads(_clean_json_response(response))
