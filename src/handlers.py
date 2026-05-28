@@ -378,7 +378,11 @@ def handle_query(
                 )
 
             if not chunks:
-                answer = "I could not find any context in your uploaded lecture notes to guide you. Please upload a lecture slide first!"
+                prompt = SOCRATIC_PROMPT.format(
+                    context="",
+                    question=question
+                )
+                answer = ai_client.invoke(prompt, max_tokens=512)
                 citations = []
             else:
                 context = "\n\n".join(
@@ -457,10 +461,14 @@ def handle_query(
             )
 
             if not chunks:
-                answer = "No relevant content found in your uploaded documents. Upload some first."
+                prompt = PROMPT_TEMPLATE.format(
+                    context="",
+                    question=question
+                )
+                answer = ai_client.invoke(prompt, max_tokens=512)
                 citations = []
-                input_tokens = 0
-                output_tokens = 0
+                input_tokens = len(prompt.split())
+                output_tokens = len(answer.split())
 
                 log_step(
                     "rag_query",

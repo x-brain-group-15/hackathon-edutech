@@ -282,12 +282,6 @@ FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
 
 
 if config.serve_frontend:
-    @app.get("/")
-    def index() -> FileResponse:
-        """Convenience: serves frontend/index.html at /. Set SERVE_FRONTEND=false
-        if you deploy the frontend separately (CloudFront+S3, Amplify, ALB)."""
-        return FileResponse(FRONTEND_DIR / "index.html")
-
-    @app.get("/global.css")
-    def global_css() -> FileResponse:
-        return FileResponse(FRONTEND_DIR / "global.css", media_type="text/css")
+    from fastapi.staticfiles import StaticFiles
+    # Mount the frontend directory to serve both index.html and assets like global.css
+    app.mount("/", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="frontend")

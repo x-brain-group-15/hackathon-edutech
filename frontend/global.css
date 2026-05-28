@@ -1969,3 +1969,108 @@ details pre {
   from { transform: scale(0.8); opacity: 0; }
   to { transform: scale(1); opacity: 1; }
 }
+
+/* Premium Mindmap Custom Styling */
+#mindmap-container {
+  transition: all 0.3s ease;
+  position: relative;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius) !important;
+  background: var(--card) !important;
+  box-shadow: var(--shadow) !important;
+}
+
+#mindmap-mermaid {
+  width: 100% !important;
+  display: flex !important;
+  justify-content: center !important;
+}
+
+#mindmap-mermaid svg {
+  max-width: 100% !important;
+  height: auto !important;
+  font-family: var(--font-sans) !important;
+}
+
+/* Base style for mindmap nodes */
+#mindmap-mermaid .node rect,
+#mindmap-mermaid .node circle,
+#mindmap-mermaid .node polygon,
+#mindmap-mermaid .node path {
+  fill-opacity: 0.9 !important;
+  stroke-width: 2px !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.1)) !important;
+}
+
+/* Light / Dark Mode adaptive colors for Nodes */
+[data-theme="dark"] #mindmap-mermaid .node rect {
+  fill: #1e1b4b !important;
+  stroke: #4f46e5 !important;
+}
+[data-theme="dark"] #mindmap-mermaid .node circle {
+  fill: #311042 !important;
+  stroke: #c084fc !important;
+}
+[data-theme="dark"] #mindmap-mermaid .node polygon {
+  fill: #064e3b !important;
+  stroke: #34d399 !important;
+}
+
+[data-theme="light"] #mindmap-mermaid .node rect {
+  fill: #e0e7ff !important;
+  stroke: #6366f1 !important;
+}
+[data-theme="light"] #mindmap-mermaid .node circle {
+  fill: #f3e8ff !important;
+  stroke: #a855f7 !important;
+}
+[data-theme="light"] #mindmap-mermaid .node polygon {
+  fill: #d1fae5 !important;
+  stroke: #10b981 !important;
+}
+
+/* Premium node text colors and font weights */
+#mindmap-mermaid .node text {
+  font-family: var(--font-sans) !important;
+  font-size: 0.85rem !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.02em !important;
+}
+
+[data-theme="dark"] #mindmap-mermaid .node text {
+  fill: #ffffff !important;
+}
+[data-theme="light"] #mindmap-mermaid .node text {
+  fill: #0f172a !important;
+}
+
+/* Interactive Hover effects with modern transformations */
+#mindmap-mermaid .node:hover rect,
+#mindmap-mermaid .node:hover circle,
+#mindmap-mermaid .node:hover polygon,
+#mindmap-mermaid .node:hover path {
+  fill-opacity: 1 !important;
+  stroke-width: 3px !important;
+  transform: scale(1.05);
+  filter: drop-shadow(0 10px 15px rgba(99, 102, 241, 0.3)) !important;
+}
+
+/* Custom styling for lines (edges) in Mindmap */
+#mindmap-mermaid .edgePaths .edgePath .path {
+  stroke-width: 3px !important;
+  stroke-linecap: round !important;
+  transition: all 0.3s ease !important;
+}
+
+[data-theme="dark"] #mindmap-mermaid .edgePaths .edgePath .path {
+  stroke: #475569 !important;
+}
+[data-theme="light"] #mindmap-mermaid .edgePaths .edgePath .path {
+  stroke: #cbd5e1 !important;
+}
+
+#mindmap-mermaid .edgePaths .edgePath:hover .path {
+  stroke: var(--accent) !important;
+  stroke-width: 4px !important;
+}

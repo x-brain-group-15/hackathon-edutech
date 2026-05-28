@@ -35,6 +35,20 @@
             newTheme === 'dark' ? t('themeDark') : t('themeLight');
           toast(t('themeSwitched', { mode: modeLabel }), 'success');
         }
+        
+        // Dynamic Mermaid Re-render for Theme Toggle
+        if (window.mermaid && window.lastMindmapCode) {
+          const container = document.getElementById('mindmap-container');
+          if (container && container.style.display !== 'none') {
+            mermaid.initialize({
+              startOnLoad: false,
+              theme: newTheme === 'dark' ? 'dark' : 'default',
+              securityLevel: 'loose',
+            });
+            container.innerHTML = `<div class="mermaid" id="mindmap-mermaid">${window.lastMindmapCode}</div>`;
+            mermaid.init(undefined, document.querySelectorAll('.mermaid'));
+          }
+        }
       }
     </script>
   </head>
@@ -1424,67 +1438,15 @@
         debugEmpty: 'No requests yet.',
       });
 
-      Object.assign(I18N.vi, {
-        languageGroup: 'Chá»n ngÃ´n ngá»¯',
-        toggleThemeTitle: 'Chuyá»ƒn giao diá»‡n sÃ¡ng/tá»‘i',
-        docSearchPlaceholder: 'TÃ¬m tÃ i liá»‡u...',
-        docSearchLabel: 'TÃ¬m kiáº¿m tÃ i liá»‡u',
-        docMeta: '{chars} kÃ½ tá»± - {size} KB',
-        uploadDragStrong: 'KÃ©o file vÃ o Ä‘Ã¢y',
-        uploadDragOr: 'hoáº·c',
-        uploadDragBrowse: 'báº¥m Ä‘á»ƒ chá»n file',
-        uploadHintPrefix: 'Tá»‘i Ä‘a ~10MB. Thá»­ má»™t bÃ i Wikipedia trong ',
-        uploadHintSuffix: '.',
-        chunkingSummary: 'Cáº¥u hÃ¬nh tÃ¡ch',
-        chunkingStrategyLabel: 'Chiáº¿n lÆ°á»£c chunking',
-        chunkingStrategyFixed: 'KÃ­ch thÆ°á»›c cá»‘ Ä‘á»‹nh (theo cÃ¢u)',
-        chunkingStrategyStructural: 'Cáº¥u trÃºc (tiÃªu Ä‘á» Markdown)',
-        chunkingStrategySemantic: 'Ngá»¯ nghÄ©a cá»¥c bá»™ (Jaccard)',
-        chunkingSizeLabel: 'KÃ­ch thÆ°á»›c chunk (kÃ½ tá»±)',
-        chunkingOverlapLabel: 'Overlap gá»‘i Ä‘áº§u (kÃ½ tá»±)',
-        chunkingThresholdLabel: 'NgÆ°á»¡ng khoáº£ng cÃ¡ch ngá»¯ nghÄ©a',
-        fileTooLarge:
-          'File vÆ°á»£t quÃ¡ dung lÆ°á»£ng cho phÃ©p ({size} MB). Dung lÆ°á»£ng tá»‘i Ä‘a lÃ  {max}MB.',
-        uploading: 'Äang táº£i {filename} ({size} KB)...',
-        uploadFailed: 'Táº£i lÃªn tháº¥t báº¡i: {detail}',
-        uploadSuccessChars:
-          '{chars} kÃ½ tá»± Ä‘Ã£ Ä‘Æ°á»£c tÃ¡ch vÃ  láº­p chá»‰ má»¥c',
-        uploadChunkPrefix: ' (dÃ¹ng ',
-        uploadChunkSuffix: ' chunking)',
-        uploadSuccessDoc: 'doc_id: {docId}',
-        uploadedToast: 'ÄÃ£ táº£i {filename}',
-        toastAskEmpty: 'HÃ£y nháº­p cÃ¢u há»i trÆ°á»›c',
-        welcomeMessage:
-          'Xin chÃ o! TÃ´i lÃ  trá»£ lÃ½ há»c táº­p AI. HÃ£y táº£i bÃ i giáº£ng, sau Ä‘Ã³ Ä‘áº·t cÃ¢u há»i.',
-        labelYou: 'Báº¡n',
-        labelBot: 'StudyBot',
-        errorQuery: 'ÄÃ£ xáº£y ra lá»—i khi truy váº¥n ghi chÃº.',
-        citationsTitle: 'TrÃ­ch dáº«n tá»« tÃ i liá»‡u cá»§a báº¡n',
-        citationChunk: 'pháº§n {chunk}',
-        citationScore: 'Ä‘iá»ƒm {score}',
-        citationsNone: 'KhÃ´ng tÃ¬m tháº¥y trÃ­ch dáº«n phÃ¹ há»£p.',
-        benchmarkMeta: 'ÄÃ¡nh giÃ¡ cháº¥t lÆ°á»£ng tÃ¡ch',
-        benchmarkIntroPrefix: 'Há»‡ thá»‘ng tá»± Ä‘á»™ng cháº¡y ',
-        benchmarkIntroStrong: '5 cÃ¢u há»i kiá»ƒm thá»­',
-        benchmarkIntroSuffix:
-          ' vá» quang há»£p Ä‘á»ƒ cháº¥m Ä‘á»™ chÃ­nh xÃ¡c truy xuáº¥t.',
-        benchmarkRunButton: 'Cháº¡y Ä‘Ã¡nh giÃ¡ benchmark',
-        benchmarkStatusRunning: 'Äang cháº¡y Ä‘Ã¡nh giÃ¡ benchmark...',
-        benchmarkMetricsTitle: 'Chá»‰ sá»‘ cháº¥t lÆ°á»£ng RAG',
-        benchmarkMetricP1: 'Äá»™ chÃ­nh xÃ¡c top-1',
-        benchmarkMetricP3: 'Äá»™ chÃ­nh xÃ¡c top-3',
-        benchmarkMetricP5: 'Äá»™ chÃ­nh xÃ¡c top-5',
-        benchmarkMetricMrr: 'Thá»© háº¡ng trung bÃ¬nh',
-        benchmarkDetailsTitle:
-          'Chi tiáº¿t truy xuáº¥t 5 cÃ¢u há»i kiá»ƒm thá»­',
-        benchmarkNeedDoc:
-          'Vui lÃ²ng táº£i lÃªn hoáº·c chá»n tÃ i liá»‡u trÆ°á»›c.',
-        benchmarkFailed: 'ÄÃ¡nh giÃ¡ tháº¥t báº¡i: {detail}',
-        benchmarkSuccess: 'ÄÃ¡nh giÃ¡ hoÃ n táº¥t.',
-        benchmarkQuestionLabel: 'CÃ¢u {index}: {query}',
-        benchmarkTargetKeywords: 'Tá»« khÃ³a má»¥c tiÃªu',
-        debugSummary: 'Pháº£n há»“i API (debug)',
-        debugEmpty: 'ChÆ°a cÃ³ yÃªu cáº§u nÃ o.',
+            Object.assign(I18N.vi, {
+        benchmarkDetailsTitle: 'Chi tiết truy xuất 5 câu hỏi kiểm thử',
+        benchmarkNeedDoc: 'Vui lòng tải lên hoặc chọn tài liệu trước.',
+        benchmarkFailed: 'Đánh giá thất bại: {detail}',
+        benchmarkSuccess: 'Đánh giá hoàn tất.',
+        benchmarkQuestionLabel: 'Câu {index}: {query}',
+        benchmarkTargetKeywords: 'Từ khóa mục tiêu',
+        debugSummary: 'Phản hồi API (debug)',
+        debugEmpty: 'Chưa có yêu cầu nào.',
       });
 
       let currentLang =

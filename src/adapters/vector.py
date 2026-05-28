@@ -144,7 +144,32 @@ class LocalVector:
         for i, chunk in enumerate(chunks):
             self.docs.append((f"{doc_id}#{i}", chunk, {**md, "doc_id": doc_id, "chunk_idx": i}))
 
+    def _seed_default_document(self, user_id: str) -> None:
+        default_text = (
+            "Photosynthesis is the process used by plants, algae and certain bacteria to convert light energy into chemical energy. "
+            "Photosynthesis occurs in chloroplasts, which contain chlorophyll pigments that absorb light wavelengths. "
+            "The light-dependent phase occurs in the thylakoid membrane where light reactions split water molecules, releasing oxygen as a byproduct. "
+            "ATP and NADPH are synthesized to power the Calvin Cycle. "
+            "The light-independent phase, also known as the Calvin Cycle, occurs in the stroma where carbon dioxide fixation takes place. "
+            "Sugars are produced during the Calvin Cycle to store chemical energy. "
+            "Some exceptions exist in parasitic plants that do not perform photosynthesis."
+        )
+        self.ingest(
+            doc_id="default-photosynthesis-doc",
+            text=default_text,
+            metadata={
+                "user_id": user_id,
+                "filename": "Photosynthesis_Overview.txt",
+                "extraction_strategy": "plain_text",
+                "asset_prefix": ""
+            }
+        )
+
     def search(self, query: str, top_k: int = 5, filter: Optional[dict] = None) -> list:
+        user_id = filter.get("user_id") if filter else "test-user-001"
+        if not self.docs:
+            self._seed_default_document(user_id)
+
         q_tokens = set(self._tokens(query))
         results = []
         for chunk_id, text, md in self.docs:

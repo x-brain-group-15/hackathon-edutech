@@ -315,3 +315,21 @@ def test_creative_features_endpoints():
     assert flashcards_res.status_code == 200
     assert "flashcards" in flashcards_res.json()
     assert len(flashcards_res.json()["flashcards"]) > 0
+
+
+def test_bedrock_ai_falls_back_to_local_ai():
+    from src.adapters.ai import BedrockAI
+    
+    # Instantiate BedrockAI which will fail to run bedrock due to dummy config / credentials
+    ai = BedrockAI(region="us-east-1", model_id="dummy-model")
+    
+    # Testing invoke fallback
+    prompt = "Practice quiz generator for photosynthesis"
+    ans = ai.invoke(prompt)
+    assert "local-q1" in ans or "chloroplasts" in ans.lower()
+    
+    # Testing retrieve_and_generate fallback
+    res = ai.retrieve_and_generate("What is photosynthesis?", kb_id="dummy-kb")
+    assert "answer" in res
+    assert "photosynthesis" in res["answer"].lower() or "local" in res["answer"].lower()
+
