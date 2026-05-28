@@ -286,6 +286,26 @@ def generate_cornell(doc_id: str, x_user_id: str | None = Header(default=None)) 
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class SynthesizeRequest(BaseModel):
+    doc_ids: list[str]
+
+@app.post("/docs/synthesize")
+def synthesize(req: SynthesizeRequest, x_user_id: str | None = Header(default=None)) -> dict:
+    user_id = _resolve_user_id(x_user_id)
+    if not req.doc_ids:
+        raise HTTPException(status_code=400, detail="No document IDs specified")
+    try:
+        return handlers.handle_cross_synthesis(
+            user_id=user_id,
+            doc_ids=req.doc_ids,
+            storage=storage,
+            ai_client=ai_client,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
 # ---- Static frontend ----
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
 
