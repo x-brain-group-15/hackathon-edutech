@@ -641,6 +641,46 @@ Resources:
       SubnetId: !Ref PublicSubnet
       RouteTableId: !Ref PublicRouteTable
 
+  # ---------- NAT Gateway (new — does NOT affect existing resources) ----------
+  # EIP gắn vào NAT Gateway — cố định IP public cho outbound traffic từ Private Subnet
+  NatGatewayEIP:
+    Type: AWS::EC2::EIP
+    DependsOn: VPCGatewayAttachment   # phải attach IGW trước mới cấp được EIP trong VPC
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub "studybot-nat-eip-${TeamName}"
+        - Key: Project
+          Value: W7Capstone
+        - Key: Team
+          Value: !Ref TeamName
+
+  # NAT Gateway đặt ở PublicSubnet — nhận traffic từ PrivateSubnet và forward ra internet qua IGW
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      AllocationId: !GetAtt NatGatewayEIP.AllocationId
+      SubnetId: !Ref PublicSubnet
+      Tags:
+        - Key: Name
+          Value: !Sub "studybot-nat-${TeamName}"
+        - Key: Project
+          Value: W7Capstone
+        - Key: Team
+          Value: !Ref TeamName
+
+  # Default route cho PrivateRouteTable — mọi traffic không khớp VPC Endpoint đi qua NAT GW
+  PrivateNatRoute:
+    Type: AWS::EC2::Route
+    DependsOn: NatGateway
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
+  # ---------------------------------------------------------------------------
+
   PrivateRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -712,6 +752,21 @@ Resources:
       PortRange:
         From: 443
         To: 443
+
+  # Rule 105 — cho phép Private Subnet gửi HTTP (80) ra ngoài qua NAT Gateway
+  # Cần thiết khi endpoint trả về HTTP redirect (301/302) trước khi chuyển sang HTTPS
+  PrivateNaclOutboundAllowHttp:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref PrivateNacl
+      RuleNumber: 105
+      Protocol: 6 # TCP
+      RuleAction: allow
+      Egress: true
+      CidrBlock: 0.0.0.0/0
+      PortRange:
+        From: 80
+        To: 80
 
   PrivateNaclOutboundAllowEphemeral:
     Type: AWS::EC2::NetworkAclEntry
@@ -1149,6 +1204,14 @@ Outputs:
   DashboardUrl:
     Description: "CloudWatch Dashboard URL"
     Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=StudyBot-${TeamName}"
+
+  NatGatewayId:
+    Description: "NAT Gateway ID"
+    Value: !Ref NatGateway
+
+  NatGatewayPublicIp:
+    Description: "NAT Gateway public Elastic IP — whitelist this IP on external services"
+    Value: !Ref NatGatewayEIP
 
   VpcId:
     Description: "VPC ID"
