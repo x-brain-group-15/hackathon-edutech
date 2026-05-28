@@ -952,94 +952,26 @@ def handle_generate_quiz(
     start_time = time.time()
     num_questions = max(1, min(num_questions, 20))
 
-    filter_params = {"user_id": user_id}
-    if doc_id:
-        filter_params["doc_id"] = doc_id
-
-    log_step(
-        "generate_quiz",
-        "vector_search_start",
-        user_id=user_id,
-        doc_id=doc_id,
-        top_k=10,
-        num_questions=num_questions,
-    )
-
-    chunks = vector_store.search(
-        "practice quiz exam key concepts definitions examples",
-        top_k=10,
-        filter=filter_params,
-    )
-
-    if not chunks and doc_id and storage is not None:
+    # Resolve filename from userstore when doc_id is provided
+    filename = None
+    if doc_id and userstore:
         docs = userstore.list_docs(user_id)
         doc = next((d for d in docs if d.get("doc_id") == doc_id), None)
         if doc:
             filename = doc.get("filename", "unknown")
-            key = f"{user_id}/{doc_id}/{filename}"
-            try:
-                log_step(
-                    "generate_quiz",
-                    "rehydrate_vector_start",
-                    user_id=user_id,
-                    doc_id=doc_id,
-                    filename=filename,
-                )
-                text = _get_document_text(user_id, doc_id, filename, storage)
-                if text.strip():
-                    vector_store.ingest(
-                        doc_id=doc_id,
-                        text=text,
-                        metadata={
-                            "user_id": user_id,
-                            "filename": filename,
-                        },
-                    )
-                    chunks = vector_store.search(
-                        "practice quiz exam key concepts definitions examples",
-                        top_k=10,
-                        filter=filter_params,
-                    )
-                log_step(
-                    "generate_quiz",
-                    "rehydrate_vector_done",
-                    user_id=user_id,
-                    doc_id=doc_id,
-                    chunks_found=len(chunks),
-                )
-            except Exception as e:
-                logger.warning(f"Quiz vector rehydrate failed for {doc_id}: {e}")
 
-    if doc_id and hasattr(vector_store, "docs"):
-        local_doc_chunks = []
-        for chunk_id, text, metadata in vector_store.docs:
-            if all(metadata.get(key) == value for key, value in filter_params.items()):
-                local_doc_chunks.append({
-                    "text": text,
-                    "doc_id": metadata.get("doc_id", chunk_id),
-                    "score": 0.0,
-                    "metadata": metadata,
-                })
-            if len(local_doc_chunks) >= 10:
-                break
-        if local_doc_chunks and len(chunks) < len(local_doc_chunks):
-            chunks = local_doc_chunks
+    # Fetch document text directly from S3
+    context = ""
+    if doc_id and storage is not None and filename:
+        log_step("generate_quiz", "s3_fetch_start", user_id=user_id, doc_id=doc_id, filename=filename)
+        try:
+            context = _get_document_text(user_id, doc_id, filename, storage)
+            log_step("generate_quiz", "s3_fetch_done", user_id=user_id, doc_id=doc_id, chars=len(context))
+        except Exception as e:
+            logger.warning(f"Quiz S3 fetch failed for {doc_id}: {e}")
 
-    log_step(
-        "generate_quiz",
-        "vector_search_done",
-        user_id=user_id,
-        doc_id=doc_id,
-        chunks_found=len(chunks),
-    )
-
-    if not chunks:
-        raise ValueError("No document chunks found. Upload a document before generating a quiz.")
-
-    context = "\n\n".join(
-        f"[chunk {i + 1}] {chunk['text']}"
-        for i, chunk in enumerate(chunks)
-    )
+    if not context.strip():
+        raise ValueError("No document content found. Upload a document before generating a quiz.")
 
     prompt = QUIZ_PROMPT.format(
         num_questions=num_questions,
@@ -1063,7 +995,9 @@ def handle_generate_quiz(
         if not _is_bedrock_fallback_error(e):
             raise
         logger.warning(f"Bedrock unavailable during quiz generation; using rule-based fallback: {e}")
-        quiz_items = _fallback_quiz_from_chunks(chunks, num_questions)
+        # Build minimal chunk list from full text for fallback generator
+        fallback_chunks = [{"text": context}]
+        quiz_items = _fallback_quiz_from_chunks(fallback_chunks, num_questions)
         latency_ms = int((time.time() - start_time) * 1000)
         log_event(
             "QUIZ_GENERATED",
@@ -1071,7 +1005,6 @@ def handle_generate_quiz(
             doc_id=doc_id,
             requested_questions=num_questions,
             returned_questions=len(quiz_items),
-            chunks_count=len(chunks),
             latency_ms=latency_ms,
             status="fallback_throttled",
         )
@@ -1096,7 +1029,7 @@ def handle_generate_quiz(
         doc_id=doc_id,
         requested_questions=num_questions,
         returned_questions=len(quiz_items),
-        chunks_count=len(chunks),
+        context_chars=len(context),
         latency_ms=latency_ms,
         status="success",
     )
