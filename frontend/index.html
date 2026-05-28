@@ -190,11 +190,30 @@
       max-height: 600px;
       overflow-y: auto;
       box-shadow: var(--shadow);
+      transition: border-color 0.3s ease;
+    }
+    #mindmap-learning-panel.active {
+      border-color: rgba(var(--accent-rgb), 0.5);
+      box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.08), var(--shadow);
     }
     #mindmap-learning-content {
       font-size: 0.88rem;
       color: var(--muted);
       line-height: 1.6;
+    }
+    @keyframes fadeSlideIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .mindmap-node-selected rect,
+    .mindmap-node-selected circle,
+    .mindmap-node-selected ellipse {
+      stroke: var(--accent) !important;
+      stroke-width: 3px !important;
+      filter: drop-shadow(0 0 10px rgba(var(--accent-rgb), 0.6)) !important;
+    }
+    .mindmap-node-selected text {
+      font-weight: 800 !important;
     }
 
     /* ─── Premium Mermaid Mindmap Visual Customizations ───────────────────── */
@@ -3092,78 +3111,96 @@
 
     async function showConceptDetails(concept) {
       const panel = $('mindmap-learning-content');
+      const panelWrapper = $('mindmap-learning-panel');
       if (!panel) return;
-      
+
+      // Highlight the panel to show it's active
+      panelWrapper && panelWrapper.classList.add('active');
+
+      // Loading state with pulsing animation
       panel.innerHTML = `
-        <div style="display: flex; flex-direction: column; align-items: center; padding: 2rem 0; text-align: center; gap: 0.75rem;">
-          <span class="spinner" style="width: 24px; height: 24px;"></span>
-          <span style="font-weight: 500; font-size: 0.85rem; color: var(--muted);">Loading details for <strong>${concept}</strong>...</span>
+        <div style="display:flex;flex-direction:column;align-items:center;padding:2rem 0;text-align:center;gap:0.75rem;">
+          <span class="spinner" style="width:28px;height:28px;"></span>
+          <span style="font-weight:600;font-size:0.88rem;color:var(--accent);">${concept}</span>
+          <span style="font-size:0.8rem;color:var(--muted);">Đang tải kiến thức...</span>
         </div>
       `;
-      
-      const prompt = `Bạn là một trợ lý học tập đắc lực. Hãy giải thích ngắn gọn, súc tích (khoảng 3-4 câu) và cực kỳ dễ hiểu về khái niệm "${concept}" dựa trên tài liệu học tập của học sinh. Định dạng câu trả lời bằng Markdown đẹp mắt với các điểm quan trọng được in đậm.`;
-      
-      const docId = window.selectedDocId || window.lastDocId;
-      const activeDocIds = window.selectedDocIds.size > 0 ? [...window.selectedDocIds] : null;
-      const res = await call('/query', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: prompt, socratic: false, doc_ids: activeDocIds }),
-      });
-      
-      if (!res.ok) {
-        panel.innerHTML = `<span style="color: var(--error);">Không thể lấy thông tin chi tiết cho "${concept}". Vui lòng thử lại.</span>`;
-        return;
+
+      try {
+        const question = `Explain the concept "${concept}" concisely in 3-5 sentences based on the study material. Use bullet points for key facts. Highlight important terms in bold.`;
+        const activeDocIds = (window.selectedDocIds && window.selectedDocIds.size > 0)
+          ? [...window.selectedDocIds]
+          : null;
+
+        const res = await call('/query', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question, socratic: false, doc_ids: activeDocIds }),
+        });
+
+        const answer = (res.ok && res.body && res.body.answer)
+          ? res.body.answer
+          : `No information found for "${concept}" in the uploaded documents. Try uploading relevant study material first.`;
+
+        panel.innerHTML = `
+          <div style="animation: fadeSlideIn 0.35s cubic-bezier(0.16,1,0.3,1);">
+            <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.75rem;padding-bottom:0.6rem;border-bottom:2px solid var(--border);">
+              <span style="width:8px;height:8px;border-radius:50%;background:var(--accent);flex-shrink:0;box-shadow:0 0 6px rgba(var(--accent-rgb),0.6);"></span>
+              <h4 style="margin:0;font-size:1rem;font-weight:800;color:var(--accent);font-family:var(--font-display);">${concept}</h4>
+            </div>
+            <div style="font-size:0.88rem;line-height:1.7;color:var(--text);">
+              ${parseMarkdownAndCitations(answer)}
+            </div>
+            <div style="margin-top:1.25rem;padding:0.6rem 0.75rem;background:rgba(var(--accent-rgb),0.07);border-left:3px solid var(--accent);border-radius:0 6px 6px 0;font-size:0.8rem;font-weight:500;color:var(--accent);display:flex;align-items:center;gap:0.4rem;">
+              <span>💡</span><span>Double-click a node to sprout sub-concepts</span>
+            </div>
+          </div>
+        `;
+      } catch (err) {
+        panel.innerHTML = `
+          <div style="padding:1rem;text-align:center;color:var(--error);font-size:0.85rem;">
+            ⚠️ Could not load details for <strong>${concept}</strong>.
+          </div>
+        `;
       }
-      
-      const answer = res.body.answer || '';
-      panel.innerHTML = `
-        <div style="animation: fadeIn 0.3s ease;">
-          <h4 style="margin: 0 0 0.75rem; font-size: 1.1rem; font-weight: 800; color: var(--accent-2); border-bottom: 2px solid var(--border); padding-bottom: 0.4rem; font-family: var(--font-display);">
-            ${concept}
-          </h4>
-          <div class="learning-markdown-body" style="font-size: 0.9rem; line-height: 1.6; color: var(--text);">
-            ${parseMarkdownAndCitations(answer)}
-          </div>
-          <div style="margin-top: 1rem; padding: 0.5rem 0.75rem; background: rgba(var(--accent-rgb), 0.06); border-left: 3px solid var(--accent); border-radius: 0 4px 4px 0; font-size: 0.82rem; font-weight: 500; color: var(--accent);">
-            💡 Tips: Double-click a node to sprout new sub-concepts!
-          </div>
-        </div>
-      `;
     }
 
     function initMindmapInteractivity() {
       const svg = document.querySelector('#mindmap-mermaid svg');
       if (!svg) return;
 
-      // Add styles to ensure pointer cursor for nodes
-      const style = document.createElement('style');
-      style.innerHTML = `
-        #mindmap-mermaid .node, #mindmap-mermaid .mindmap-node { cursor: pointer !important; }
-      `;
-      document.head.appendChild(style);
-
       svg.style.transformOrigin = 'center center';
       svg.style.transition = 'transform 0.1s ease';
       applyMindmapTransform();
 
-      // 1. Pan Event Listeners
+      // ── Pan state ───────────────────────────────────────────────────────────
       const container = $('mindmap-container');
       container.style.cursor = 'grab';
+      let panStartX = 0, panStartY = 0;
+      let didDrag = false;                   // true if mouse moved > threshold
+      const DRAG_THRESHOLD = 5;             // px — below this = real click
 
       container.onmousedown = (e) => {
-        if (e.target.closest('.mindmap-toolbar') || e.target.closest('.node, .mindmap-node, g[class*="node"]')) return;
+        if (e.target.closest('.mindmap-toolbar')) return;
         isPanningMindmap = true;
+        didDrag = false;
         container.style.cursor = 'grabbing';
+        panStartX = e.clientX;
+        panStartY = e.clientY;
         startPanX = e.clientX - mindmapPanX;
         startPanY = e.clientY - mindmapPanY;
       };
 
       window.onmousemove = (e) => {
         if (!isPanningMindmap) return;
-        mindmapPanX = e.clientX - startPanX;
-        mindmapPanY = e.clientY - startPanY;
-        applyMindmapTransform();
+        const dx = Math.abs(e.clientX - panStartX);
+        const dy = Math.abs(e.clientY - panStartY);
+        if (dx > DRAG_THRESHOLD || dy > DRAG_THRESHOLD) {
+          didDrag = true;
+          mindmapPanX = e.clientX - startPanX;
+          mindmapPanY = e.clientY - startPanY;
+          applyMindmapTransform();
+        }
       };
 
       window.onmouseup = () => {
@@ -3173,30 +3210,60 @@
         }
       };
 
-      // 2. Robust Event Delegation to Nodes (fixes async rendering timing and dynamic wrapper issues)
-      container.onclick = (e) => {
-        const node = e.target.closest('.node, .mindmap-node, g[class*="node"]');
-        if (node) {
-          e.stopPropagation();
-          const textEl = node.querySelector('text');
-          if (textEl) {
-            const concept = textEl.textContent.trim();
-            showConceptDetails(concept);
-          }
-        }
-      };
+      // ── Node click & dblclick — attach directly to each node element ────────
+      // Attaching directly (not via delegation) avoids pan/drag conflict and
+      // ensures SVG sub-elements don't swallow the event.
+      let selectedNode = null;
 
-      container.ondblclick = (e) => {
-        const node = e.target.closest('.node, .mindmap-node, g[class*="node"]');
-        if (node) {
-          e.stopPropagation();
-          const textEl = node.querySelector('text');
-          if (textEl) {
-            const concept = textEl.textContent.trim();
-            sproutConcept(concept);
-          }
-        }
-      };
+      function attachNodeListeners() {
+        const nodes = svg.querySelectorAll('.node, .mindmap-node, g[class*="node"]');
+        nodes.forEach(node => {
+          // Remove old listeners by cloning
+          const fresh = node.cloneNode(true);
+          node.parentNode.replaceChild(fresh, node);
+
+          fresh.style.cursor = 'pointer';
+
+          // Single click — show concept in Study Hub
+          fresh.addEventListener('click', (e) => {
+            if (didDrag) return;            // was a pan, not a click
+            e.stopPropagation();
+
+            // Remove previous selection highlight
+            if (selectedNode) selectedNode.classList.remove('mindmap-node-selected');
+            selectedNode = fresh;
+            fresh.classList.add('mindmap-node-selected');
+
+            // Scroll Study Hub into view on mobile
+            const panel = $('mindmap-learning-panel');
+            if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+            // Extract label from <text> or <tspan>
+            const textEl = fresh.querySelector('text');
+            if (textEl) {
+              const concept = Array.from(fresh.querySelectorAll('text'))
+                .map(t => t.textContent.trim()).filter(Boolean).join(' ');
+              if (concept) showConceptDetails(concept);
+            }
+          });
+
+          // Double click — sprout sub-concepts
+          fresh.addEventListener('dblclick', (e) => {
+            e.stopPropagation();
+            const textEl = fresh.querySelector('text');
+            if (textEl) {
+              const concept = Array.from(fresh.querySelectorAll('text'))
+                .map(t => t.textContent.trim()).filter(Boolean).join(' ');
+              if (concept) sproutConcept(concept);
+            }
+          });
+        });
+      }
+
+      attachNodeListeners();
+
+      // Re-attach after any dynamic updates (sprout)
+      window._mindmapReattachListeners = attachNodeListeners;
     }
 
     function applyMindmapTransform() {
