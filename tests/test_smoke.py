@@ -113,22 +113,32 @@ def test_quiz_falls_back_when_bedrock_is_throttled():
     from src import handlers
     from src.adapters.vector import LocalVector
 
+    DOC_TEXT = (
+        "Photosynthesis occurs in chloroplasts and converts light energy into chemical energy. "
+        "Light reactions split water and release oxygen as a byproduct. "
+        "The Calvin cycle uses carbon dioxide to build sugars."
+    )
+
     class ThrottledAI:
         def generate_quiz_from_kb(self, prompt, **kwargs):
+            raise Exception("ThrottlingException: Too many tokens per day")
+        def invoke(self, prompt, **kwargs):
             raise Exception("ThrottlingException: Too many tokens per day")
 
     class DummyUserStore:
         def log_query(self, *args, **kwargs):
             return None
+        def list_docs(self, user_id):
+            return [{"doc_id": "throttled-doc", "filename": "lecture.txt"}]
+
+    class DummyStorage:
+        def get(self, key):
+            return DOC_TEXT.encode("utf-8")
 
     vector = LocalVector()
     vector.ingest(
         doc_id="throttled-doc",
-        text=(
-            "Photosynthesis occurs in chloroplasts and converts light energy into chemical energy. "
-            "Light reactions split water and release oxygen as a byproduct. "
-            "The Calvin cycle uses carbon dioxide to build sugars."
-        ),
+        text=DOC_TEXT,
         metadata={"user_id": "throttled-user", "filename": "lecture.txt"},
     )
 
@@ -139,6 +149,7 @@ def test_quiz_falls_back_when_bedrock_is_throttled():
         vector_store=vector,
         ai_client=ThrottledAI(),
         userstore=DummyUserStore(),
+        storage=DummyStorage(),
     )
 
     assert len(quiz["quiz"]) == 3
@@ -172,6 +183,14 @@ def test_quiz_falls_back_when_bedrock_credentials_are_missing():
     from src import handlers
     from src.adapters.vector import LocalVector
 
+    DOC_TEXT = (
+        "Machine learning is a subset of artificial intelligence. "
+        "Gradient descent is used to minimize a loss function. "
+        "Backpropagation computes gradients through a neural network. "
+        "Training data is used to fit model parameters. "
+        "Evaluation data measures how well a model generalizes."
+    )
+
     class MissingCredentialsAI:
         def generate_quiz_from_kb(self, prompt, **kwargs):
             raise Exception("NoCredentialsError: Unable to locate credentials")
@@ -179,17 +198,17 @@ def test_quiz_falls_back_when_bedrock_credentials_are_missing():
     class DummyUserStore:
         def log_query(self, *args, **kwargs):
             return None
+        def list_docs(self, user_id):
+            return [{"doc_id": "missing-credentials-doc", "filename": "ml.txt"}]
+
+    class DummyStorage:
+        def get(self, key):
+            return DOC_TEXT.encode("utf-8")
 
     vector = LocalVector()
     vector.ingest(
         doc_id="missing-credentials-doc",
-        text=(
-            "Machine learning is a subset of artificial intelligence. "
-            "Gradient descent is used to minimize a loss function. "
-            "Backpropagation computes gradients through a neural network. "
-            "Training data is used to fit model parameters. "
-            "Evaluation data measures how well a model generalizes."
-        ),
+        text=DOC_TEXT,
         metadata={"user_id": "missing-credentials-user", "filename": "ml.txt"},
     )
 
@@ -200,6 +219,7 @@ def test_quiz_falls_back_when_bedrock_credentials_are_missing():
         vector_store=vector,
         ai_client=MissingCredentialsAI(),
         userstore=DummyUserStore(),
+        storage=DummyStorage(),
     )
 
     assert len(quiz["quiz"]) == 5
@@ -211,6 +231,16 @@ def test_quiz_fallback_uses_full_local_doc_when_search_returns_partial_chunks():
     from src import handlers
     from src.adapters.vector import LocalVector
 
+    DOC_TEXT = (
+        "Mathematics is the study of numbers, shapes, and patterns. "
+        "Numbers: including how things can be counted. "
+        "Structure: including how things are organized. "
+        "Place: where things are and spatial arrangement. "
+        "Change: how things become different. "
+        "Applied math is useful for solving real-world problems. "
+        "Deduction is a way to prove new truths using old truths."
+    )
+
     class MissingCredentialsAI:
         def generate_quiz_from_kb(self, prompt, **kwargs):
             raise Exception("NoCredentialsError: Unable to locate credentials")
@@ -218,19 +248,17 @@ def test_quiz_fallback_uses_full_local_doc_when_search_returns_partial_chunks():
     class DummyUserStore:
         def log_query(self, *args, **kwargs):
             return None
+        def list_docs(self, user_id):
+            return [{"doc_id": "math-doc", "filename": "math.txt"}]
+
+    class DummyStorage:
+        def get(self, key):
+            return DOC_TEXT.encode("utf-8")
 
     vector = LocalVector()
     vector.ingest(
         doc_id="math-doc",
-        text=(
-            "Mathematics is the study of numbers, shapes, and patterns. "
-            "Numbers: including how things can be counted. "
-            "Structure: including how things are organized. "
-            "Place: where things are and spatial arrangement. "
-            "Change: how things become different. "
-            "Applied math is useful for solving real-world problems. "
-            "Deduction is a way to prove new truths using old truths."
-        ),
+        text=DOC_TEXT,
         metadata={"user_id": "math-user", "filename": "math.txt"},
         size=80,
         overlap=0,
@@ -243,6 +271,7 @@ def test_quiz_fallback_uses_full_local_doc_when_search_returns_partial_chunks():
         vector_store=vector,
         ai_client=MissingCredentialsAI(),
         userstore=DummyUserStore(),
+        storage=DummyStorage(),
     )
 
     assert len(quiz["quiz"]) == 5

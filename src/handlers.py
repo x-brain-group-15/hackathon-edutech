@@ -135,6 +135,39 @@ LECTURE-NOTE CONTEXT:
 {context}
 """
 
+CHUNK_SUMMARY_PROMPT = """You are a study assistant. Read the following excerpt from a lecture document and extract the key knowledge points.
+
+Return a concise bullet-point summary of the most important facts, definitions, and concepts in this excerpt. Be specific and factual. Do not add information not present in the text.
+
+EXCERPT:
+{chunk}
+
+KEY POINTS:"""
+
+QUIZ_FROM_SUMMARY_PROMPT = """You are a practice quiz generator for a student.
+Create exactly {num_questions} multiple-choice questions based ONLY on the summarized lecture notes below.
+
+Return STRICTLY a raw JSON array. Do not include markdown fences, labels, commentary, or text before or after the JSON.
+Each array item must match this schema:
+{{
+  "id": "short-stable-id",
+  "question": "question text",
+  "options": ["option A", "option B", "option C", "option D"],
+  "correct_answer": "the exact option text that is correct",
+  "explanation": "brief explanation grounded in the notes"
+}}
+
+Rules:
+- Use 4 options per question.
+- Exactly one option must match correct_answer.
+- Do not invent facts outside the notes.
+- Keep questions clear and testable.
+- Spread questions across different topics in the notes.
+
+SUMMARIZED LECTURE NOTES:
+{context}
+"""
+
 def _put_cloudwatch_metric(metric_name: str, value: float, unit: str, aws_region: str, status: str = "Success"):
     """Real-world scenario: Put custom metrics to CloudWatch to monitor AI operations."""
     try:
@@ -960,7 +993,7 @@ def handle_generate_quiz(
         if doc:
             filename = doc.get("filename", "unknown")
 
-    # Fetch document text directly from S3
+    # Step 1: Fetch document text from S3
     context = ""
     if doc_id and storage is not None and filename:
         log_step("generate_quiz", "s3_fetch_start", user_id=user_id, doc_id=doc_id, filename=filename)
@@ -968,35 +1001,71 @@ def handle_generate_quiz(
             context = _get_document_text(user_id, doc_id, filename, storage)
             log_step("generate_quiz", "s3_fetch_done", user_id=user_id, doc_id=doc_id, chars=len(context))
         except Exception as e:
+            log_step("generate_quiz", "s3_fetch_failed", user_id=user_id, doc_id=doc_id, error=str(e))
             logger.warning(f"Quiz S3 fetch failed for {doc_id}: {e}")
 
     if not context.strip():
+        log_step("generate_quiz", "no_content", user_id=user_id, doc_id=doc_id)
         raise ValueError("No document content found. Upload a document before generating a quiz.")
 
-    prompt = QUIZ_PROMPT.format(
-        num_questions=num_questions,
-        context=context,
-    )
+    # Step 2: Chunk the document using semantic chunking (best for topic-aware splitting)
+    from src.chunker import chunk_semantic, chunk_fixed
+    log_step("generate_quiz", "chunking_start", user_id=user_id, doc_id=doc_id, chars=len(context))
+    chunks = chunk_semantic(context, threshold=0.25)
+    # If semantic chunking produces too few or too many chunks, fall back to fixed
+    if len(chunks) < 2 or len(chunks) > 50:
+        chunks = chunk_fixed(context, size=800, overlap=100)
+    log_step("generate_quiz", "chunking_done", user_id=user_id, doc_id=doc_id, num_chunks=len(chunks))
 
+    # Step 3 (Map): Summarize each chunk into bullet-point key knowledge
+    log_step("generate_quiz", "map_summarize_start", user_id=user_id, doc_id=doc_id, num_chunks=len(chunks))
+    summaries = []
+    for i, chunk in enumerate(chunks):
+        if not chunk.strip():
+            continue
+        try:
+            prompt = CHUNK_SUMMARY_PROMPT.format(chunk=chunk)
+            summary = ai_client.invoke(prompt, max_tokens=512, temperature=0.1)
+            summaries.append(summary.strip())
+            log_step("generate_quiz", "chunk_summarized", user_id=user_id, chunk_index=i, summary_chars=len(summary))
+        except Exception as e:
+            logger.warning(f"Quiz map: chunk {i} summarization failed: {e}")
+            log_step("generate_quiz", "chunk_summarize_fallback", user_id=user_id, chunk_index=i, error=str(e))
+            # Fall back to using the raw chunk text
+            summaries.append(chunk.strip())
+
+    if not summaries:
+        raise ValueError("Failed to summarize document content for quiz generation.")
+
+    log_step("generate_quiz", "map_summarize_done", user_id=user_id, doc_id=doc_id, num_summaries=len(summaries))
+
+    # Step 4 (Reduce): Combine all summaries and generate quiz
+    combined_summary = "\n\n".join(
+        f"--- Section {i+1} ---\n{s}" for i, s in enumerate(summaries)
+    )
     log_step(
         "generate_quiz",
-        "ai_generate_start",
+        "reduce_quiz_start",
         user_id=user_id,
         doc_id=doc_id,
-        prompt_chars=len(prompt),
+        summary_chars=len(combined_summary),
+    )
+
+    prompt = QUIZ_FROM_SUMMARY_PROMPT.format(
+        num_questions=num_questions,
+        context=combined_summary,
     )
 
     try:
         if hasattr(ai_client, "generate_quiz_from_kb"):
-            response = ai_client.generate_quiz_from_kb(prompt, max_tokens=1200, temperature=0.1)
+            response = ai_client.generate_quiz_from_kb(prompt, max_tokens=2048, temperature=0.1)
         else:
-            response = ai_client.invoke(prompt, max_tokens=1200, temperature=0.1)
+            response = ai_client.invoke(prompt, max_tokens=2048, temperature=0.1)
     except Exception as e:
         if not _is_bedrock_fallback_error(e):
             raise
         logger.warning(f"Bedrock unavailable during quiz generation; using rule-based fallback: {e}")
-        # Build minimal chunk list from full text for fallback generator
-        fallback_chunks = [{"text": context}]
+        fallback_chunks = [{"text": s} for s in summaries]
         quiz_items = _fallback_quiz_from_chunks(fallback_chunks, num_questions)
         latency_ms = int((time.time() - start_time) * 1000)
         log_event(
@@ -1012,6 +1081,7 @@ def handle_generate_quiz(
 
     raw_items = json.loads(_clean_json_response(response))
     quiz_items = _normalize_quiz_items(raw_items, num_questions)
+    log_step("generate_quiz", "reduce_quiz_done", user_id=user_id, doc_id=doc_id, num_questions=len(quiz_items))
 
     latency_ms = int((time.time() - start_time) * 1000)
     try:
@@ -1030,6 +1100,7 @@ def handle_generate_quiz(
         requested_questions=num_questions,
         returned_questions=len(quiz_items),
         context_chars=len(context),
+        num_chunks=len(chunks),
         latency_ms=latency_ms,
         status="success",
     )
@@ -1052,6 +1123,7 @@ def handle_generate_quiz(
         except Exception as e:
             logger.warning(f"Quiz S3 save failed for {doc_id}: {e}")
 
+    log_step("generate_quiz", "quiz_completed", user_id=user_id, doc_id=doc_id, latency_ms=latency_ms, status="success")
     return {"quiz": quiz_items, "saved": saved}
 
 
