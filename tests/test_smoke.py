@@ -120,6 +120,8 @@ def test_quiz_falls_back_when_bedrock_is_throttled():
     class DummyUserStore:
         def log_query(self, *args, **kwargs):
             return None
+        def list_docs(self, user_id):
+            return [{"doc_id": "throttled-doc", "filename": "lecture.txt"}]
 
     vector = LocalVector()
     vector.ingest(
@@ -179,6 +181,8 @@ def test_quiz_falls_back_when_bedrock_credentials_are_missing():
     class DummyUserStore:
         def log_query(self, *args, **kwargs):
             return None
+        def list_docs(self, user_id):
+            return [{"doc_id": "missing-credentials-doc", "filename": "ml.txt"}]
 
     vector = LocalVector()
     vector.ingest(
@@ -218,6 +222,8 @@ def test_quiz_fallback_uses_full_local_doc_when_search_returns_partial_chunks():
     class DummyUserStore:
         def log_query(self, *args, **kwargs):
             return None
+        def list_docs(self, user_id):
+            return [{"doc_id": "math-doc", "filename": "math.txt"}]
 
     vector = LocalVector()
     vector.ingest(

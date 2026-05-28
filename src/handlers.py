@@ -971,6 +971,16 @@ def handle_generate_quiz(
             logger.warning(f"Quiz S3 fetch failed for {doc_id}: {e}")
 
     if not context.strip():
+        # Fallback: try to reconstruct context from vector_store if available (important for offline tests/local mode)
+        if hasattr(vector_store, "docs") and vector_store.docs:
+            local_doc_chunks = []
+            for chunk_id, text, metadata in vector_store.docs:
+                if metadata.get("user_id") == user_id and (not doc_id or metadata.get("doc_id") == doc_id):
+                    local_doc_chunks.append(text)
+            if local_doc_chunks:
+                context = "\n\n".join(local_doc_chunks)
+
+    if not context.strip():
         raise ValueError("No document content found. Upload a document before generating a quiz.")
 
     prompt = QUIZ_PROMPT.format(
