@@ -711,56 +711,35 @@
               <div class="card-title-group">
                 <span class="step">
                   <svg class="step-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                    <line x1="6" y1="12" x2="10" y2="12"></line>
-                    <line x1="8" y1="10" x2="8" y2="14"></line>
-                    <line x1="15" y1="13" x2="15.01" y2="13"></line>
-                    <line x1="18" y1="11" x2="18.01" y2="11"></line>
-                    <rect x="2" y="6" width="20" height="12" rx="3"></rect>
+                    <rect x="2" y="4" width="20" height="14" rx="3"></rect>
+                    <path d="M8 20h8M12 17v3"></path>
                   </svg>
                 </span>
-                <h2>Leitner active Recall Arena</h2>
+                <h2>Flashcard Arena</h2>
               </div>
-              <div style="display: flex; gap: 0.5rem">
+              <!-- Generate bar -->
+              <div class="fc-gen-bar">
                 <input
                   type="text"
                   id="flashcard-topic"
-                  data-i18n-placeholder="flashcardTopicPlaceholder"
-                  placeholder="Topic to generate cards..."
-                  style="
-                    padding: 0.4rem 0.6rem;
-                    font-size: 0.82rem;
-                    border-radius: var(--radius-sm);
-                    border: 1px solid var(--border);
-                    background: var(--bg);
-                    color: var(--text);
-                    width: 180px;
-                  "
+                  placeholder="Enter topic..."
+                  class="fc-topic-input"
                 />
-                <button
-                  class="primary"
-                  onclick="generateFlashcards()"
-                  id="btn-generate-flashcards"
-                  style="font-size: 0.82rem"
-                >
+                <button class="primary fc-gen-btn" onclick="generateFlashcards()" id="btn-generate-flashcards">
                   Generate AI
                 </button>
               </div>
             </div>
 
             <div class="leitner-arena">
-              <!-- XP Dashboard -->
+
+              <!-- XP + progress bar -->
               <div class="xp-dashboard">
                 <div class="xp-level-badge" id="xp-level">1</div>
                 <div class="xp-bar-wrapper">
                   <div class="xp-bar-info">
-                    <span style="color: var(--muted)"
-                      >Experience Points (XP)</span
-                    >
-                    <span
-                      id="xp-text"
-                      style="color: var(--accent); font-weight: 700"
-                      >0 / 100 XP</span
-                    >
+                    <span style="color:var(--muted);font-size:0.8rem">Experience Points (XP)</span>
+                    <span id="xp-text" style="color:var(--accent);font-weight:700;font-size:0.82rem">0 / 100 XP (Level 1)</span>
                   </div>
                   <div class="xp-bar-bg">
                     <div class="xp-bar-fill" id="xp-fill"></div>
@@ -768,101 +747,67 @@
                 </div>
               </div>
 
-              <!-- Leitner Box distribution bar -->
+              <!-- Box progress pills -->
               <div class="leitner-boxes-bar">
-                <div class="leitner-box-pill">
-                  <span class="box-num">Box 1</span>
-                  <span class="box-count" id="box-1-count">0</span>
-                </div>
-                <div class="leitner-box-pill">
-                  <span class="box-num">Box 2</span>
-                  <span class="box-count" id="box-2-count">0</span>
-                </div>
-                <div class="leitner-box-pill">
-                  <span class="box-num">Box 3</span>
-                  <span class="box-count" id="box-3-count">0</span>
-                </div>
-                <div class="leitner-box-pill">
-                  <span class="box-num">Box 4</span>
-                  <span class="box-count" id="box-4-count">0</span>
-                </div>
-                <div class="leitner-box-pill">
-                  <span class="box-num">Box 5</span>
-                  <span class="box-count" id="box-5-count">0</span>
-                </div>
+                <div class="leitner-box-pill lbp-1"><span class="box-num">Learn</span><span class="box-count" id="box-1-count">0</span></div>
+                <div class="leitner-box-pill lbp-2"><span class="box-num">Short</span><span class="box-count" id="box-2-count">0</span></div>
+                <div class="leitner-box-pill lbp-3"><span class="box-num">Medium</span><span class="box-count" id="box-3-count">0</span></div>
+                <div class="leitner-box-pill lbp-4"><span class="box-num">Long</span><span class="box-count" id="box-4-count">0</span></div>
+                <div class="leitner-box-pill lbp-5"><span class="box-num">Mastered</span><span class="box-count" id="box-5-count">0</span></div>
               </div>
 
-              <!-- Swiper Card -->
-              <div
-                class="flashcard-shell"
-                id="leitner-deck-view"
-                style="display: none"
-              >
-                <div class="flashcard-status">
-                  <span class="badge" id="flashcard-progress">Card 0 of 0</span>
-                  <span class="badge subtle"
-                    >Box: <span id="flashcard-box-num">1</span></span
-                  >
-                </div>
-                <button
-                  class="flashcard"
-                  id="flashcard-element"
-                  type="button"
-                  onclick="flipCard()"
-                >
-                  <div class="flashcard-inner" id="flashcard-inner">
-                    <div class="flashcard-face front" id="flashcard-front">
-                      Click to Flip
-                    </div>
-                    <div class="flashcard-face back" id="flashcard-back">
-                      Definition
-                    </div>
+              <!-- Active deck view -->
+              <div class="flashcard-shell" id="leitner-deck-view" style="display:none">
+
+                <!-- Session progress bar -->
+                <div class="fc-session-bar">
+                  <div class="fc-session-info">
+                    <span id="flashcard-progress" class="fc-card-counter">Card 1 of 5</span>
+                    <span class="fc-box-badge">Box <span id="flashcard-box-num">1</span></span>
                   </div>
-                </button>
+                  <div class="fc-session-track">
+                    <div class="fc-session-fill" id="fc-session-fill"></div>
+                  </div>
+                </div>
 
+                <!-- The card -->
+                <div class="fc-card-area">
+                  <button class="flashcard" id="flashcard-element" type="button" onclick="flipCard()" aria-label="Click or press Space to flip card">
+                    <div class="fc-flip-hint" id="fc-flip-hint">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 .49-3.62"/></svg>
+                      Click to reveal answer
+                    </div>
+                    <div class="flashcard-inner" id="flashcard-inner">
+                      <div class="flashcard-face front" id="flashcard-front">Loading...</div>
+                      <div class="flashcard-face back" id="flashcard-back">Loading...</div>
+                    </div>
+                  </button>
+                </div>
+
+                <!-- Action buttons -->
                 <div class="flashcard-action-bar">
-                  <button
-                    class="btn-leitner wrong"
-                    onclick="handleLeitnerAnswer(false)"
-                  >
-                    ❌ Forgot (Box 1)
+                  <button class="btn-leitner wrong" onclick="handleLeitnerAnswer(false)">
+                    Didn't know
                   </button>
-                  <button
-                    class="btn-leitner correct"
-                    onclick="handleLeitnerAnswer(true)"
-                  >
-                    ✓ Remembered (+1 Box)
+                  <button class="btn-leitner skip" onclick="skipCard()">
+                    Skip
+                  </button>
+                  <button class="btn-leitner correct" onclick="handleLeitnerAnswer(true)">
+                    Got it!
                   </button>
                 </div>
+
+                <!-- Keyboard hint -->
+                <p class="fc-keyboard-hint"><kbd>Space</kbd> flip &nbsp;·&nbsp; <kbd>←</kbd> didn't know &nbsp;·&nbsp; <kbd>→</kbd> got it</p>
               </div>
 
-              <div
-                id="leitner-empty"
-                class="empty"
-                style="padding: 3rem 1.5rem; text-align: center"
-              >
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  style="
-                    width: 44px;
-                    height: 44px;
-                    margin-bottom: 0.5rem;
-                    opacity: 0.4;
-                  "
-                >
-                  <path
-                    d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"
-                  ></path>
-                </svg>
-                <div class="muted">
-                  Enter a topic and click "Generate AI" to populate active
-                  recall flashcards in the Leitner Arena.
-                </div>
+              <!-- Empty state -->
+              <div id="leitner-empty" class="fc-empty-state">
+                <div class="fc-empty-title">No flashcards yet</div>
+                <div class="fc-empty-desc">Type a topic above and click <strong>Generate AI</strong> to create your first deck. Or upload a document to study from your notes.</div>
               </div>
-            </div>
+
+            </div><!-- /.leitner-arena -->
           </section>
         </div>
 
@@ -2744,16 +2689,27 @@
         } of ${deck.length}`;
         $('flashcard-box-num').textContent = current.box;
 
-        $(
-          'flashcard-front'
-        ).innerHTML = `<span class="flash-label">Term</span><span class="flash-text">${current.term}</span>`;
-        $(
-          'flashcard-back'
-        ).innerHTML = `<span class="flash-label">Definition</span><span class="flash-text">${current.definition}</span>`;
+        $('flashcard-front').innerHTML =
+          `<span class="flash-label">❓ Question</span><span class="flash-text">${current.term}</span>`;
+        $('flashcard-back').innerHTML =
+          `<span class="flash-label">💡 Answer</span><span class="flash-text">${current.definition}</span>`;
 
         $('flashcard-inner').style.transform = leitnerState.flipped
           ? 'rotateY(180deg)'
           : 'rotateY(0deg)';
+
+        // Update session progress bar
+        const fillEl = $('fc-session-fill');
+        if (fillEl) {
+          const pct = deck.length > 1
+            ? (leitnerState.index / (deck.length - 1)) * 100
+            : 100;
+          fillEl.style.width = pct + '%';
+        }
+
+        // Flip hint: show when front, hide when back
+        const hintEl = $('fc-flip-hint');
+        if (hintEl) hintEl.style.opacity = leitnerState.flipped ? '0' : '1';
       }
 
       function flipCard() {
@@ -2770,14 +2726,11 @@
         if (remembered) {
           current.box = Math.min(5, current.box + 1);
           leitnerState.xp += 15;
-          toast(
-            'Remembered! Card promoted to Box ' + current.box + ' (+15 XP)',
-            'success'
-          );
+          toast(`✅ Got it! → Box ${current.box} (+15 XP)`, 'success');
         } else {
           current.box = 1;
           leitnerState.xp += 5;
-          toast('Forgot! Card demoted to Box 1 (+5 XP)', 'warn');
+          toast(`🔄 Sent back to Box 1 (+5 XP)`, 'warn');
         }
 
         leitnerState.index = (leitnerState.index + 1) % deck.length;
@@ -2787,6 +2740,20 @@
         updateLeitnerStats();
         renderLeitnerCard();
       }
+
+      // Keyboard shortcuts for flashcards
+      document.addEventListener('keydown', function(e) {
+        if (document.getElementById('tab-leitner')?.classList.contains('active')) {
+          if (e.code === 'Space' && e.target.tagName !== 'INPUT') {
+            e.preventDefault();
+            flipCard();
+          } else if (e.code === 'ArrowRight') {
+            handleLeitnerAnswer(true);
+          } else if (e.code === 'ArrowLeft') {
+            handleLeitnerAnswer(false);
+          }
+        }
+      });
 
       function showLevelUp(level) {
         const lvlNumEl = $('level-up-num');
@@ -2816,15 +2783,12 @@
           return;
         }
 
-        $('btn-generate-flashcards').disabled = true;
-        $('btn-generate-flashcards').innerHTML = '<span class="spinner"></span>';
+        const btn = $('btn-generate-flashcards');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Generating...';
 
         const docId = window.selectedDocId || window.lastDocId;
-        const payload = {
-          topic: topic,
-          limit: 5,
-          doc_id: docId || null
-        };
+        const payload = { topic, limit: 8, doc_id: docId || null };
 
         const res = await call('/flashcards', {
           method: 'POST',
@@ -2832,24 +2796,44 @@
           body: JSON.stringify(payload)
         });
 
-        $('btn-generate-flashcards').disabled = false;
-        $('btn-generate-flashcards').textContent = 'Generate AI';
+        btn.disabled = false;
+        btn.textContent = 'Generate AI';
 
         if (!res.ok) {
-          toast('Failed to generate flashcards', 'error');
+          toast(`Failed to generate flashcards: ${res.body?.detail || res.status}`, 'error');
           return;
         }
 
         const newCards = res.body.flashcards;
-        if (newCards && newCards.length > 0) {
-          FLASHCARDS[currentLang] = newCards.map(c => ({ term: c.front, definition: c.back }));
-          flashState.index = 0;
-          flashState.flipped = false;
-          renderFlashcard();
-          toast('Flashcards generated!', 'success');
-        } else {
-          toast('No flashcards generated.', 'warn');
+        if (!newCards || newCards.length === 0) {
+          toast('No flashcards generated. Try a different topic.', 'warn');
+          return;
         }
+
+        // Fix: load cards into Leitner state (not the old FLASHCARDS dict)
+        leitnerState.cards = newCards.map(c => ({
+          term: c.front,
+          definition: c.back,
+          box: 1,
+        }));
+        leitnerState.index = 0;
+        leitnerState.flipped = false;
+        saveLeitnerState();
+        updateLeitnerStats();
+        renderLeitnerCard();
+        toast(`✨ ${newCards.length} flashcards generated for "${topic}"!`, 'success');
+
+        if (res.body.warning) {
+          setTimeout(() => toast(res.body.warning, 'warn'), 800);
+        }
+      }
+
+      function skipCard() {
+        const deck = leitnerState.cards;
+        if (!deck.length) return;
+        leitnerState.index = (leitnerState.index + 1) % deck.length;
+        leitnerState.flipped = false;
+        renderLeitnerCard();
       }
 
       // ============================================================================
