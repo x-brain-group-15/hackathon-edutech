@@ -12,11 +12,14 @@ from typing import Optional
 from src.config import config
 from src.adapters import factory
 from src import handlers
+from src.handlers import logger
+
+_allowed = ["*"] if config.cors_origins == "*" else [o.strip() for o in config.cors_origins.split(",") if o.strip()]
 
 app = FastAPI(title="StudyBot — Upload")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_allowed,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -46,12 +49,14 @@ async def upload(
     overlap: int | None = None,
     threshold: float | None = None,
     x_user_id: str | None = Header(default=None),
-):
+) -> dict:
+    user_id = _uid(x_user_id)
     data = await file.read()
     if not data:
+        logger.warning(f"[/upload] Empty file user={user_id} filename={file.filename}")
         raise HTTPException(status_code=400, detail="Empty file")
     return handlers.handle_upload(
-        user_id=_uid(x_user_id),
+        user_id=user_id,
         filename=file.filename or "untitled",
         data=data,
         storage=storage,
@@ -64,27 +69,16 @@ async def upload(
     )
 
 
-@app.delete("/docs/{doc_id}")
-def delete_doc(doc_id: str, x_user_id: str | None = Header(default=None)):
-    try:
-        return handlers.handle_delete_doc(
-            user_id=_uid(x_user_id),
-            doc_id=doc_id,
-            storage=storage,
-            userstore=userstore,
-            vector_store=vector_store,
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @app.post("/docs/{doc_id}/evaluate")
-def evaluate(doc_id: str, req: EvaluateRequest, x_user_id: str | None = Header(default=None)):
+def evaluate(
+    doc_id: str,
+    req: EvaluateRequest,
+    x_user_id: str | None = Header(default=None),
+) -> dict:
+    user_id = _uid(x_user_id)
     try:
         return handlers.handle_evaluate(
-            user_id=_uid(x_user_id),
+            user_id=user_id,
             doc_id=doc_id,
             storage=storage,
             userstore=userstore,
@@ -95,8 +89,29 @@ def evaluate(doc_id: str, req: EvaluateRequest, x_user_id: str | None = Header(d
             threshold=req.threshold,
         )
     except ValueError as e:
+        logger.warning(f"[/docs/{doc_id}/evaluate] Not found user={user_id}: {e}")
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
+        logger.error(f"[/docs/{doc_id}/evaluate] Unexpected error user={user_id}: {type(e).__name__}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/docs/{doc_id}")
+def delete_doc(doc_id: str, x_user_id: str | None = Header(default=None)) -> dict:
+    user_id = _uid(x_user_id)
+    try:
+        return handlers.handle_delete_doc(
+            user_id=user_id,
+            doc_id=doc_id,
+            storage=storage,
+            userstore=userstore,
+            vector_store=vector_store,
+        )
+    except ValueError as e:
+        logger.warning(f"[/docs/{doc_id} DELETE] Not found user={user_id}: {e}")
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"[/docs/{doc_id} DELETE] Unexpected error user={user_id}: {type(e).__name__}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
