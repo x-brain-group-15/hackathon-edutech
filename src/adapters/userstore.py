@@ -189,9 +189,29 @@ class SQLiteUserStore:
             "SELECT doc_id, metadata, created_at FROM user_docs WHERE user_id = ? ORDER BY created_at DESC",
             (user_id,),
         )
+        rows = cur.fetchall()
+        if not rows:
+            default_meta = {
+                "filename": "Photosynthesis_Overview.txt",
+                "size": 752,
+                "location": "local-default",
+                "chars": 752,
+                "extraction": {"strategy": "plain_text"}
+            }
+            self.conn.execute(
+                "INSERT OR REPLACE INTO user_docs (user_id, doc_id, metadata) VALUES (?, ?, ?)",
+                (user_id, "default-photosynthesis-doc", json.dumps(default_meta)),
+            )
+            self.conn.commit()
+            cur = self.conn.execute(
+                "SELECT doc_id, metadata, created_at FROM user_docs WHERE user_id = ? ORDER BY created_at DESC",
+                (user_id,),
+            )
+            rows = cur.fetchall()
+            
         return [
             {"doc_id": r[0], **(json.loads(r[1]) if r[1] else {}), "created_at": r[2]}
-            for r in cur.fetchall()
+            for r in rows
         ]
 
     def log_query(self, user_id, query, answer):

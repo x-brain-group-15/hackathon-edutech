@@ -2,6 +2,56 @@
 <html lang="en" data-lang="en">
 
 <head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title id="page-title">StudyBot — AI Study Buddy</title>
+  <link rel="stylesheet" href="global.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+  <script>
+    // ---------- Early Theme & Language Initialization ----------
+    (function () {
+      const savedTheme = localStorage.getItem('studybot-theme') || 'light';
+      document.documentElement.setAttribute('data-theme', savedTheme);
+      const storedLang = localStorage.getItem('studybot-lang');
+      const browserLang = (navigator.language || 'en').toLowerCase();
+      const initialLang =
+        storedLang || (browserLang.startsWith('vi') ? 'vi' : 'en');
+      document.documentElement.setAttribute('data-lang', initialLang);
+      document.documentElement.lang = initialLang;
+    })();
+
+    // toggleTheme defined early so inline onclick always works even if main
+    // script has a parse error or hasn't loaded yet
+    function toggleTheme() {
+      const currentTheme =
+        document.documentElement.getAttribute('data-theme') || 'dark';
+      const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', newTheme);
+      localStorage.setItem('studybot-theme', newTheme);
+      if (typeof toast === 'function' && typeof t === 'function') {
+        const modeLabel =
+          newTheme === 'dark' ? t('themeDark') : t('themeLight');
+        toast(t('themeSwitched', { mode: modeLabel }), 'success');
+      }
+
+      // Dynamic Mermaid Re-render for Theme Toggle
+      if (window.mermaid && window.lastMindmapCode) {
+        const container = document.getElementById('mindmap-container');
+        if (container && container.style.display !== 'none') {
+          mermaid.initialize({
+            startOnLoad: false,
+            theme: newTheme === 'dark' ? 'dark' : 'default',
+            securityLevel: 'loose',
+          });
+          container.innerHTML = `<div class="mermaid" id="mindmap-mermaid">${window.lastMindmapCode}</div>`;
+          mermaid.init(undefined, document.querySelectorAll('.mermaid'));
+        }
+      }
+    }
+  </script>
+</head>
+
+<head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title id="page-title">StudyBot — AI Study Buddy</title>
@@ -21,7 +71,6 @@
 </head>
 
 <body>
-
   <header class="header-glass">
     <div class="topbar">
       <div class="brand">
@@ -85,9 +134,13 @@
             <span class="step">3</span>
             <h2 data-i18n="libraryTitle"></h2>
           </div>
-          <button class="ghost" onclick="refresh()" style="padding: 0.4rem 0.75rem; font-size: 0.78rem;">
-            <svg style="width:14px;height:14px;margin-right:2px;vertical-align:middle;" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" stroke-width="2">
+          <button class="ghost" onclick="refresh()" style="padding: 0.4rem 0.75rem; font-size: 0.78rem">
+            <svg style="
+                  width: 14px;
+                  height: 14px;
+                  margin-right: 2px;
+                  vertical-align: middle;
+                " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
             </svg>
             <span data-i18n="refresh"></span>
@@ -95,12 +148,16 @@
         </div>
         <div class="search-box-container">
           <input type="text" id="doc-search" class="doc-search" placeholder=""
-            data-i18n-placeholder="docSearchPlaceholder" data-i18n-aria="docSearchLabel" oninput="filterDocs()">
+            data-i18n-placeholder="docSearchPlaceholder" data-i18n-aria="docSearchLabel" oninput="filterDocs()" />
         </div>
         <div class="doc-list" id="docs">
           <div class="empty">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-              style="width: 44px; height: 44px; margin-bottom: 0.5rem; opacity: 0.4;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="
+                  width: 44px;
+                  height: 44px;
+                  margin-bottom: 0.5rem;
+                  opacity: 0.4;
+                ">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
               <polyline points="14 2 14 8 20 8"></polyline>
             </svg>
@@ -133,20 +190,33 @@
             <span data-i18n="uploadDragOr"></span>
             <span class="browse" data-i18n="uploadDragBrowse"></span>
           </p>
-          <p class="muted" style="font-size:0.78rem; margin-top: 0.5rem;">
+          <p class="muted" style="font-size: 0.78rem; margin-top: 0.5rem">
             <span data-i18n="uploadHintPrefix"></span>
             <code>sample_data/</code><span data-i18n="uploadHintSuffix"></span>
           </p>
-          <input type="file" id="file" accept=".pdf,.txt,.md">
+          <input type="file" id="file" accept=".pdf,.txt,.md" />
         </label>
         <div id="upload-result"></div>
 
         <!-- Advanced Chunking Settings Options -->
-        <div style="margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 1rem;">
+        <div style="
+              margin-top: 1rem;
+              border-top: 1px solid var(--border);
+              padding-top: 1rem;
+            ">
           <details>
-            <summary
-              style="font-weight: 600; color: var(--accent); cursor: pointer; display: flex; align-items: center; gap: 0.4rem; font-size: 0.84rem; outline: none; user-select: none;">
-              <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            <summary style="
+                  font-weight: 600;
+                  color: var(--accent);
+                  cursor: pointer;
+                  display: flex;
+                  align-items: center;
+                  gap: 0.4rem;
+                  font-size: 0.84rem;
+                  outline: none;
+                  user-select: none;
+                ">
+              <svg style="width: 14px; height: 14px" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="12" cy="12" r="3"></circle>
                 <path
@@ -155,267 +225,1109 @@
               </svg>
               <span data-i18n="chunkingSummary"></span>
             </summary>
-            <div
-              style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.8rem; margin-top: 0.8rem; padding: 0.8rem; background: rgba(255,255,255,0.02); border-radius: var(--radius-sm); border: 1px solid var(--border);">
+            <div style="
+                  display: grid;
+                  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+                  gap: 0.8rem;
+                  margin-top: 0.8rem;
+                  padding: 0.8rem;
+                  background: rgba(255, 255, 255, 0.02);
+                  border-radius: var(--radius-sm);
+                  border: 1px solid var(--border);
+                ">
               <div>
-                <label style="font-size: 0.78rem; font-weight: 700; display: block; margin-bottom: 0.3rem;"
-                  data-i18n="chunkingStrategyLabel"></label>
-                <select id="chunk-strategy"
-                  style="width: 100%; padding: 0.45rem; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.82rem; background: var(--card); color: var(--text);"
-                  onchange="toggleStrategyFields()">
+                <label style="
+                      font-size: 0.78rem;
+                      font-weight: 700;
+                      display: block;
+                      margin-bottom: 0.3rem;
+                    " data-i18n="chunkingStrategyLabel"></label>
+                <select id="chunk-strategy" style="
+                      width: 100%;
+                      padding: 0.45rem;
+                      border: 1px solid var(--border);
+                      border-radius: var(--radius-sm);
+                      font-size: 0.82rem;
+                      background: var(--card);
+                      color: var(--text);
+                    " onchange="toggleStrategyFields()">
                   <option value="fixed" data-i18n="chunkingStrategyFixed"></option>
                   <option value="structural" data-i18n="chunkingStrategyStructural"></option>
                   <option value="semantic" data-i18n="chunkingStrategySemantic"></option>
                 </select>
               </div>
               <div id="field-size">
-                <label style="font-size: 0.78rem; font-weight: 700; display: block; margin-bottom: 0.3rem;"
-                  data-i18n="chunkingSizeLabel"></label>
-                <input type="number" id="chunk-size" value="500"
-                  style="width: 100%; padding: 0.4rem; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.82rem; background: var(--card); color: var(--text);">
+                <label style="
+                      font-size: 0.78rem;
+                      font-weight: 700;
+                      display: block;
+                      margin-bottom: 0.3rem;
+                    " data-i18n="chunkingSizeLabel"></label>
+                <input type="number" id="chunk-size" value="500" style="
+                      width: 100%;
+                      padding: 0.4rem;
+                      border: 1px solid var(--border);
+                      border-radius: var(--radius-sm);
+                      font-size: 0.82rem;
+                      background: var(--card);
+                      color: var(--text);
+                    " />
               </div>
               <div id="field-overlap">
-                <label style="font-size: 0.78rem; font-weight: 700; display: block; margin-bottom: 0.3rem;"
-                  data-i18n="chunkingOverlapLabel"></label>
-                <input type="number" id="chunk-overlap" value="100"
-                  style="width: 100%; padding: 0.4rem; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.82rem; background: var(--card); color: var(--text);">
+                <label style="
+                      font-size: 0.78rem;
+                      font-weight: 700;
+                      display: block;
+                      margin-bottom: 0.3rem;
+                    " data-i18n="chunkingOverlapLabel"></label>
+                <input type="number" id="chunk-overlap" value="100" style="
+                      width: 100%;
+                      padding: 0.4rem;
+                      border: 1px solid var(--border);
+                      border-radius: var(--radius-sm);
+                      font-size: 0.82rem;
+                      background: var(--card);
+                      color: var(--text);
+                    " />
               </div>
-              <div id="field-threshold" style="display: none;">
-                <label style="font-size: 0.78rem; font-weight: 700; display: block; margin-bottom: 0.3rem;"
-                  data-i18n="chunkingThresholdLabel"></label>
-                <input type="number" id="chunk-threshold" value="0.3" step="0.05" min="0" max="1"
-                  style="width: 100%; padding: 0.4rem; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.82rem; background: var(--card); color: var(--text);">
+              <div id="field-threshold" style="display: none">
+                <label style="
+                      font-size: 0.78rem;
+                      font-weight: 700;
+                      display: block;
+                      margin-bottom: 0.3rem;
+                    " data-i18n="chunkingThresholdLabel"></label>
+                <input type="number" id="chunk-threshold" value="0.3" step="0.05" min="0" max="1" style="
+                      width: 100%;
+                      padding: 0.4rem;
+                      border: 1px solid var(--border);
+                      border-radius: var(--radius-sm);
+                      font-size: 0.82rem;
+                      background: var(--card);
+                      color: var(--text);
+                    " />
               </div>
             </div>
           </details>
         </div>
       </section>
 
-      <!-- Step 2: Ask Question Card -->
-      <section class="card">
-        <div class="card-header">
-          <div class="card-title-group">
-            <span class="step">2</span>
-            <h2 data-i18n="askTitle"></h2>
-          </div>
-          <span class="meta" data-i18n="askMeta"></span>
-        </div>
-
-        <div class="chat-container">
-          <!-- AI Premium Chat bubbles stream -->
-          <div class="answer-card" id="answer-card">
-            <!-- Messages will be dynamically rendered here -->
-          </div>
-
-          <div class="input-row">
-            <input type="text" id="question" placeholder="Ask your AI buddy about the uploaded notes..."
-              data-i18n-placeholder="questionPlaceholder" autocomplete="off">
-            <button class="primary" id="ask-btn" onclick="ask()">
-              <span data-i18n="askButton"></span>
-              <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="22" y1="2" x2="11" y2="13"></line>
-                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-              </svg>
-              Refresh
-            </button>
-          </div>
-        </div>
-      </section>
-
-      <div class="section-title">
-        <div>
-          <h2 data-i18n="practiceTitle"></h2>
-          <p data-i18n="practiceSubtitle"></p>
-        </div>
-        <span class="section-pill" data-i18n="practicePill"></span>
+      <!-- Navigation Tabs for Premium Study Suite -->
+      <div class="nav-tabs">
+        <button class="tab-btn active" id="btn-tab-chat" onclick="switchTab('tab-chat')">
+          💬 Chat & Socratic
+        </button>
+        <button class="tab-btn" id="btn-tab-cornell" onclick="switchTab('tab-cornell')">
+          📝 Cornell Guide
+        </button>
+        <button class="tab-btn" id="btn-tab-mindmap" onclick="switchTab('tab-mindmap')">
+          📊 Mind-Map
+        </button>
+        <button class="tab-btn" id="btn-tab-leitner" onclick="switchTab('tab-leitner')">
+          🎮 Leitner Arena
+        </button>
+        <button class="tab-btn" id="btn-tab-quiz" onclick="switchTab('tab-quiz')">
+          ✍️ Practice Quiz
+        </button>
       </div>
 
-      <div class="practice-grid">
+      <!-- Tab: Chat & Socratic Tutor -->
+      <div class="tab-content active" id="tab-chat">
+        <section class="card">
+          <div class="card-header">
+            <div class="card-title-group">
+              <span class="step">💬</span>
+              <h2 data-i18n="askTitle"></h2>
+            </div>
+            <span class="meta" data-i18n="askMeta"></span>
+          </div>
+
+          <!-- Socratic Tutor Switcher -->
+          <div class="socratic-wrapper">
+            <div class="socratic-info">
+              <span style="font-size: 1.25rem">🧠</span>
+              <div>
+                <div class="socratic-title">Socratic Tutor Mode</div>
+                <div class="socratic-subtitle">
+                  Guides you to answers instead of spoonfeeding them
+                </div>
+              </div>
+            </div>
+            <label class="socratic-toggle-container">
+              <input type="checkbox" id="socratic-toggle" class="socratic-checkbox" />
+              <span class="socratic-slider"></span>
+            </label>
+          </div>
+
+          <div class="chat-container">
+            <!-- AI Premium Chat bubbles stream -->
+            <div class="answer-card" id="answer-card">
+              <!-- Messages will be dynamically rendered here -->
+            </div>
+
+            <div class="input-row">
+              <input type="text" id="question" placeholder="Ask your AI buddy about the uploaded notes..."
+                data-i18n-placeholder="questionPlaceholder" autocomplete="off" />
+              <button class="primary" id="ask-btn" onclick="ask()">
+                <span data-i18n="askButton"></span>
+                <svg style="width: 16px; height: 16px" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="22" y1="2" x2="11" y2="13"></line>
+                  <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- Tab: Cornell Study Guide -->
+      <div class="tab-content" id="tab-cornell">
+        <section class="card">
+          <div class="card-header">
+            <div class="card-title-group">
+              <span class="step">📝</span>
+              <h2>Cornell Notes Study Guide</h2>
+            </div>
+            <button class="primary" onclick="generateCornell()" id="btn-generate-cornell">
+              Generate Cornell Guide
+            </button>
+          </div>
+
+          <div id="cornell-view" style="display: none" class="cornell-notes">
+            <div class="cornell-body">
+              <div class="cornell-column-left" id="cornell-cues">
+                <!-- Cues / Keywords go here -->
+              </div>
+              <div class="cornell-column-right" id="cornell-notes-points">
+                <!-- Note taking points go here -->
+              </div>
+            </div>
+            <div class="cornell-summary" id="cornell-summary-text">
+              <!-- Summary goes here -->
+            </div>
+          </div>
+          <div id="cornell-empty" class="empty" style="padding: 3rem 1.5rem; text-align: center">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="
+                  width: 44px;
+                  height: 44px;
+                  margin-bottom: 0.5rem;
+                  opacity: 0.4;
+                ">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+            </svg>
+            <div class="muted">
+              Upload a document first, then click "Generate Cornell Guide" to
+              create a premium structured study guide.
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- Tab: Mind-Map -->
+      <div class="tab-content" id="tab-mindmap">
+        <section class="card">
+          <div class="card-header">
+            <div class="card-title-group">
+              <span class="step">📊</span>
+              <h2>Interactive Mind-Map</h2>
+            </div>
+            <button class="primary" onclick="generateMindmap()" id="btn-generate-mindmap">
+              Generate Mind-Map
+            </button>
+          </div>
+
+          <div id="mindmap-container" style="
+                display: none;
+                padding: 1rem;
+                border: 1px solid var(--border);
+                border-radius: var(--radius-sm);
+                background: rgba(255, 255, 255, 0.02);
+                overflow: auto;
+                text-align: center;
+                min-height: 400px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+              ">
+            <div class="mermaid" id="mindmap-mermaid"></div>
+          </div>
+          <div id="mindmap-empty" class="empty" style="padding: 3rem 1.5rem; text-align: center">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="
+                  width: 44px;
+                  height: 44px;
+                  margin-bottom: 0.5rem;
+                  opacity: 0.4;
+                ">
+              <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+              <polyline points="2 17 12 22 22 17"></polyline>
+              <polyline points="2 12 12 17 22 12"></polyline>
+            </svg>
+            <div class="muted">
+              Upload a document first, then click "Generate Mind-Map" to
+              visually inspect connections between ideas.
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- Tab: Leitner SRS Arena -->
+      <div class="tab-content" id="tab-leitner">
+        <section class="card">
+          <div class="card-header">
+            <div class="card-title-group">
+              <span class="step">🎮</span>
+              <h2>Leitner active Recall Arena</h2>
+            </div>
+            <div style="display: flex; gap: 0.5rem">
+              <input type="text" id="flashcard-topic" data-i18n-placeholder="flashcardTopicPlaceholder"
+                placeholder="Topic to generate cards..." style="
+                    padding: 0.4rem 0.6rem;
+                    font-size: 0.82rem;
+                    border-radius: var(--radius-sm);
+                    border: 1px solid var(--border);
+                    background: var(--bg);
+                    color: var(--text);
+                    width: 180px;
+                  " />
+              <button class="primary" onclick="generateFlashcards()" id="btn-generate-flashcards"
+                style="font-size: 0.82rem">
+                Generate AI
+              </button>
+            </div>
+          </div>
+
+          <div class="leitner-arena">
+            <!-- XP Dashboard -->
+            <div class="xp-dashboard">
+              <div class="xp-level-badge" id="xp-level">1</div>
+              <div class="xp-bar-wrapper">
+                <div class="xp-bar-info">
+                  <span style="color: var(--muted)">Experience Points (XP)</span>
+                  <span id="xp-text" style="color: var(--accent); font-weight: 700">0 / 100 XP</span>
+                </div>
+                <div class="xp-bar-bg">
+                  <div class="xp-bar-fill" id="xp-fill"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Leitner Box distribution bar -->
+            <div class="leitner-boxes-bar">
+              <div class="leitner-box-pill">
+                <span class="box-num">Box 1</span>
+                <span class="box-count" id="box-1-count">0</span>
+              </div>
+              <div class="leitner-box-pill">
+                <span class="box-num">Box 2</span>
+                <span class="box-count" id="box-2-count">0</span>
+              </div>
+              <div class="leitner-box-pill">
+                <span class="box-num">Box 3</span>
+                <span class="box-count" id="box-3-count">0</span>
+              </div>
+              <div class="leitner-box-pill">
+                <span class="box-num">Box 4</span>
+                <span class="box-count" id="box-4-count">0</span>
+              </div>
+              <div class="leitner-box-pill">
+                <span class="box-num">Box 5</span>
+                <span class="box-count" id="box-5-count">0</span>
+              </div>
+            </div>
+
+            <!-- Swiper Card -->
+            <div class="flashcard-shell" id="leitner-deck-view" style="display: none">
+              <div class="flashcard-status">
+                <span class="badge" id="flashcard-progress">Card 0 of 0</span>
+                <span class="badge subtle">Box: <span id="flashcard-box-num">1</span></span>
+              </div>
+              <button class="flashcard" id="flashcard-element" type="button" onclick="flipCard()">
+                <div class="flashcard-inner" id="flashcard-inner">
+                  <div class="flashcard-face front" id="flashcard-front">
+                    Click to Flip
+                  </div>
+                  <div class="flashcard-face back" id="flashcard-back">
+                    Definition
+                  </div>
+                </div>
+              </button>
+
+              <div class="flashcard-action-bar">
+                <button class="btn-leitner wrong" onclick="handleLeitnerAnswer(false)">
+                  ❌ Forgot (Box 1)
+                </button>
+                <button class="btn-leitner correct" onclick="handleLeitnerAnswer(true)">
+                  ✓ Remembered (+1 Box)
+                </button>
+              </div>
+            </div>
+
+            <div id="leitner-empty" class="empty" style="padding: 3rem 1.5rem; text-align: center">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="
+                    width: 44px;
+                    height: 44px;
+                    margin-bottom: 0.5rem;
+                    opacity: 0.4;
+                  ">
+                <path
+                  d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z">
+                </path>
+              </svg>
+              <div class="muted">
+                Enter a topic and click "Generate AI" to populate active
+                recall flashcards in the Leitner Arena.
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- Tab: Practice Quiz -->
+      <div class="tab-content" id="tab-quiz">
         <section class="card practice-card quiz-card">
           <div class="card-header">
             <div class="card-title-group">
-              <span class="step">4</span>
+              <span class="step">✍️</span>
               <h2 data-i18n="quizTitle"></h2>
             </div>
             <span class="meta" data-i18n="quizMeta"></span>
           </div>
           <div class="quiz-shell">
-            <div class="quiz-deck" data-i18n="quizDeck"></div>
-            <div class="quiz-status">
-              <span class="badge" id="quiz-progress"></span>
-              <span class="badge subtle" id="quiz-score"></span>
-            </div>
-            <div class="quiz-question" id="quiz-question" aria-live="polite"></div>
-            <div class="quiz-options" id="quiz-options"></div>
-            <div class="quiz-explain" id="quiz-explain" aria-live="polite"></div>
-            <div class="quiz-actions">
-              <button class="ghost" id="quiz-prev" type="button" data-i18n="quizPrev"></button>
-              <button class="ghost" id="quiz-reset" type="button" data-i18n="quizReset"></button>
-              <button class="primary" id="quiz-next" type="button" data-i18n="quizNext"></button>
-            </div>
-          </div>
-        </section>
-
-        <section class="card practice-card flashcard-card">
-          <div class="card-header">
-            <div class="card-title-group">
-              <span class="step">5</span>
-              <h2 data-i18n="flashcardTitle"></h2>
-            </div>
-            <span class="meta" data-i18n="flashcardMeta"></span>
-          </div>
-          <div class="flashcard-shell">
-
-            <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
-              <input type="text" id="flashcard-topic" data-i18n-placeholder="flashcardTopicPlaceholder"
-                placeholder="Enter topic for AI..."
-                style="flex: 1; padding: 0.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--bg); color: var(--text);">
-              <button class="primary" onclick="generateFlashcards()" id="btn-generate-flashcards">Generate AI</button>
-            </div>
-            <div class="flashcard-deck" data-i18n="flashcardDeck"></div>
-            <div class="flashcard-status">
-              <span class="badge" id="flashcard-progress"></span>
-              <span class="badge subtle" data-i18n="flashcardTip"></span>
-            </div>
-            <button class="flashcard" id="flashcard" type="button" data-i18n-aria="flashcardAria">
-              <div class="flashcard-inner">
-                <div class="flashcard-face front" id="flashcard-front"></div>
-                <div class="flashcard-face back" id="flashcard-back"></div>
+            <!-- Doc + action bar -->
+            <div class="quiz-toolbar" id="quiz-toolbar">
+              <div class="quiz-doc-label" id="quiz-doc-label">
+                <span class="muted" data-i18n="quizNoDoc"></span>
               </div>
-            </button>
-            <div class="flashcard-actions">
-              <button class="ghost" id="flashcard-prev" type="button" data-i18n="flashcardPrev"></button>
-              <button class="ghost" id="flashcard-flip" type="button" data-i18n="flashcardFlip"></button>
-              <button class="primary" id="flashcard-next" type="button" data-i18n="flashcardNext"></button>
+              <button class="primary" id="quiz-generate" type="button" data-i18n="quizGenerate"></button>
+            </div>
+
+            <!-- Empty state -->
+            <div class="quiz-empty" id="quiz-empty">
+              <span class="muted" data-i18n="quizDeck"></span>
+            </div>
+
+            <!-- Active quiz view -->
+            <div id="quiz-active-view" style="display:none">
+              <div class="quiz-status">
+                <span class="badge" id="quiz-progress"></span>
+                <span class="badge subtle" id="quiz-score"></span>
+                <span class="badge subtle" id="quiz-saved-badge" style="display:none" data-i18n="quizSaved"></span>
+              </div>
+              <div class="quiz-question" id="quiz-question" aria-live="polite"></div>
+              <div class="quiz-options" id="quiz-options"></div>
+              <div class="quiz-explain" id="quiz-explain" aria-live="polite"></div>
+              <div class="quiz-actions">
+                <button class="ghost" id="quiz-prev" type="button" data-i18n="quizPrev"></button>
+                <button class="ghost" id="quiz-reset" type="button" data-i18n="quizReset"></button>
+                <button class="primary" id="quiz-next" type="button" data-i18n="quizNext"></button>
+              </div>
             </div>
           </div>
         </section>
       </div>
 
-      <!-- Step 4: RAG Quality Dashboard Card -->
-      <section class="card" id="benchmark-section" style="display: none;">
+      <!-- Level Up Dialog Overlay -->
+      <div id="level-up-overlay">
+        <div class="level-up-dialog">
+          <div style="font-size: 4rem; margin-bottom: 1rem">🎉</div>
+          <h2 style="
+                font-family: var(--font-display);
+                font-weight: 800;
+                color: var(--accent);
+                margin: 0 0 0.5rem;
+              ">
+            LEVEL UP!
+          </h2>
+          <p style="font-size: 1.1rem; font-weight: 500; margin: 0 0 1.5rem">
+            You reached Level
+            <span id="level-up-num" style="font-weight: 800; color: var(--accent-2)">2</span>!
+          </p>
+          <button class="primary" onclick="closeLevelUp()" style="margin: 0 auto">
+            Awesome! Keep Learning
+          </button>
+        </div>
+      </div>
+      <section class="card practice-card flashcard-card">
         <div class="card-header">
           <div class="card-title-group">
-            <span class="step">📊</span>
-            <h2 data-i18n="benchmarkTitle"></h2>
+            <span class="step">5</span>
+            <h2 data-i18n="flashcardTitle"></h2>
           </div>
-          <span class="meta" data-i18n="benchmarkMeta"></span>
+          <span class="meta" data-i18n="flashcardMeta"></span>
         </div>
+        <div class="flashcard-shell">
 
-        <div style="margin-bottom: 1.5rem;">
-          <p style="margin: 0 0 1rem; font-size: 0.88rem; color: var(--muted); line-height: 1.6;">
-            <span data-i18n="benchmarkIntroPrefix"></span><strong data-i18n="benchmarkIntroStrong"></strong><span
-              data-i18n="benchmarkIntroSuffix"></span>
-          </p>
-          <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center;">
-            <button class="primary" id="benchmark-btn" onclick="runBenchmark()"
-              style="background: var(--success); box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);">
-              <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polygon points="5 3 19 12 5 21 5 3"></polygon>
-              </svg>
-              <span data-i18n="benchmarkRunButton"></span>
-            </button>
-            <span id="benchmark-status" style="font-size: 0.82rem; color: var(--muted); font-weight: 500;"></span>
+          <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+            <input type="text" id="flashcard-topic" data-i18n-placeholder="flashcardTopicPlaceholder"
+              placeholder="Enter topic for AI..."
+              style="flex: 1; padding: 0.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--bg); color: var(--text);">
+            <button class="primary" onclick="generateFlashcards()" id="btn-generate-flashcards">Generate AI</button>
           </div>
-        </div>
-
-        <div id="benchmark-results" style="display: none; border-top: 1px solid var(--border); padding-top: 1.5rem;">
-          <h3 style="margin: 0 0 1rem; font-size: 0.96rem; font-weight: 700; color: var(--text);"
-            data-i18n="benchmarkMetricsTitle"></h3>
-
-          <!-- Metrics Grid -->
-          <div
-            style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
-
-            <div
-              style="padding: 1rem; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: var(--radius-sm); text-align: center; box-shadow: var(--shadow-sm);">
-              <div
-                style="font-size: 0.7rem; font-weight: 700; text-transform: uppercase; color: var(--muted); margin-bottom: 0.3rem; letter-spacing: 0.05em;">
-                Precision@1</div>
-              <div id="metric-p1" style="font-size: 1.8rem; font-weight: 800; color: var(--accent);">0%</div>
-              <div style="font-size: 0.68rem; color: var(--muted); margin-top: 0.2rem;" data-i18n="benchmarkMetricP1">
-              </div>
-            </div>
-
-            <div
-              style="padding: 1rem; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: var(--radius-sm); text-align: center; box-shadow: var(--shadow-sm);">
-              <div
-                style="font-size: 0.7rem; font-weight: 700; text-transform: uppercase; color: var(--muted); margin-bottom: 0.3rem; letter-spacing: 0.05em;">
-                Precision@3</div>
-              <div id="metric-p3" style="font-size: 1.8rem; font-weight: 800; color: var(--accent);">0%</div>
-              <div style="font-size: 0.68rem; color: var(--muted); margin-top: 0.2rem;" data-i18n="benchmarkMetricP3">
-              </div>
-            </div>
-
-            <div
-              style="padding: 1rem; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: var(--radius-sm); text-align: center; box-shadow: var(--shadow-sm);">
-              <div
-                style="font-size: 0.7rem; font-weight: 700; text-transform: uppercase; color: var(--muted); margin-bottom: 0.3rem; letter-spacing: 0.05em;">
-                Precision@5</div>
-              <div id="metric-p5" style="font-size: 1.8rem; font-weight: 800; color: var(--accent);">0%</div>
-              <div style="font-size: 0.68rem; color: var(--muted); margin-top: 0.2rem;" data-i18n="benchmarkMetricP5">
-              </div>
-            </div>
-            <p><strong>Drag a file here</strong> or <span class="browse">click to browse</span></p>
-            <p class="muted" style="font-size:0.78rem; margin-top: 0.5rem;">Max ~10MB. Try a Wikipedia article from
-              <code>sample_data/</code>.
-            </p>
-            <input type="file" id="file" accept=".pdf,.txt,.md">
-            </label>
-            <div id="upload-result"></div>
-
-            <div
-              style="padding: 1rem; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: var(--radius-sm); text-align: center; box-shadow: var(--shadow-sm);">
-              <div
-                style="font-size: 0.7rem; font-weight: 700; text-transform: uppercase; color: var(--muted); margin-bottom: 0.3rem; letter-spacing: 0.05em;">
-                MRR</div>
-              <div id="metric-mrr" style="font-size: 1.8rem; font-weight: 800; color: var(--success);">0.00</div>
-              <div style="font-size: 0.68rem; color: var(--muted); margin-top: 0.2rem;" data-i18n="benchmarkMetricMrr">
-              </div>
-            </div>
-            <span class="meta">Grounded in your uploaded notes</span>
+          <div class="flashcard-deck" data-i18n="flashcardDeck"></div>
+          <div class="flashcard-status">
+            <span class="badge" id="flashcard-progress"></span>
+            <span class="badge subtle" data-i18n="flashcardTip"></span>
           </div>
-
-          <h3 style="margin: 1.5rem 0 1rem; font-size: 0.92rem; font-weight: 700; color: var(--text);"
-            data-i18n="benchmarkDetailsTitle"></h3>
-          <div id="benchmark-queries" style="display: grid; gap: 1.25rem;"></div>
+          <button class="flashcard" id="flashcard" type="button" data-i18n-aria="flashcardAria">
+            <div class="flashcard-inner">
+              <div class="flashcard-face front" id="flashcard-front"></div>
+              <div class="flashcard-face back" id="flashcard-back"></div>
+            </div>
+          </button>
+          <div class="flashcard-actions">
+            <button class="ghost" id="flashcard-prev" type="button" data-i18n="flashcardPrev"></button>
+            <button class="ghost" id="flashcard-flip" type="button" data-i18n="flashcardFlip"></button>
+            <button class="primary" id="flashcard-next" type="button" data-i18n="flashcardNext"></button>
+          </div>
         </div>
       </section>
+    </div>
 
-      <!-- Raw Drawer (Accordion) -->
-      <details>
-        <summary>
-          <svg style="width:14px;height:14px;vertical-align:middle;" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd"
-              d="M12.316 3.051a1 1 0 01.633 1.265l-4 12a1 1 0 11-1.898-.632l4-12a1 1 0 011.265-.633zM5.707 6.293a1 1 0 010 1.414L3.414 10l2.293 2.293a1 1 0 11-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0zm8.586 0a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 11-1.414-1.414L16.586 10l-2.293-2.293a1 1 0 010-1.414z"
-              clip-rule="evenodd" />
-          </svg>
-          <span data-i18n="debugSummary"></span>
-        </summary>
-        <pre id="debug-log" data-empty="true">No requests yet.</pre>
-      </details>
+    <!-- Step 4: RAG Quality Dashboard Card -->
+    <section class="card" id="benchmark-section" style="display: none">
+      <div class="card-header">
+        <div class="card-title-group">
+          <span class="step">📊</span>
+          <h2 data-i18n="benchmarkTitle"></h2>
+        </div>
+        <span class="meta" data-i18n="benchmarkMeta"></span>
+      </div>
+
+      <div style="margin-bottom: 1.5rem">
+        <p style="
+                margin: 0 0 1rem;
+                font-size: 0.88rem;
+                color: var(--muted);
+                line-height: 1.6;
+              ">
+          <span data-i18n="benchmarkIntroPrefix"></span><strong data-i18n="benchmarkIntroStrong"></strong><span
+            data-i18n="benchmarkIntroSuffix"></span>
+        </p>
+        <div style="
+                display: flex;
+                gap: 0.75rem;
+                flex-wrap: wrap;
+                align-items: center;
+              ">
+          <button class="primary" id="benchmark-btn" onclick="runBenchmark()" style="
+                  background: var(--success);
+                  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);
+                ">
+            <svg style="width: 16px; height: 16px" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="5 3 19 12 5 21 5 3"></polygon>
+            </svg>
+            <span data-i18n="benchmarkRunButton"></span>
+          </button>
+          <span id="benchmark-status" style="
+                  font-size: 0.82rem;
+                  color: var(--muted);
+                  font-weight: 500;
+                "></span>
+        </div>
+      </div>
+
+      <div id="benchmark-results" style="
+              display: none;
+              border-top: 1px solid var(--border);
+              padding-top: 1.5rem;
+              overflow-x: hidden;
+              min-width: 0;
+            ">
+        <h3 style="
+                margin: 0 0 1rem;
+                font-size: 0.96rem;
+                font-weight: 700;
+                color: var(--text);
+              " data-i18n="benchmarkMetricsTitle"></h3>
+
+        <!-- Metrics Grid -->
+        <div style="
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+                gap: 1rem;
+                margin-bottom: 1.5rem;
+              ">
+          <div style="
+                  padding: 1rem;
+                  background: rgba(255, 255, 255, 0.02);
+                  border: 1px solid var(--border);
+                  border-radius: var(--radius-sm);
+                  text-align: center;
+                  box-shadow: var(--shadow-sm);
+                ">
+            <div style="
+                    font-size: 0.7rem;
+                    font-weight: 700;
+                    text-transform: uppercase;
+                    color: var(--muted);
+                    margin-bottom: 0.3rem;
+                    letter-spacing: 0.05em;
+                  ">
+              Precision@1
+            </div>
+            <div id="metric-p1" style="
+                    font-size: 1.8rem;
+                    font-weight: 800;
+                    color: var(--accent);
+                  ">
+              0%
+            </div>
+            <div style="
+                    font-size: 0.68rem;
+                    color: var(--muted);
+                    margin-top: 0.2rem;
+                  " data-i18n="benchmarkMetricP1"></div>
+          </div>
+
+          <div style="
+                  padding: 1rem;
+                  background: rgba(255, 255, 255, 0.02);
+                  border: 1px solid var(--border);
+                  border-radius: var(--radius-sm);
+                  text-align: center;
+                  box-shadow: var(--shadow-sm);
+                ">
+            <div style="
+                    font-size: 0.7rem;
+                    font-weight: 700;
+                    text-transform: uppercase;
+                    color: var(--muted);
+                    margin-bottom: 0.3rem;
+                    letter-spacing: 0.05em;
+                  ">
+              Precision@3
+            </div>
+            <div id="metric-p3" style="
+                    font-size: 1.8rem;
+                    font-weight: 800;
+                    color: var(--accent);
+                  ">
+              0%
+            </div>
+            <div style="
+                    font-size: 0.68rem;
+                    color: var(--muted);
+                    margin-top: 0.2rem;
+                  " data-i18n="benchmarkMetricP3"></div>
+          </div>
+
+          <div style="
+                  padding: 1rem;
+                  background: rgba(255, 255, 255, 0.02);
+                  border: 1px solid var(--border);
+                  border-radius: var(--radius-sm);
+                  text-align: center;
+                  box-shadow: var(--shadow-sm);
+                ">
+            <div style="
+                    font-size: 0.7rem;
+                    font-weight: 700;
+                    text-transform: uppercase;
+                    color: var(--muted);
+                    margin-bottom: 0.3rem;
+                    letter-spacing: 0.05em;
+                  ">
+              Precision@5
+            </div>
+            <div id="metric-p5" style="
+                    font-size: 1.8rem;
+                    font-weight: 800;
+                    color: var(--accent);
+                  ">
+              0%
+            </div>
+            <div style="
+                    font-size: 0.68rem;
+                    color: var(--muted);
+                    margin-top: 0.2rem;
+                  " data-i18n="benchmarkMetricP5"></div>
+          </div>
+
+          <div style="
+                  padding: 1rem;
+                  background: rgba(255, 255, 255, 0.02);
+                  border: 1px solid var(--border);
+                  border-radius: var(--radius-sm);
+                  text-align: center;
+                  box-shadow: var(--shadow-sm);
+                ">
+            <div style="
+                    font-size: 0.7rem;
+                    font-weight: 700;
+                    text-transform: uppercase;
+                    color: var(--muted);
+                    margin-bottom: 0.3rem;
+                    letter-spacing: 0.05em;
+                  ">
+              MRR
+            </div>
+            <div id="metric-mrr" style="
+                    font-size: 1.8rem;
+                    font-weight: 800;
+                    color: var(--success);
+                  ">
+              0.00
+            </div>
+            <div style="
+                    font-size: 0.68rem;
+                    color: var(--muted);
+                    margin-top: 0.2rem;
+                  " data-i18n="benchmarkMetricMrr"></div>
+          </div>
+        </div>
+
+        <h3 style="
+                margin: 1.5rem 0 1rem;
+                font-size: 0.92rem;
+                font-weight: 700;
+                color: var(--text);
+              " data-i18n="benchmarkDetailsTitle"></h3>
+        <div id="benchmark-queries" style="
+                display: grid;
+                gap: 1.25rem;
+                min-width: 0;
+                overflow: hidden;
+              "></div>
+      </div>
+    </section>
+
+    <!-- Raw Drawer (Accordion) -->
+    <details>
+      <summary>
+        <svg style="width: 14px; height: 14px; vertical-align: middle" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd"
+            d="M12.316 3.051a1 1 0 01.633 1.265l-4 12a1 1 0 11-1.898-.632l4-12a1 1 0 011.265-.633zM5.707 6.293a1 1 0 010 1.414L3.414 10l2.293 2.293a1 1 0 11-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0zm8.586 0a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 11-1.414-1.414L16.586 10l-2.293-2.293a1 1 0 010-1.414z"
+            clip-rule="evenodd" />
+        </svg>
+        <span data-i18n="debugSummary"></span>
+      </summary>
+      <pre id="debug-log" data-empty="true">No requests yet.</pre>
+    </details>
     </div>
   </main>
 
   <div class="toasts" id="toasts"></div>
 
   <script>
-    // ============================================================================
-    // Config
-    // ============================================================================
-    const API_BASE = (window.API_BASE
-      || new URLSearchParams(location.search).get('api')
-      || '').replace(/\/$/, '');
+    function detectTenant() {
+      const hostname = window.location.hostname;
+      let tenant = 'default';
 
-    const USER_ID = (new URLSearchParams(location.search).get('user') || 'test-user-001');
+      if (hostname.endsWith('.restx.food')) {
+        tenant = hostname.replace('.restx.food', '');
+      } else if (hostname.endsWith('.localhost')) {
+        tenant = hostname.replace('.localhost', '');
+      } else {
+        tenant =
+          new URLSearchParams(location.search).get('tenant') || 'default';
+      }
+
+      document.documentElement.setAttribute('data-tenant', tenant);
+      return tenant;
+    }
+
+    const ACTIVE_TENANT = detectTenant();
+
+    const getApiDefault = () => {
+      if (window.API_BASE) return window.API_BASE;
+      const param = new URLSearchParams(location.search).get('api');
+      if (param) return param;
+      if (
+        location.hostname === 'localhost' ||
+        location.hostname === '127.0.0.1'
+      ) {
+        return 'http://localhost:8000';
+      }
+      return 'https://1lse4odraj.execute-api.ap-southeast-1.amazonaws.com';
+    };
+    const API_BASE = getApiDefault().replace(/\/$/, '');
+    const USER_ID =
+      new URLSearchParams(location.search).get('user') || 'test-user-001';
+
+    // ============================================================================
+    // I18N & Translation & Gamification
+    // ============================================================================
+    const I18N = {
+      en: {
+        pageTitle: 'StudyBot — AI Study Buddy',
+        tagline:
+          'AI Study Buddy — Socratic Tutor, Cornell Notes, Mermaid Mind-Maps',
+        statusLoading: 'Loading system status...',
+        statusOffline: 'backend offline',
+        statusTenant: 'tenant',
+        statusLocal: 'local',
+        statusRemote: 'remote',
+        libraryTitle: 'Your Library',
+        refresh: 'Refresh',
+        libraryEmpty: 'No documents yet.',
+        uploadTitle: 'Upload Documents',
+        uploadMeta: 'PDF, TXT, MD for RAG',
+        askTitle: 'Socratic Tutor',
+        askMeta: 'Ask anything, I will guide you',
+        questionPlaceholder: 'Ask a Socratic question...',
+        askButton: 'Query',
+        cornellTitle: 'Cornell Study Guide',
+        cornellMeta: 'Structured summary',
+        mindmapTitle: 'Interactive Mind-Map',
+        mindmapMeta: 'Visual knowledge graph',
+        leitnerTitle: 'Leitner Arena',
+        leitnerMeta: 'Level {level} (XP: {xp})',
+        leitnerEmpty: 'No cards in this box.',
+        benchmarkTitle: 'RAG Quality Dashboard',
+        benchmarkMrrLabel: 'MRR',
+        benchmarkP3Label: 'P@3',
+        benchmarkChunkLabel: 'Chunk {chunk} (Score: {score})',
+        benchmarkRelevant: '✓ Relevant',
+        benchmarkIrrelevant: '✗ Irrelevant',
+        docRecommended: 'Recommended',
+        docActive: 'Active',
+        docSelect: 'Select',
+        docDelete: 'Delete',
+        docSelectedToast: 'Selected: {filename}',
+        docDeleteConfirm: 'Delete "{filename}"?',
+        docDeleteProgress: 'Deleting...',
+        docDeleteFailed: 'Delete failed',
+        docDeleteSuccess: 'Deleted {filename}',
+        quizTitle: 'Practice Quiz',
+        quizMeta: 'Generated from your active document',
+        quizDeck:
+          'Select a document, then click "Generate Quiz" to create questions from its content.',
+        quizNoDoc: '📄 No document selected',
+        quizDocLabel: '📄 {filename}',
+        quizProgress: 'Question {index} / {total}',
+        quizScore: 'Score {score} / {total}',
+        quizPrev: 'Previous',
+        quizReset: 'Restart',
+        quizGenerate: '✨ Generate Quiz',
+        quizNext: 'Next',
+        quizCorrect: 'Correct',
+        quizIncorrect: 'Try again',
+        quizExplanation: 'Explanation',
+        quizNeedDoc: 'Select or upload a document before generating a quiz.',
+        quizGenerating: 'Generating quiz...',
+        quizGenerated: 'Quiz generated from active document.',
+        quizFailed: 'Quiz generation failed: {detail}',
+        quizSaved: '☁️ Saved',
+        quizLoadedFromS3: 'Loaded saved quiz.',
+        quizLoading: 'Loading saved quiz...',
+      },
+      vi: {
+        pageTitle: 'StudyBot — Trợ lý học tập AI',
+        tagline:
+          'Trợ lý học tập AI — Gia sư Socratic, Ghi chú Cornell, Mind-Map',
+        statusLoading: 'Đang tải...',
+        statusOffline: 'backend ngoại tuyến',
+        statusTenant: 'tenant',
+        statusLocal: 'cục bộ',
+        statusRemote: 'từ xa',
+        libraryTitle: 'Thư viện',
+        refresh: 'Làm mới',
+        libraryEmpty: 'Chưa có tài liệu.',
+        uploadTitle: 'Tải tài liệu',
+        uploadMeta: 'PDF, TXT, MD',
+        askTitle: 'Gia sư Socratic',
+        askMeta: 'Tôi sẽ dẫn dắt tư duy của bạn',
+        questionPlaceholder: 'Hỏi bất cứ điều gì...',
+        askButton: 'Hỏi',
+        cornellTitle: 'Ghi chú Cornell',
+        cornellMeta: 'Tóm tắt có cấu trúc',
+        mindmapTitle: 'Sơ đồ tư duy',
+        mindmapMeta: 'Đồ thị kiến thức',
+        leitnerTitle: 'Đấu trường Leitner',
+        leitnerMeta: 'Cấp {level} (XP: {xp})',
+        leitnerEmpty: 'Hộp này trống.',
+        benchmarkTitle: 'Bảng chất lượng RAG',
+        benchmarkMrrLabel: 'MRR',
+        benchmarkP3Label: 'P@3',
+        benchmarkChunkLabel: 'Chunk {chunk} (Điểm: {score})',
+        benchmarkRelevant: '✓ Phù hợp',
+        benchmarkIrrelevant: '✗ Không phù hợp',
+        docRecommended: 'Nên dùng',
+        docActive: 'Đang chọn',
+        docSelect: 'Chọn',
+        docDelete: 'Xóa',
+        docDeleteTitle: 'Xóa tài liệu',
+        docSelectedToast: 'Đã chọn tài liệu: {filename}',
+        docDeleteConfirm:
+          'Bạn chắc chắn muốn xóa "{filename}"? Thao tác này sẽ xóa file khỏi bộ nhớ và làm sạch chỉ mục vector.',
+        docDeleteProgress: 'Đang xóa {filename}...',
+        docDeleteFailed: 'Xóa thất bại: {detail}',
+        docDeleteSuccess: 'Đã xóa {filename}',
+        quizTitle: 'Practice Quiz',
+        quizMeta: 'Sinh từ tài liệu đang chọn',
+        quizDeck: 'Chọn tài liệu, rồi nhấn "Tạo Quiz" để sinh câu hỏi từ nội dung.',
+        quizNoDoc: '📄 Chưa chọn tài liệu',
+        quizDocLabel: '📄 {filename}',
+        quizProgress: 'Câu {index} / {total}',
+        quizScore: 'Điểm {score} / {total}',
+        quizPrev: 'Trước',
+        quizReset: 'Làm lại',
+        quizGenerate: '✨ Tạo Quiz',
+        quizNext: 'Tiếp',
+        quizCorrect: 'Đúng',
+        quizIncorrect: 'Thử lại',
+        quizExplanation: 'Giải thích',
+        quizNeedDoc: 'Hãy chọn hoặc tải lên tài liệu trước khi tạo quiz.',
+        quizGenerating: 'Đang tạo quiz...',
+        quizGenerated: 'Đã tạo quiz từ tài liệu đang chọn.',
+        quizFailed: 'Tạo quiz thất bại: {detail}',
+        quizSaved: '☁️ Đã lưu',
+        quizLoadedFromS3: 'Đã tải quiz đã lưu.',
+        quizLoading: 'Đang tải quiz đã lưu...',
+      },
+    };
+
+    Object.assign(I18N.en, {
+      languageGroup: 'Language switcher',
+      toggleThemeTitle: 'Toggle light/dark theme',
+      docSearchPlaceholder: 'Search library...',
+      docSearchLabel: 'Search documents',
+      docMeta: '{chars} chars - {size} KB',
+      docDeleteTitle: 'Delete document',
+      uploadDragStrong: 'Drag a file here',
+      uploadDragOr: 'or',
+      uploadDragBrowse: 'click to browse',
+      uploadHintPrefix: 'Max ~10MB. Try a Wikipedia article from ',
+      uploadHintSuffix: '.',
+      chunkingSummary: 'Chunking settings',
+      chunkingStrategyLabel: 'Chunking strategy',
+      chunkingStrategyFixed: 'Fixed-size (sentence-aware)',
+      chunkingStrategyStructural: 'Structural (Markdown headers)',
+      chunkingStrategySemantic: 'Local semantic (Jaccard)',
+      chunkingSizeLabel: 'Chunk size (characters)',
+      chunkingOverlapLabel: 'Overlap (characters)',
+      chunkingThresholdLabel: 'Semantic distance threshold',
+      fileTooLarge:
+        'File is too large ({size} MB). Maximum size allowed is {max}MB.',
+      uploading: 'Uploading {filename} ({size} KB)...',
+      uploadFailed: 'Upload failed: {detail}',
+      uploadSuccessChars: '{chars} chars extracted & indexed',
+      uploadChunkPrefix: ' (using ',
+      uploadChunkSuffix: ' chunking)',
+      uploadSuccessDoc: 'doc_id: {docId}',
+      uploadedToast: 'Uploaded {filename}',
+      toastAskEmpty: 'Type a question first',
+      welcomeMessage:
+        'Hello! I am your AI Study Buddy. Upload your lecture notes, then ask me anything about them.',
+      labelYou: 'You',
+      labelBot: 'StudyBot',
+      errorQuery: 'Error occurred while querying the notes.',
+      citationsTitle: 'Citations from your documents',
+      citationChunk: 'chunk {chunk}',
+      citationScore: 'score {score}',
+      citationsNone: 'No citations matched.',
+      benchmarkMeta: 'Evaluate chunking quality',
+      benchmarkIntroPrefix: 'We automatically run ',
+      benchmarkIntroStrong: '5 test questions',
+      benchmarkIntroSuffix:
+        ' about Photosynthesis and score retrieval accuracy.',
+      benchmarkRunButton: 'Run benchmark evaluation',
+      benchmarkStatusRunning: 'Running benchmark evaluation...',
+      benchmarkMetricsTitle: 'RAG quality metrics',
+      benchmarkMetricP1: 'Top-1 accuracy',
+      benchmarkMetricP3: 'Top-3 accuracy',
+      benchmarkMetricP5: 'Top-5 accuracy',
+      benchmarkMetricMrr: 'Mean reciprocal rank',
+      benchmarkDetailsTitle: 'Retrieval details for 5 test questions',
+      benchmarkNeedDoc: 'Please upload or select a document first.',
+      benchmarkFailed: 'Evaluation failed: {detail}',
+      benchmarkSuccess: 'Evaluation completed successfully.',
+      benchmarkQuestionLabel: 'Q{index}: {query}',
+      benchmarkTargetKeywords: 'Target keywords',
+      debugSummary: 'Raw API responses (debug)',
+      debugEmpty: 'No requests yet.',
+    });
+
+    Object.assign(I18N.vi, {
+      languageGroup: 'Chọn ngôn ngữ',
+      toggleThemeTitle: 'Chuyển giao diện sáng/tối',
+      docSearchPlaceholder: 'Tìm tài liệu...',
+      docSearchLabel: 'Tìm kiếm tài liệu',
+      docMeta: '{chars} ký tự - {size} KB',
+      docDeleteTitle: 'Xóa tài liệu',
+      uploadDragStrong: 'Kéo file vào đây',
+      uploadDragOr: 'hoặc',
+      uploadDragBrowse: 'bấm để chọn file',
+      uploadHintPrefix: 'Tối đa ~10MB. Thử một bài Wikipedia trong ',
+      uploadHintSuffix: '.',
+      chunkingSummary: 'Cấu hình tách',
+      chunkingStrategyLabel: 'Chiến lược chunking',
+      chunkingStrategyFixed: 'Kích thước cố định (theo câu)',
+      chunkingStrategyStructural: 'Cấu trúc (tiêu đề Markdown)',
+      chunkingStrategySemantic: 'Ngữ nghĩa cục bộ (Jaccard)',
+      chunkingSizeLabel: 'Kích thước chunk (ký tự)',
+      chunkingOverlapLabel: 'Overlap gối đầu (ký tự)',
+      chunkingThresholdLabel: 'Ngưỡng khoảng cách ngữ nghĩa',
+      fileTooLarge: 'File vượt quá dung lượng cho phép ({size} MB). Dung lượng tối đa là {max}MB.',
+      uploading: 'Đang tải {filename} ({size} KB)...',
+      uploadFailed: 'Tải lên thất bại: {detail}',
+      uploadSuccessChars: '{chars} ký tự đã được tách và lập chỉ mục',
+      uploadChunkPrefix: ' (dùng ',
+      uploadChunkSuffix: ' chunking)',
+      uploadSuccessDoc: 'doc_id: {docId}',
+      uploadedToast: 'Đã tải {filename}',
+      toastAskEmpty: 'Hãy nhập câu hỏi trước',
+      welcomeMessage: 'Xin chào! Tôi là trợ lý học tập AI. Hãy tải bài giảng, sau đó đặt câu hỏi.',
+      labelYou: 'Bạn',
+      labelBot: 'StudyBot',
+      errorQuery: 'Đã xảy ra lỗi khi truy vấn ghi chú.',
+      citationsTitle: 'Trích dẫn từ tài liệu của bạn',
+      citationChunk: 'phần {chunk}',
+      citationScore: 'điểm {score}',
+      citationsNone: 'Không tìm thấy trích dẫn phù hợp.',
+      benchmarkMeta: 'Đánh giá chất lượng tách',
+      benchmarkIntroPrefix: 'Hệ thống tự động chạy ',
+      benchmarkIntroStrong: '5 câu hỏi kiểm thử',
+      benchmarkIntroSuffix: ' về quang hợp để chấm độ chính xác truy xuất.',
+      benchmarkRunButton: 'Chạy đánh giá benchmark',
+      benchmarkStatusRunning: 'Đang chạy đánh giá benchmark...',
+      benchmarkMetricsTitle: 'Chỉ số chất lượng RAG',
+      benchmarkMetricP1: 'Độ chính xác top-1',
+      benchmarkMetricP3: 'Độ chính xác top-3',
+      benchmarkMetricP5: 'Độ chính xác top-5',
+      benchmarkMetricMrr: 'Thứ hạng trung bình',
+      benchmarkDetailsTitle: 'Chi tiết truy xuất 5 câu hỏi kiểm thử',
+      benchmarkNeedDoc: 'Vui lòng tải lên hoặc chọn tài liệu trước.',
+      benchmarkFailed: 'Đánh giá thất bại: {detail}',
+      benchmarkSuccess: 'Đánh giá hoàn tất.',
+      benchmarkQuestionLabel: 'Câu {index}: {query}',
+      benchmarkTargetKeywords: 'Từ khóa mục tiêu',
+      debugSummary: 'Phản hồi API (debug)',
+      debugEmpty: 'Chưa có yêu cầu nào.',
+    });
+
+    let currentLang =
+      document.documentElement.getAttribute('data-lang') || 'en';
+
+    function t(key, vars = {}) {
+      const dict = I18N[currentLang] || I18N.en;
+      let str = dict[key] || I18N.en[key] || key;
+      Object.keys(vars).forEach((k) => {
+        str = str.replace(new RegExp(`\\{${k}\\}`, 'g'), vars[k]);
+      });
+      return str;
+    }
+
+    function applyI18n() {
+      document.documentElement.lang = currentLang;
+      document.documentElement.setAttribute('data-lang', currentLang);
+      document.title = t('pageTitle');
+
+      document.querySelectorAll('[data-i18n]').forEach((el) => {
+        const key = el.getAttribute('data-i18n');
+        el.textContent = t(key);
+      });
+
+      document.querySelectorAll('[data-i18n-placeholder]').forEach((el) => {
+        const key = el.getAttribute('data-i18n-placeholder');
+        el.setAttribute('placeholder', t(key));
+      });
+
+      document.querySelectorAll('[data-i18n-title]').forEach((el) => {
+        const key = el.getAttribute('data-i18n-title');
+        el.setAttribute('title', t(key));
+      });
+
+      document.querySelectorAll('[data-i18n-aria]').forEach((el) => {
+        const key = el.getAttribute('data-i18n-aria');
+        el.setAttribute('aria-label', t(key));
+      });
+
+      const debugLog = $('debug-log');
+      if (debugLog && debugLog.getAttribute('data-empty') === 'true') {
+        debugLog.textContent = t('debugEmpty');
+      }
+    }
+
+    function setLanguage(lang) {
+      currentLang = I18N[lang] ? lang : 'en';
+      localStorage.setItem('studybot-lang', currentLang);
+      applyI18n();
+      updateLangButtons();
+      renderWelcomeMessage();
+      loadStatus();
+      refresh();
+      initQuiz();
+
+      // Reload Leitner State with new language default cards if they have not added custom cards yet
+      const saved = localStorage.getItem('studybot-leitner');
+      if (!saved) {
+        leitnerState.cards =
+          DEFAULT_LEITNER_CARDS[currentLang] || DEFAULT_LEITNER_CARDS.en;
+        leitnerState.xp = 0;
+        leitnerState.level = 1;
+        updateLeitnerStats();
+        renderLeitnerCard();
+      }
+    }
+
+    function updateLangButtons() {
+      document.querySelectorAll('.lang-btn').forEach((btn) => {
+        const isActive = btn.getAttribute('data-lang') === currentLang;
+        btn.classList.toggle('active', isActive);
+        btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+      });
+    }
+
+    function initLanguageControls() {
+      document.querySelectorAll('.lang-btn').forEach((btn) => {
+        btn.addEventListener('click', () =>
+          setLanguage(btn.getAttribute('data-lang'))
+        );
+      });
+    }
+
+    function toast(message, type = 'info') {
+      const container = $('toasts');
+      if (!container) return;
+
+      const toastEl = document.createElement('div');
+      toastEl.className = `toast ${type}`;
+
+      let icon = 'ℹ️';
+      if (type === 'success') icon = '✓';
+      else if (type === 'error') icon = '❌';
+      else if (type === 'warn') icon = '⚠️';
+
+      toastEl.innerHTML = `
+        <span style="font-weight: 700; font-size: 1rem;">${icon}</span>
+        <div style="flex-grow: 1;">${message}</div>
+      `;
+
+      container.appendChild(toastEl);
+
+      setTimeout(() => {
+        toastEl.style.opacity = '0';
+        setTimeout(() => toastEl.remove(), 300);
+      }, 4000);
+    }
 
     // ============================================================================
     // Helpers
     // ============================================================================
-    function $(id) { return document.getElementById(id); }
+    function $(id) {
+      return document.getElementById(id);
+    }
 
+    function toggleStrategyFields() {
+      const strat = $('chunk-strategy').value;
+      if (strat === 'fixed') {
+        $('field-size').style.display = 'block';
+        $('field-overlap').style.display = 'block';
+        $('field-threshold').style.display = 'none';
+      } else if (strat === 'semantic') {
+        $('field-size').style.display = 'none';
+        $('field-overlap').style.display = 'none';
+        $('field-threshold').style.display = 'block';
+      } else {
+        $('field-size').style.display = 'none';
+        $('field-overlap').style.display = 'none';
+        $('field-threshold').style.display = 'none';
+      }
+    }
     function toggleStrategyFields() {
       const strat = $('chunk-strategy').value;
       if (strat === 'fixed') {
@@ -439,6 +1351,32 @@
     async function loadStatus() {
       const res = await call('/health');
       if (!res.ok) {
+        $('status-pills').innerHTML = `<span class="pill error">${t(
+          'statusOffline'
+        )}</span>`;
+        return;
+      }
+
+      const statusHtml = Object.entries(res.body.backends)
+        .map(([k, v]) => {
+          const label = v === 'local' ? t('statusLocal') : t('statusRemote');
+          return `<span class="pill ${v === 'local' ? 'local' : 'remote'
+            }">${k}: ${label}</span>`;
+        })
+        .join('');
+
+      const tenantBadgeHtml = `<span class="pill" style="border-color: rgba(var(--accent-rgb), 0.3); background: rgba(var(--accent-rgb), 0.1); color: var(--accent);">${t(
+        'statusTenant'
+      )}: ${ACTIVE_TENANT}</span>`;
+
+      $('status-pills').innerHTML = tenantBadgeHtml + statusHtml;
+    }
+    // ============================================================================
+    // Backend status
+    // ============================================================================
+    async function loadStatus() {
+      const res = await call('/health');
+      if (!res.ok) {
         $('status-pills').innerHTML = `<span class="pill error">${t('statusOffline')}</span>`;
         return;
       }
@@ -456,17 +1394,33 @@
     }
 
     function logDebug(label, data) {
-      const lines = $('debug-log').textContent === 'No requests yet.' ? [] : $('debug-log').textContent.split('\n');
-      lines.unshift(`── ${new Date().toLocaleTimeString()} — ${label} ──\n${JSON.stringify(data, null, 2)}\n`);
+      const lines =
+        $('debug-log').textContent === 'No requests yet.'
+          ? []
+          : $('debug-log').textContent.split('\n');
+      lines.unshift(
+        `── ${new Date().toLocaleTimeString()} — ${label} ──\n${JSON.stringify(
+          data,
+          null,
+          2
+        )}\n`
+      );
       $('debug-log').textContent = lines.slice(0, 6).join('\n');
     }
 
     async function call(path, opts = {}) {
-      opts.headers = Object.assign({ 'X-User-Id': USER_ID }, opts.headers || {});
+      opts.headers = Object.assign(
+        { 'X-User-Id': USER_ID },
+        opts.headers || {}
+      );
       const r = await fetch(API_BASE + path, opts);
       const text = await r.text();
       let body;
-      try { body = JSON.parse(text); } catch { body = text; }
+      try {
+        body = JSON.parse(text);
+      } catch {
+        body = text;
+      }
       logDebug(`${opts.method || 'GET'} ${path}`, body);
       return { ok: r.ok, status: r.status, body };
     }
@@ -476,49 +1430,96 @@
       const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024;
       if (file.size > MAX_SIZE_BYTES) {
         const sizeInMB = (file.size / (1024 * 1024)).toFixed(1);
+        const errorMsg = t('fileTooLarge', {
+          size: sizeInMB,
+          max: MAX_SIZE_MB,
+        });
+        toast(errorMsg, 'error');
+        $('upload-result').innerHTML = `
+    async function doUpload(file) {
+      const MAX_SIZE_MB = 10;
+      const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024;
+      if (file.size > MAX_SIZE_BYTES) {
+        const sizeInMB = (file.size / (1024 * 1024)).toFixed(1);
         const errorMsg = t('fileTooLarge', { size: sizeInMB, max: MAX_SIZE_MB });
         toast(errorMsg, 'error');
         $('upload-result').innerHTML = `
-      <p style="color:var(--error); margin:0.8rem 0 0; font-size: 0.88rem; font-weight: 500;">
-        ${errorMsg}
-      </p>`;
+          < p style = "color:var(--error); margin:0.8rem 0 0; font-size: 0.88rem; font-weight: 500;" >
+            ${ errorMsg }
+      </p > `;
         return;
       }
+          return;
+        }
 
       $('upload-result').innerHTML = `
+        $('upload-result').innerHTML = `
     <p class="muted" style="margin:0.8rem 0 0; font-size: 0.88rem; display: flex; align-items: center; gap: 0.5rem;">
       <span class="spinner"></span> 
+      ${t('uploading', {
+          filename: file.name,
+          size: (file.size / 1024).toFixed(1),
+        })}
       ${t('uploading', { filename: file.name, size: (file.size / 1024).toFixed(1) })}
     </p>`;
 
-      const fd = new FormData();
-      fd.append('file', file);
+        const fd = new FormData();
+        fd.append('file', file);
 
-      const strategy = $('chunk-strategy').value;
-      const size = $('chunk-size').value;
-      const overlap = $('chunk-overlap').value;
-      const threshold = $('chunk-threshold').value;
+        const fd = new FormData();
+        fd.append('file', file);
 
-      let queryParams = `?strategy=${strategy}`;
-      if (strategy === 'fixed') {
-        queryParams += `&size=${size}&overlap=${overlap}`;
-      } else if (strategy === 'semantic') {
-        queryParams += `&threshold=${threshold}`;
-      }
+        const strategy = $('chunk-strategy').value;
+        const size = $('chunk-size').value;
+        const overlap = $('chunk-overlap').value;
+        const threshold = $('chunk-threshold').value;
+        const strategy = $('chunk-strategy').value;
+        const size = $('chunk-size').value;
+        const overlap = $('chunk-overlap').value;
+        const threshold = $('chunk-threshold').value;
 
-      const res = await call(`/upload${queryParams}`, { method: 'POST', body: fd });
+        let queryParams = `?strategy=${strategy}`;
+        if (strategy === 'fixed') {
+          queryParams += `&size=${size}&overlap=${overlap}`;
+        } else if (strategy === 'semantic') {
+          queryParams += `&threshold=${threshold}`;
+        }
+        let queryParams = `?strategy=${strategy}`;
+        if (strategy === 'fixed') {
+          queryParams += `&size=${size}&overlap=${overlap}`;
+        } else if (strategy === 'semantic') {
+          queryParams += `&threshold=${threshold}`;
+        }
+
+        const res = await call(`/upload${queryParams}`, {
+          method: 'POST',
+          body: fd,
+        });
+
+        if (!res.ok) {
+          toast(
+            t('uploadFailed', { detail: res.body.detail || res.status }),
+            'error'
+          );
+          $('upload-result').innerHTML = `
+      const res = await call(`/ upload${ queryParams } `, { method: 'POST', body: fd });
 
       if (!res.ok) {
         toast(t('uploadFailed', { detail: res.body.detail || res.status }), 'error');
         $('upload-result').innerHTML = `
-      <p style="color:var(--error); margin:0.8rem 0 0; font-size: 0.88rem; font-weight: 500;">
-        ${res.body.detail || t('uploadFailedShort')}
-      </p>`;
+            < p style = "color:var(--error); margin:0.8rem 0 0; font-size: 0.88rem; font-weight: 500;" >
+              ${ res.body.detail || t('uploadFailedShort') }
+      </p > `;
         return;
       }
 
       const b = res.body;
       $('upload-result').innerHTML = `
+          return;
+        }
+
+        const b = res.body;
+        $('upload-result').innerHTML = `
     <div class="upload-success-alert">
       <div class="upload-success-title">
         <svg style="width:16px;height:16px;" viewBox="0 0 20 20" fill="currentColor">
@@ -526,15 +1527,29 @@
         </svg>
         <strong>${b.filename}</strong>
       </div>
+      <div>${t('uploadSuccessChars', {
+          chars: b.chars_extracted.toLocaleString(),
+        })}${t('uploadChunkPrefix')}<code>${strategy}</code>${t(
+          'uploadChunkSuffix'
+        )}</div>
+      <div class="upload-success-meta">${t('uploadSuccessDoc', {
+          docId: b.doc_id,
+        })}</div>
       <div>${t('uploadSuccessChars', { chars: b.chars_extracted.toLocaleString() })}${t('uploadChunkPrefix')}<code>${strategy}</code>${t('uploadChunkSuffix')}</div>
       <div class="upload-success-meta">${t('uploadSuccessDoc', { docId: b.doc_id })}</div>
     </div>`;
 
-      toast(t('uploadedToast', { filename: b.filename }), 'success');
+        toast(t('uploadedToast', { filename: b.filename }), 'success');
 
-      window.lastDocId = b.doc_id;
-      window.lastDocName = b.filename;
+        toast(t('uploadedToast', { filename: b.filename }), 'success');
 
+        window.lastDocId = b.doc_id;
+        window.lastDocName = b.filename;
+        window.lastDocId = b.doc_id;
+        window.lastDocName = b.filename;
+
+        refresh();
+      }
       refresh();
     }
 
@@ -548,7 +1563,17 @@
       }
       card.classList.add('visible');
       card.innerHTML = `
-    <div class="chat-bubble ai">
+      // ============================================================================
+      // AI Chat Premium Messenger logic
+      // ============================================================================
+      function renderWelcomeMessage() {
+        const card = $('answer-card');
+        if (card.getAttribute('data-has-messages') === 'true') {
+          return;
+        }
+        card.classList.add('visible');
+        card.innerHTML = `
+        < div class="chat-bubble ai" >
       <div class="bubble-avatar">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 18px; height: 18px;">
           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
@@ -558,23 +1583,40 @@
         <div class="bubble-sender">${t('labelBot')}</div>
         <div class="bubble-text">${t('welcomeMessage')}</div>
       </div>
-    </div>
-  `;
+    </div >
+        `;
     }
+      }
 
-    async function ask() {
-      const q = $('question').value.trim();
-      if (!q) { toast(t('toastAskEmpty'), 'warn'); return; }
-      $('answer-card').setAttribute('data-has-messages', 'true');
+      async function ask() {
+        const q = $('question').value.trim();
+        if (!q) {
+          toast(t('toastAskEmpty'), 'warn');
+          return;
+        }
+        $('answer-card').setAttribute('data-has-messages', 'true');
 
-      $('question').value = '';
+        $('question').value = '';
 
-      const prevAns = $('answer-text');
-      if (prevAns) prevAns.removeAttribute('id');
-      const prevCit = $('citations');
-      if (prevCit) prevCit.removeAttribute('id');
+        const prevAns = $('answer-text');
+        if (prevAns) prevAns.removeAttribute('id');
+        const prevCit = $('citations');
+        if (prevCit) prevCit.removeAttribute('id');
 
-      const userBubbleHtml = `
+        const userBubbleHtml = `
+      async function ask() {
+        const q = $('question').value.trim();
+        if (!q) { toast(t('toastAskEmpty'), 'warn'); return; }
+        $('answer-card').setAttribute('data-has-messages', 'true');
+
+        $('question').value = '';
+
+        const prevAns = $('answer-text');
+        if (prevAns) prevAns.removeAttribute('id');
+        const prevCit = $('citations');
+        if (prevCit) prevCit.removeAttribute('id');
+
+        const userBubbleHtml = `
     <div class="chat-bubble user">
       <div class="bubble-avatar">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -588,10 +1630,13 @@
       </div>
     </div>
   `;
-      $('answer-card').insertAdjacentHTML('beforeend', userBubbleHtml);
+        $('answer-card').insertAdjacentHTML('beforeend', userBubbleHtml);
 
-      const aiBubbleHtml = `
-    <div class="chat-bubble ai">
+        const aiBubbleHtml = `
+        $('answer-card').insertAdjacentHTML('beforeend', userBubbleHtml);
+
+        const aiBubbleHtml = `
+          < div class="chat-bubble ai" >
       <div class="bubble-avatar">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 18px; height: 18px;">
           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
@@ -608,38 +1653,69 @@
         </div>
         <div id="citations"></div>
       </div>
-    </div>
-  `;
-      $('answer-card').insertAdjacentHTML('beforeend', aiBubbleHtml);
+    </div >
+          `;
+        $('answer-card').insertAdjacentHTML('beforeend', aiBubbleHtml);
 
-      $('answer-card').scrollTop = $('answer-card').scrollHeight;
-
-      $('ask-btn').disabled = true;
-      const res = await call('/query', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: q }),
-      });
-      $('ask-btn').disabled = false;
-
-      if (!res.ok) {
-        $('answer-text').innerHTML = `<span style="color:var(--error); font-weight: 500;">${res.body.detail || t('errorQuery')}</span>`;
         $('answer-card').scrollTop = $('answer-card').scrollHeight;
-        return;
-      }
 
-      $('answer-text').textContent = res.body.answer;
-      const c = res.body.citations || [];
-      if (c.length) {
-        $('citations').innerHTML = `
+        $('ask-btn').disabled = true;
+        const socratic = $('socratic-toggle').checked;
+        const res = await call('/query', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question: q, socratic: socratic }),
+        });
+        $('ask-btn').disabled = false;
+
+        if (!res.ok) {
+          $(
+            'answer-text'
+          ).innerHTML = `< span style = "color:var(--error); font-weight: 500;" > ${
+          res.body.detail || t('errorQuery')
+        }</span > `;
+          $('answer-card').scrollTop = $('answer-card').scrollHeight;
+          return;
+        }
+
+        $('answer-text').textContent = res.body.answer;
+        const c = res.body.citations || [];
+        if (c.length) {
+          $('citations').innerHTML =
+            `
+        $('answer-card').insertAdjacentHTML('beforeend', aiBubbleHtml);
+
+        $('answer-card').scrollTop = $('answer-card').scrollHeight;
+
+        $('ask-btn').disabled = true;
+        const res = await call('/query', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question: q }),
+        });
+        $('ask-btn').disabled = false;
+
+        if (!res.ok) {
+          $('answer-text').innerHTML = `<span style="color:var(--error); font-weight: 500;">${res.body.detail || t('errorQuery')}</span>`;
+          $('answer-card').scrollTop = $('answer-card').scrollHeight;
+          return;
+        }
+
+        $('answer-text').textContent = res.body.answer;
+        const c = res.body.citations || [];
+        if (c.length) {
+          $('citations').innerHTML = `
       <div class="citations-title">
         <svg style="width:12px;height:12px;vertical-align:middle;" viewBox="0 0 20 20" fill="currentColor">
           <path fill-rule="evenodd" d="M12.586 4.586a2 2 0 112.828 2.828l-3 3a2 2 0 01-2.828 0 1 1 0 00-1.414 1.414 4 4 0 005.656 0l3-3a4 4 0 00-5.656-5.656l-1.5 1.5a1 1 0 101.414 1.414l1.5-1.5zm-5 5a2 2 0 012.828 0 1 1 0 101.414-1.414 4 4 0 00-5.656 0l-3 3a4 4 0 105.656 5.656l1.5-1.5a1 1 0 10-1.414-1.414l-1.5 1.5a2 2 0 11-2.828-2.828l3-3z" clip-rule="evenodd"/>
         </svg>
         ${t('citationsTitle')}
       </div>` +
+            c
+              .map(
+                (x) => `
           c.map(x => `
-        <div class="citation">
+                  < div class= "citation" >
           <div class="head">
             <span>
               <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -647,214 +1723,603 @@
                 <polyline points="14 2 14 8 20 8"></polyline>
               </svg>
               ${t('citationChunk', { chunk: x.chunk })}
+              ${t('citationChunk', { chunk: x.chunk })}
             </span>
+            <span class="score">${t('citationScore', {
+              score: (x.score || 0).toFixed(1),
+            })}</span>
             <span class="score">${t('citationScore', { score: (x.score || 0).toFixed(1) })}</span>
           </div>
           <div class="body">${(x.text || '').replace(/</g, '&lt;')}</div>
-        </div>
+        </div >
+                `
+              )
+              .join('');
+        } else {
+          $(
+            'citations'
+          ).innerHTML = `< div class= "muted" style = "font-size:0.82rem; margin-top:0.6rem; text-align: center;" > ${
+                t(
+            'citationsNone'
+                )
+              }</div > `;
+        }
+
+        setTimeout(() => {
+          $('answer-card').scrollTo({
+            top: $('answer-card').scrollHeight,
+            behavior: 'smooth',
+          });
+        }, 50);
+      }
       `).join('');
-      } else {
-        $('citations').innerHTML = `<div class="muted" style="font-size:0.82rem; margin-top:0.6rem; text-align: center;">${t('citationsNone')}</div>`;
-      }
-
-      setTimeout(() => {
-        $('answer-card').scrollTo({
-          top: $('answer-card').scrollHeight,
-          behavior: 'smooth'
-        });
-      }, 50);
-    }
-
-    $('question').addEventListener('keydown', e => { if (e.key === 'Enter') ask(); });
-
-    // ============================================================================
-    // Quiz Sprint
-    // ============================================================================
-    const QUIZ_BANK = {
-      en: [
-        {
-          id: 'bio-photosynthesis',
-          question: 'Which process turns light energy into chemical energy in plants?',
-          options: ['Photosynthesis', 'Respiration', 'Evaporation', 'Fermentation'],
-          answer: 0,
-          explanation: 'Photosynthesis converts light energy into chemical energy stored in glucose.'
-        },
-        {
-          id: 'net-ip',
-          question: 'In networking, what does IP stand for?',
-          options: ['Internet Protocol', 'Interface Packet', 'Integrated Port', 'Internal Process'],
-          answer: 0,
-          explanation: 'IP stands for Internet Protocol, the addressing system for routing data.'
-        },
-        {
-          id: 'cs-cache',
-          question: 'What is the main purpose of a CPU cache?',
-          options: ['Store frequently used data for faster access', 'Increase disk capacity', 'Create backups', 'Convert analog signals'],
-          answer: 0,
-          explanation: 'Caches keep frequently used data closer to the CPU to reduce latency.'
-        },
-        {
-          id: 'math-derivative',
-          question: 'In calculus, a derivative describes:',
-          options: ['The rate of change of a function', 'The area under a curve', 'The sum of a series', 'The length of a vector'],
-          answer: 0,
-          explanation: 'Derivatives measure instantaneous rate of change or slope.'
-        },
-        {
-          id: 'net-osi',
-          question: 'Which OSI model layer handles routing between networks?',
-          options: ['Network layer', 'Data link layer', 'Transport layer', 'Application layer'],
-          answer: 0,
-          explanation: 'The network layer is responsible for routing and forwarding.'
-        },
-        {
-          id: 'physics-energy',
-          question: 'Energy cannot be created or destroyed is the:',
-          options: ['Law of conservation of energy', 'Law of gravity', 'Law of inertia', 'Law of entropy'],
-          answer: 0,
-          explanation: 'The conservation of energy states total energy remains constant.'
+        } else {
+          $('citations').innerHTML = `<div class="muted" style="font-size:0.82rem; margin-top:0.6rem; text-align: center;">${t('citationsNone')}</div>`;
         }
-      ],
-      vi: [
-        {
-          id: 'bio-photosynthesis',
-          question: 'Quá trình nào biến đổi năng lượng ánh sáng thành năng lượng hóa học ở thực vật?',
-          options: ['Quang hợp', 'Hô hấp', 'Bay hơi', 'Lên men'],
-          answer: 0,
-          explanation: 'Quang hợp biến năng lượng ánh sáng thành đường và năng lượng hóa học.'
-        },
-        {
-          id: 'net-ip',
-          question: 'Trong mạng máy tính, IP viết tắt của gì?',
-          options: ['Internet Protocol', 'Interface Packet', 'Integrated Port', 'Internal Process'],
-          answer: 0,
-          explanation: 'IP là Internet Protocol, hệ thống địa chỉ để định tuyến dữ liệu.'
-        },
-        {
-          id: 'cs-cache',
-          question: 'Mục đích chính của bộ nhớ cache CPU là gì?',
-          options: ['Lưu dữ liệu dùng thường xuyên để truy cập nhanh', 'Tăng dung lượng đĩa', 'Tạo bản sao lưu', 'Chuyển đổi tín hiệu'],
-          answer: 0,
-          explanation: 'Cache giúp CPU truy cập dữ liệu nhanh hơn bằng cách lưu gần bộ xử lý.'
-        },
-        {
-          id: 'math-derivative',
-          question: 'Trong giải tích, đạo hàm mô tả:',
-          options: ['Tốc độ thay đổi của hàm số', 'Diện tích dưới đường cong', 'Tổng của chuỗi', 'Độ dài của vectơ'],
-          answer: 0,
-          explanation: 'Đạo hàm đo tốc độ thay đổi (độ dốc) tại một điểm.'
-        },
-        {
-          id: 'net-osi',
-          question: 'Lớp nào trong mô hình OSI đảm nhiệm định tuyến?',
-          options: ['Lớp mạng', 'Lớp liên kết dữ liệu', 'Lớp vận chuyển', 'Lớp ứng dụng'],
-          answer: 0,
-          explanation: 'Lớp mạng đảm nhiệm định tuyến và chuyển tiếp gói tin.'
-        },
-        {
-          id: 'physics-energy',
-          question: 'Năng lượng không tự sinh ra hoặc mất đi là:',
-          options: ['Định luật bảo toàn năng lượng', 'Định luật trọng lực', 'Định luật quán tính', 'Định luật entropy'],
-          answer: 0,
-          explanation: 'Định luật bảo toàn năng lượng cho biết tổng năng lượng không đổi.'
-        }
-      ]
-    };
 
-    const quizState = {
-      items: [],
-      index: 0,
-      answers: {}
-    };
-
-    function shuffle(list) {
-      const arr = list.slice();
-      for (let i = arr.length - 1; i > 0; i -= 1) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [arr[i], arr[j]] = [arr[j], arr[i]];
-      }
-      return arr;
-    }
-
-    function initQuiz() {
-      const deck = QUIZ_BANK[currentLang] || QUIZ_BANK.en;
-      quizState.items = shuffle(deck).slice(0, Math.min(5, deck.length));
-      quizState.index = 0;
-      quizState.answers = {};
-      renderQuiz();
-    }
-
-    function getQuizScore() {
-      return quizState.items.reduce((score, item) => {
-        const answer = quizState.answers[item.id];
-        return score + (answer === item.answer ? 1 : 0);
-      }, 0);
-    }
-
-    function renderQuiz() {
-      const questionEl = $('quiz-question');
-      const optionsEl = $('quiz-options');
-      const explainEl = $('quiz-explain');
-      const progressEl = $('quiz-progress');
-      const scoreEl = $('quiz-score');
-      const prevBtn = $('quiz-prev');
-      const nextBtn = $('quiz-next');
-
-      if (!quizState.items.length) {
-        questionEl.textContent = '';
-        optionsEl.innerHTML = '';
-        explainEl.textContent = '';
-        progressEl.textContent = '';
-        scoreEl.textContent = '';
-        prevBtn.disabled = true;
-        nextBtn.disabled = true;
-        return;
+        setTimeout(() => {
+          $('answer-card').scrollTo({
+            top: $('answer-card').scrollHeight,
+            behavior: 'smooth'
+          });
+        }, 50);
       }
 
-      const current = quizState.items[quizState.index];
-      const total = quizState.items.length;
-      const answered = quizState.answers[current.id];
-
-      progressEl.textContent = t('quizProgress', { index: quizState.index + 1, total });
-      scoreEl.textContent = t('quizScore', { score: getQuizScore(), total });
-      questionEl.textContent = current.question;
-
-      optionsEl.innerHTML = current.options.map((opt, idx) => {
-        const isSelected = answered === idx;
-        const hasAnswer = typeof answered === 'number';
-        const isCorrect = hasAnswer && idx === current.answer;
-        const isWrong = hasAnswer && isSelected && idx !== current.answer;
-        const classes = [
-          'quiz-option',
-          isSelected ? 'selected' : '',
-          isCorrect ? 'correct' : '',
-          isWrong ? 'wrong' : ''
-        ].filter(Boolean).join(' ');
-
-        return `<button type="button" class="${classes}" data-index="${idx}"><span>${opt}</span></button>`;
-      }).join('');
-
-      optionsEl.querySelectorAll('button').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const idx = Number(btn.getAttribute('data-index'));
-          quizState.answers[current.id] = idx;
-          renderQuiz();
-        });
+      $('question').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') ask();
       });
 
+      // ============================================================================
+      // Quiz Sprint
+      // ============================================================================
+      const QUIZ_BANK = {
+        en: [
+          {
+            id: 'bio-photosynthesis',
+            question:
+              'Which process turns light energy into chemical energy in plants?',
+            options: [
+              'Photosynthesis',
+              'Respiration',
+              'Evaporation',
+              'Fermentation',
+            ],
+            answer: 0,
+            explanation:
+              'Photosynthesis converts light energy into chemical energy stored in glucose.',
+          },
+          {
+            id: 'net-ip',
+            question: 'In networking, what does IP stand for?',
+            options: [
+              'Internet Protocol',
+              'Interface Packet',
+              'Integrated Port',
+              'Internal Process',
+            ],
+            answer: 0,
+            explanation:
+              'IP stands for Internet Protocol, the addressing system for routing data.',
+          },
+          {
+            id: 'cs-cache',
+            question: 'What is the main purpose of a CPU cache?',
+            options: [
+              'Store frequently used data for faster access',
+              'Increase disk capacity',
+              'Create backups',
+              'Convert analog signals',
+            ],
+            answer: 0,
+            explanation:
+              'Caches keep frequently used data closer to the CPU to reduce latency.',
+          },
+          {
+            id: 'math-derivative',
+            question: 'In calculus, a derivative describes:',
+            options: [
+              'The rate of change of a function',
+              'The area under a curve',
+              'The sum of a series',
+              'The length of a vector',
+            ],
+            answer: 0,
+            explanation:
+              'Derivatives measure instantaneous rate of change or slope.',
+          },
+          {
+            id: 'net-osi',
+            question: 'Which OSI model layer handles routing between networks?',
+            options: [
+              'Network layer',
+              'Data link layer',
+              'Transport layer',
+              'Application layer',
+            ],
+            answer: 0,
+            explanation:
+              'The network layer is responsible for routing and forwarding.',
+          },
+          {
+            id: 'physics-energy',
+            question: 'Energy cannot be created or destroyed is the:',
+            options: [
+              'Law of conservation of energy',
+              'Law of gravity',
+              'Law of inertia',
+              'Law of entropy',
+            ],
+            answer: 0,
+            explanation:
+              'The conservation of energy states total energy remains constant.',
+          },
+        ],
+        vi: [
+          {
+            id: 'bio-photosynthesis',
+            question:
+              'Quá trình nào biến đổi năng lượng ánh sáng thành năng lượng hóa học ở thực vật?',
+            options: ['Quang hợp', 'Hô hấp', 'Bay hơi', 'Lên men'],
+            answer: 0,
+            explanation:
+              'Quang hợp biến năng lượng ánh sáng thành đường và năng lượng hóa học.',
+          },
+          {
+            id: 'net-ip',
+            question: 'Trong mạng máy tính, IP viết tắt của gì?',
+            options: [
+              'Internet Protocol',
+              'Interface Packet',
+              'Integrated Port',
+              'Internal Process',
+            ],
+            answer: 0,
+            explanation:
+              'IP là Internet Protocol, hệ thống địa chỉ để định tuyến dữ liệu.',
+          },
+          {
+            id: 'cs-cache',
+            question: 'Mục đích chính của bộ nhớ cache CPU là gì?',
+            options: [
+              'Lưu dữ liệu dùng thường xuyên để truy cập nhanh',
+              'Tăng dung lượng đĩa',
+              'Tạo bản sao lưu',
+              'Chuyển đổi tín hiệu',
+            ],
+            answer: 0,
+            explanation:
+              'Cache giúp CPU truy cập dữ liệu nhanh hơn bằng cách lưu gần bộ xử lý.',
+          },
+          {
+            id: 'math-derivative',
+            question: 'Trong giải tích, đạo hàm mô tả:',
+            options: [
+              'Tốc độ thay đổi của hàm số',
+              'Diện tích dưới đường cong',
+              'Tổng của chuỗi',
+              'Độ dài của vectơ',
+            ],
+            answer: 0,
+            explanation: 'Đạo hàm đo tốc độ thay đổi (độ dốc) tại một điểm.',
+          },
+          {
+            id: 'net-osi',
+            question: 'Lớp nào trong mô hình OSI đảm nhiệm định tuyến?',
+            options: [
+              'Lớp mạng',
+              'Lớp liên kết dữ liệu',
+              'Lớp vận chuyển',
+              'Lớp ứng dụng',
+            ],
+            answer: 0,
+            explanation:
+              'Lớp mạng đảm nhiệm định tuyến và chuyển tiếp gói tin.',
+          },
+          {
+            id: 'physics-energy',
+            question: 'Năng lượng không tự sinh ra hoặc mất đi là:',
+            options: [
+              'Định luật bảo toàn năng lượng',
+              'Định luật trọng lực',
+              'Định luật quán tính',
+              'Định luật entropy',
+            ],
+            answer: 0,
+            explanation:
+              'Định luật bảo toàn năng lượng cho biết tổng năng lượng không đổi.',
+          },
+        ],
+      };
+      // ============================================================================
+      // Quiz Sprint
+      // ============================================================================
+      const QUIZ_BANK = {
+        en: [
+          {
+            id: 'bio-photosynthesis',
+            question: 'Which process turns light energy into chemical energy in plants?',
+            options: ['Photosynthesis', 'Respiration', 'Evaporation', 'Fermentation'],
+            answer: 0,
+            explanation: 'Photosynthesis converts light energy into chemical energy stored in glucose.'
+          },
+          {
+            id: 'net-ip',
+            question: 'In networking, what does IP stand for?',
+            options: ['Internet Protocol', 'Interface Packet', 'Integrated Port', 'Internal Process'],
+            answer: 0,
+            explanation: 'IP stands for Internet Protocol, the addressing system for routing data.'
+          },
+          {
+            id: 'cs-cache',
+            question: 'What is the main purpose of a CPU cache?',
+            options: ['Store frequently used data for faster access', 'Increase disk capacity', 'Create backups', 'Convert analog signals'],
+            answer: 0,
+            explanation: 'Caches keep frequently used data closer to the CPU to reduce latency.'
+          },
+          {
+            id: 'math-derivative',
+            question: 'In calculus, a derivative describes:',
+            options: ['The rate of change of a function', 'The area under a curve', 'The sum of a series', 'The length of a vector'],
+            answer: 0,
+            explanation: 'Derivatives measure instantaneous rate of change or slope.'
+          },
+          {
+            id: 'net-osi',
+            question: 'Which OSI model layer handles routing between networks?',
+            options: ['Network layer', 'Data link layer', 'Transport layer', 'Application layer'],
+            answer: 0,
+            explanation: 'The network layer is responsible for routing and forwarding.'
+          },
+          {
+            id: 'physics-energy',
+            question: 'Energy cannot be created or destroyed is the:',
+            options: ['Law of conservation of energy', 'Law of gravity', 'Law of inertia', 'Law of entropy'],
+            answer: 0,
+            explanation: 'The conservation of energy states total energy remains constant.'
+          }
+        ],
+        vi: [
+          {
+            id: 'bio-photosynthesis',
+            question: 'Quá trình nào biến đổi năng lượng ánh sáng thành năng lượng hóa học ở thực vật?',
+            options: ['Quang hợp', 'Hô hấp', 'Bay hơi', 'Lên men'],
+            answer: 0,
+            explanation: 'Quang hợp biến năng lượng ánh sáng thành đường và năng lượng hóa học.'
+          },
+          {
+            id: 'net-ip',
+            question: 'Trong mạng máy tính, IP viết tắt của gì?',
+            options: ['Internet Protocol', 'Interface Packet', 'Integrated Port', 'Internal Process'],
+            answer: 0,
+            explanation: 'IP là Internet Protocol, hệ thống địa chỉ để định tuyến dữ liệu.'
+          },
+          {
+            id: 'cs-cache',
+            question: 'Mục đích chính của bộ nhớ cache CPU là gì?',
+            options: ['Lưu dữ liệu dùng thường xuyên để truy cập nhanh', 'Tăng dung lượng đĩa', 'Tạo bản sao lưu', 'Chuyển đổi tín hiệu'],
+            answer: 0,
+            explanation: 'Cache giúp CPU truy cập dữ liệu nhanh hơn bằng cách lưu gần bộ xử lý.'
+          },
+          {
+            id: 'math-derivative',
+            question: 'Trong giải tích, đạo hàm mô tả:',
+            options: ['Tốc độ thay đổi của hàm số', 'Diện tích dưới đường cong', 'Tổng của chuỗi', 'Độ dài của vectơ'],
+            answer: 0,
+            explanation: 'Đạo hàm đo tốc độ thay đổi (độ dốc) tại một điểm.'
+          },
+          {
+            id: 'net-osi',
+            question: 'Lớp nào trong mô hình OSI đảm nhiệm định tuyến?',
+            options: ['Lớp mạng', 'Lớp liên kết dữ liệu', 'Lớp vận chuyển', 'Lớp ứng dụng'],
+            answer: 0,
+            explanation: 'Lớp mạng đảm nhiệm định tuyến và chuyển tiếp gói tin.'
+          },
+          {
+            id: 'physics-energy',
+            question: 'Năng lượng không tự sinh ra hoặc mất đi là:',
+            options: ['Định luật bảo toàn năng lượng', 'Định luật trọng lực', 'Định luật quán tính', 'Định luật entropy'],
+            answer: 0,
+            explanation: 'Định luật bảo toàn năng lượng cho biết tổng năng lượng không đổi.'
+          }
+        ]
+      };
+
+      const quizState = {
+        items: [],
+        index: 0,
+        answers: {},
+        sourceDocId: null,
+        savedToS3: false,
+      };
+      const quizState = {
+        items: [],
+        index: 0,
+        answers: {}
+      };
+
+      function shuffle(list) {
+        const arr = list.slice();
+        for (let i = arr.length - 1; i > 0; i -= 1) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [arr[i], arr[j]] = [arr[j], arr[i]];
+        }
+        return arr;
+      }
+      function shuffle(list) {
+        const arr = list.slice();
+        for (let i = arr.length - 1; i > 0; i -= 1) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [arr[i], arr[j]] = [arr[j], arr[i]];
+        }
+        return arr;
+      }
+
+      function normalizeQuizItems(items) {
+        return items
+          .map((item, idx) => {
+            const options = Array.isArray(item.options) ? item.options : [];
+            const correct = item.correct_answer ?? item.answer;
+            const answerIndex =
+              typeof correct === 'number'
+                ? correct
+                : options.findIndex((opt) => String(opt) === String(correct));
+
+            return {
+              id: item.id || `generated-${idx + 1}`,
+              question: item.question || '',
+              options,
+              answer: answerIndex,
+              explanation: item.explanation || '',
+            };
+          })
+          .filter(
+            (item) => item.question && item.options.length && item.answer >= 0
+          );
+      }
+
+      function updateQuizDocLabel() {
+        const docId = window.selectedDocId || window.lastDocId;
+        const labelEl = $('quiz-doc-label');
+        if (!labelEl) return;
+        const filename = window.selectedDocName || window.lastDocName || '';
+        if (docId && filename) {
+          // Strip extension for display
+          const displayName = filename.replace(/\.[^.]+$/, '');
+          labelEl.innerHTML = `<span style="color:var(--accent);font-weight:600">${t('quizDocLabel', { filename: displayName })}</span>`;
+        } else {
+          labelEl.innerHTML = `<span class="muted">${t('quizNoDoc')}</span>`;
+        }
+      }
+
+      function initQuiz(deckOverride = null, savedToS3 = false) {
+        if (!deckOverride || deckOverride.length === 0) {
+          quizState.items = [];
+          quizState.index = 0;
+          quizState.answers = {};
+          quizState.savedToS3 = false;
+          renderQuiz();
+          return;
+        }
+        quizState.items = normalizeQuizItems(deckOverride);
+        quizState.index = 0;
+        quizState.answers = {};
+        quizState.savedToS3 = savedToS3;
+        renderQuiz();
+      }
+
+      async function loadQuizFromS3(docId) {
+        const btn = $('quiz-generate');
+        const oldText = btn ? btn.textContent : '';
+        if (btn) {
+          btn.disabled = true;
+          btn.innerHTML = `<span class="spinner"></span> ${t('quizLoading')}`;
+        }
+        try {
+          const res = await call(`/quiz/${docId}`, { method: 'GET' });
+          if (res.ok && res.body.quiz && res.body.quiz.length > 0) {
+            initQuiz(res.body.quiz, true);
+            quizState.sourceDocId = docId;
+            toast(t('quizLoadedFromS3'), 'success');
+          }
+          // If empty, do nothing — keep empty state, let user generate
+        } catch (err) {
+          // Silently ignore load errors
+        } finally {
+          if (btn) {
+            btn.disabled = false;
+            btn.textContent = oldText || t('quizGenerate');
+          }
+        }
+      }
+
+      async function generatePracticeQuiz() {
+        const docId = window.selectedDocId || window.lastDocId;
+        if (!docId) {
+          toast(t('quizNeedDoc'), 'warn');
+          return;
+        }
+
+        const btn = $('quiz-generate');
+        const oldText = btn.textContent;
+        btn.disabled = true;
+        btn.innerHTML = `<span class="spinner"></span> ${t('quizGenerating')}`;
+
+        try {
+          const res = await call('/quiz', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ num_questions: 5, doc_id: docId }),
+          });
+
+          if (!res.ok) {
+            throw new Error(res.body.detail || res.status);
+          }
+
+          const quizItems = res.body.quiz || (Array.isArray(res.body) ? res.body : []);
+          const saved = res.body.saved === true;
+          initQuiz(quizItems, saved);
+          quizState.sourceDocId = docId;
+          toast(t('quizGenerated'), 'success');
+        } catch (err) {
+          toast(t('quizFailed', { detail: err.message }), 'error');
+        } finally {
+          btn.disabled = false;
+          btn.textContent = oldText || t('quizGenerate');
+        }
+      }
+      function initQuiz() {
+        const deck = QUIZ_BANK[currentLang] || QUIZ_BANK.en;
+        quizState.items = shuffle(deck).slice(0, Math.min(5, deck.length));
+        quizState.index = 0;
+        quizState.answers = {};
+        renderQuiz();
+      }
+
+      function getQuizScore() {
+        return quizState.items.reduce((score, item) => {
+          const answer = quizState.answers[item.id];
+          return score + (answer === item.answer ? 1 : 0);
+        }, 0);
+      }
+      function getQuizScore() {
+        return quizState.items.reduce((score, item) => {
+          const answer = quizState.answers[item.id];
+          return score + (answer === item.answer ? 1 : 0);
+        }, 0);
+      }
+
+      function renderQuiz() {
+        const activeView = $('quiz-active-view');
+        const emptyView = $('quiz-empty');
+        const savedBadge = $('quiz-saved-badge');
+
+        if (!quizState.items.length) {
+          if (activeView) activeView.style.display = 'none';
+          if (emptyView) emptyView.style.display = 'block';
+          return;
+        }
+
+        if (activeView) activeView.style.display = 'block';
+        if (emptyView) emptyView.style.display = 'none';
+        if (savedBadge) savedBadge.style.display = quizState.savedToS3 ? 'inline-flex' : 'none';
+
+        const questionEl = $('quiz-question');
+        const optionsEl = $('quiz-options');
+        const explainEl = $('quiz-explain');
+        const progressEl = $('quiz-progress');
+        const scoreEl = $('quiz-score');
+        const prevBtn = $('quiz-prev');
+        const nextBtn = $('quiz-next');
+        function renderQuiz() {
+          const questionEl = $('quiz-question');
+          const optionsEl = $('quiz-options');
+          const explainEl = $('quiz-explain');
+          const progressEl = $('quiz-progress');
+          const scoreEl = $('quiz-score');
+          const prevBtn = $('quiz-prev');
+          const nextBtn = $('quiz-next');
+
+          if (!quizState.items.length) {
+            questionEl.textContent = '';
+            optionsEl.innerHTML = '';
+            explainEl.textContent = '';
+            progressEl.textContent = '';
+            scoreEl.textContent = '';
+            prevBtn.disabled = true;
+            nextBtn.disabled = true;
+            return;
+          }
+
+          const current = quizState.items[quizState.index];
+          const total = quizState.items.length;
+          const answered = quizState.answers[current.id];
+          const current = quizState.items[quizState.index];
+          const total = quizState.items.length;
+          const answered = quizState.answers[current.id];
+
+          progressEl.textContent = t('quizProgress', {
+            index: quizState.index + 1,
+            total,
+          });
+          scoreEl.textContent = t('quizScore', { score: getQuizScore(), total });
+          questionEl.textContent = current.question;
+          progressEl.textContent = t('quizProgress', { index: quizState.index + 1, total });
+          scoreEl.textContent = t('quizScore', { score: getQuizScore(), total });
+          questionEl.textContent = current.question;
+
+          optionsEl.innerHTML = current.options
+            .map((opt, idx) => {
+              const isSelected = answered === idx;
+              const hasAnswer = typeof answered === 'number';
+              const isCorrect = hasAnswer && idx === current.answer;
+              const isWrong = hasAnswer && isSelected && idx !== current.answer;
+              const classes = [
+                'quiz-option',
+                isSelected ? 'selected' : '',
+                isCorrect ? 'correct' : '',
+                isWrong ? 'wrong' : '',
+              ]
+                .filter(Boolean)
+                .join(' ');
+              optionsEl.innerHTML = current.options.map((opt, idx) => {
+                const isSelected = answered === idx;
+                const hasAnswer = typeof answered === 'number';
+                const isCorrect = hasAnswer && idx === current.answer;
+                const isWrong = hasAnswer && isSelected && idx !== current.answer;
+                const classes = [
+                  'quiz-option',
+                  isSelected ? 'selected' : '',
+                  isCorrect ? 'correct' : '',
+                  isWrong ? 'wrong' : ''
+                ].filter(Boolean).join(' ');
+
+                return `<button type="button" class="${classes}" data-index="${idx}"><span>${opt}</span></button>`;
+              })
+                .join('');
+              return `<button type="button" class="${classes}" data-index="${idx}"><span>${opt}</span></button>`;
+            }).join('');
+
+          optionsEl.querySelectorAll('button').forEach((btn) => {
+            btn.addEventListener('click', () => {
+              const idx = Number(btn.getAttribute('data-index'));
+              quizState.answers[current.id] = idx;
+              renderQuiz();
+            });
+          });
+          optionsEl.querySelectorAll('button').forEach(btn => {
+            btn.addEventListener('click', () => {
+              const idx = Number(btn.getAttribute('data-index'));
+              quizState.answers[current.id] = idx;
+              renderQuiz();
+            });
+          });
+
+          if (typeof answered === 'number') {
+            const isCorrect = answered === current.answer;
+            explainEl.innerHTML = `
+      <span class="quiz-badge ${isCorrect ? 'good' : 'bad'}">${isCorrect ? t('quizCorrect') : t('quizIncorrect')
+              }</span>
+      <span class="quiz-explain-text">${t('quizExplanation')}: ${current.explanation
+              }</span>
       if (typeof answered === 'number') {
         const isCorrect = answered === current.answer;
         explainEl.innerHTML = `
-      <span class="quiz-badge ${isCorrect ? 'good' : 'bad'}">${isCorrect ? t('quizCorrect') : t('quizIncorrect')}</span>
-      <span class="quiz-explain-text">${t('quizExplanation')}: ${current.explanation}</span>
-    `;
+              < span class="quiz-badge ${isCorrect ? 'good' : 'bad'}" > ${ isCorrect ? t('quizCorrect') : t('quizIncorrect') }</span >
+                <span class="quiz-explain-text">${t('quizExplanation')}: ${current.explanation}</span>
+            `;
       } else {
         explainEl.textContent = '';
       }
+        } else {
+          explainEl.textContent = '';
+        }
 
       prevBtn.disabled = quizState.index === 0;
       nextBtn.disabled = quizState.index >= total - 1;
     }
+        prevBtn.disabled = quizState.index === 0;
+        nextBtn.disabled = quizState.index >= total - 1;
+      }
 
     $('quiz-prev').addEventListener('click', () => {
       if (quizState.index > 0) {
@@ -862,6 +2327,12 @@
         renderQuiz();
       }
     });
+      $('quiz-prev').addEventListener('click', () => {
+        if (quizState.index > 0) {
+          quizState.index -= 1;
+          renderQuiz();
+        }
+      });
 
     $('quiz-next').addEventListener('click', () => {
       if (quizState.index < quizState.items.length - 1) {
@@ -869,170 +2340,635 @@
         renderQuiz();
       }
     });
+      $('quiz-next').addEventListener('click', () => {
+        if (quizState.index < quizState.items.length - 1) {
+          quizState.index += 1;
+          renderQuiz();
+        }
+      });
 
+      $('quiz-reset').addEventListener('click', () => {
+        quizState.answers = {};
+        quizState.index = 0;
+        renderQuiz();
+      });
+
+      $('quiz-generate').addEventListener('click', () => {
+        generatePracticeQuiz();
+      });
     $('quiz-reset').addEventListener('click', () => {
       initQuiz();
     });
 
-    // ============================================================================
-    // Flashcards
-    // ============================================================================
-    const FLASHCARDS = {
-      en: [
-        { term: 'Photosynthesis', definition: 'Process where plants convert light into chemical energy.' },
-        { term: 'CPU cache', definition: 'Small, fast memory that stores frequently used data.' },
-        { term: 'Derivative', definition: 'Measures the rate of change of a function.' },
-        { term: 'Internet Protocol (IP)', definition: 'Addressing and routing protocol for data packets.' },
-        { term: 'Energy conservation', definition: 'Total energy remains constant in a closed system.' }
-      ],
-      vi: [
-        { term: 'Quang hợp', definition: 'Quá trình thực vật biến đổi ánh sáng thành năng lượng hóa học.' },
-        { term: 'Bộ nhớ cache CPU', definition: 'Bộ nhớ nhỏ, nhanh, lưu dữ liệu dùng thường xuyên.' },
-        { term: 'Đạo hàm', definition: 'Đo tốc độ thay đổi của hàm số tại một điểm.' },
-        { term: 'Internet Protocol (IP)', definition: 'Giao thức địa chỉ và định tuyến gói dữ liệu.' },
-        { term: 'Bảo toàn năng lượng', definition: 'Tổng năng lượng trong hệ kín không đổi.' }
-      ]
-    };
+      // ============================================================================
+      // Creative Features: Tabs, Cornell Notes, Mermaid Mind-Map, Leitner SRS Arena
+      // ============================================================================
 
-    const flashState = {
-      index: 0,
-      flipped: false
-    };
+      function switchTab(tabId) {
+        document
+          .querySelectorAll('.tab-btn')
+          .forEach((btn) => btn.classList.remove('active'));
+        document
+          .querySelectorAll('.tab-content')
+          .forEach((content) => content.classList.remove('active'));
 
-    function getFlashcardDeck() {
-      return FLASHCARDS[currentLang] || FLASHCARDS.en;
-    }
+        const tabBtn = $(`btn - ${ tabId } `);
+        const tabContent = $(tabId);
+        if (tabBtn) tabBtn.classList.add('active');
+        if (tabContent) tabContent.classList.add('active');
 
-    function renderFlashcard() {
-      const deck = getFlashcardDeck();
-      const progressEl = $('flashcard-progress');
-      const cardEl = $('flashcard');
-      const frontEl = $('flashcard-front');
-      const backEl = $('flashcard-back');
-      const prevBtn = $('flashcard-prev');
-      const nextBtn = $('flashcard-next');
-      const flipBtn = $('flashcard-flip');
-
-      if (!deck.length) {
-        progressEl.textContent = '';
-        frontEl.innerHTML = `<span class="flash-label">${t('flashcardFrontLabel')}</span><span class="flash-text muted">${t('flashcardEmptyFront')}</span>`;
-        backEl.innerHTML = `<span class="flash-label">${t('flashcardBackLabel')}</span><span class="flash-text muted">${t('flashcardEmptyBack')}</span>`;
-        cardEl.classList.remove('flipped');
-        cardEl.disabled = true;
-        prevBtn.disabled = true;
-        nextBtn.disabled = true;
-        flipBtn.disabled = true;
-        return;
+        if (tabId === 'tab-leitner') {
+          updateLeitnerStats();
+        }
+        if (tabId === 'tab-quiz') {
+          updateQuizDocLabel();
+          const docId = window.selectedDocId || window.lastDocId;
+          if (docId && quizState.sourceDocId !== docId) {
+            loadQuizFromS3(docId).then(() => {
+              quizState.sourceDocId = docId;
+            });
+          }
+        }
       }
 
-      if (flashState.index >= deck.length) {
-        flashState.index = 0;
-      }
-      const current = deck[flashState.index];
-      progressEl.textContent = t('flashcardProgress', { index: flashState.index + 1, total: deck.length });
-      frontEl.innerHTML = `<span class="flash-label">${t('flashcardFrontLabel')}</span><span class="flash-text">${current.term}</span>`;
-      backEl.innerHTML = `<span class="flash-label">${t('flashcardBackLabel')}</span><span class="flash-text">${current.definition}</span>`;
-      cardEl.classList.toggle('flipped', flashState.flipped);
-      cardEl.disabled = false;
-      prevBtn.disabled = flashState.index === 0;
-      nextBtn.disabled = flashState.index >= deck.length - 1;
-      flipBtn.disabled = false;
-    }
+      // --- Cornell Study Guide ---
+      async function generateCornell() {
+        const docId = window.selectedDocId || window.lastDocId;
+        if (!docId) {
+          toast(t('benchmarkNeedDoc'), 'warn');
+          return;
+        }
 
-    function flipFlashcard() {
-      flashState.flipped = !flashState.flipped;
-      renderFlashcard();
-    }
+        const btn = $('btn-generate-cornell');
+        btn.disabled = true;
+        const oldText = btn.textContent;
+        btn.innerHTML = '<span class="spinner"></span> Generating...';
 
-    function moveFlashcard(step) {
-      const deck = getFlashcardDeck();
-      const nextIndex = flashState.index + step;
-      if (nextIndex >= 0 && nextIndex < deck.length) {
-        flashState.index = nextIndex;
-        flashState.flipped = false;
-        renderFlashcard();
-      }
-    }
+        try {
+          const res = await call(`/ docs / ${ docId }/cornell`, { method: 'POST' });
+            if (!res.ok) {
+              throw new Error(
+                res.body.detail || 'Failed to generate Cornell study guide'
+              );
+            }
 
-    $('flashcard').addEventListener('click', flipFlashcard);
-    $('flashcard-flip').addEventListener('click', flipFlashcard);
-    $('flashcard-prev').addEventListener('click', () => moveFlashcard(-1));
-    $('flashcard-next').addEventListener('click', () => moveFlashcard(1));
+            const data = res.body.cornell;
 
-    // ============================================================================
-    // Language Controls
-    // ============================================================================
-    function initLanguageControls() {
-      document.querySelectorAll('.lang-btn').forEach(btn => {
-        btn.addEventListener('click', () => setLanguage(btn.getAttribute('data-lang')));
-      });
-    }
+            // Render Cues
+            const cuesHtml = data.cues
+              .map(
+                (c) => `
+      <div class="cornell-cue-card" onclick="scrollToCornellNote('${c.association.replace(
+                  /'/g,
+                  "\\'"
+                )}')">
+        <div style="color: var(--accent); margin-bottom: 0.25rem;">❓ ${c.keyword
+                  }</div>
+        <div style="font-size: 0.72rem; color: var(--muted); font-weight: 500;">Points to: ${c.association
+                  }</div>
+      </div>
+    `
+              )
+              .join('');
+            $('cornell-cues').innerHTML =
+              `<h3 style="font-size: 0.85rem; font-weight: 700; text-transform: uppercase; color: var(--muted); letter-spacing: 0.05em; margin: 0 0 0.5rem;">Cues & Keywords</h3>` +
+              cuesHtml;
 
-    // ============================================================================
-    // RAG Quality Evaluation Benchmark
-    // ============================================================================
-    async function runBenchmark() {
-      const docId = window.selectedDocId || window.lastDocId;
-      if (!docId) {
-        toast(t('benchmarkNeedDoc'), 'warn');
-        return;
-      }
+            // Render Notes
+            const notesHtml = data.notes
+              .map(
+                (n) => `
+      <div class="cornell-note-point">
+        ${n}
+      </div>
+    `
+              )
+              .join('');
+            $('cornell-notes-points').innerHTML =
+              `<h3 style="font-size: 0.85rem; font-weight: 700; text-transform: uppercase; color: var(--muted); letter-spacing: 0.05em; margin: 0 0 0.5rem;">Detailed Class Notes</h3>` +
+              notesHtml;
 
-      $('benchmark-btn').disabled = true;
-      $('benchmark-status').innerHTML = `<span class="spinner"></span> ${t('benchmarkStatusRunning')}`;
-      $('benchmark-results').style.display = 'none';
+            // Render Summary
+            $('cornell-summary-text').innerHTML = `
+      <h3 style="font-size: 0.85rem; font-weight: 700; text-transform: uppercase; color: var(--accent-2); letter-spacing: 0.05em; margin: 0 0 0.5rem;">Summary (Takeaway)</h3>
+      <p style="margin: 0; font-size: 0.95rem; line-height: 1.5; font-weight: 500;">${data.summary}</p>
+    `;
 
-      const strategy = $('chunk-strategy').value;
-      const size = $('chunk-size').value;
-      const overlap = $('chunk-overlap').value;
-      const threshold = $('chunk-threshold').value;
+            $('cornell-empty').style.display = 'none';
+            $('cornell-view').style.display = 'flex';
+            toast('Cornell Study Guide successfully generated!', 'success');
+          } catch (err) {
+            toast(err.message, 'error');
+          } finally {
+            btn.disabled = false;
+            btn.textContent = oldText;
+          }
+        }
 
-      const payload = {
-        strategy: strategy,
-        size: parseInt(size) || 500,
-        overlap: parseInt(overlap) || 100,
-        threshold: parseFloat(threshold) || 0.3
-      };
+        function scrollToCornellNote(association) {
+          const notesContainer = $('cornell-notes-points');
+          const notes = notesContainer.querySelectorAll('.cornell-note-point');
+          for (let note of notes) {
+            if (
+              note.textContent.toLowerCase().includes(association.toLowerCase())
+            ) {
+              note.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              note.style.borderColor = 'var(--accent)';
+              note.style.background = 'rgba(var(--accent-rgb), 0.05)';
+              setTimeout(() => {
+                note.style.borderColor = 'var(--border)';
+                note.style.background = 'var(--card)';
+              }, 2000);
+              break;
+            }
+          }
+        }
 
-      const res = await call(`/docs/${docId}/evaluate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
+        // --- Interactive Mind-Map ---
+        async function generateMindmap() {
+          const docId = window.selectedDocId || window.lastDocId;
+          if (!docId) {
+            toast(t('benchmarkNeedDoc'), 'warn');
+            return;
+          }
 
-      $('benchmark-btn').disabled = false;
-      $('benchmark-status').textContent = '';
+          const btn = $('btn-generate-mindmap');
+          btn.disabled = true;
+          const oldText = btn.textContent;
+          btn.innerHTML = '<span class="spinner"></span> Generating...';
 
-      if (!res.ok) {
-        toast(t('benchmarkFailed', { detail: res.body.detail || res.status }), 'error');
-        return;
-      }
+          try {
+            const res = await call(`/docs/${docId}/mindmap`, { method: 'POST' });
+            if (!res.ok) {
+              throw new Error(res.body.detail || 'Failed to generate Mind-Map');
+            }
 
-      const data = res.body;
+            const code = res.body.mindmap;
+            window.lastMindmapCode = code; // Cache for theme changes
+            const container = $('mindmap-container');
+            container.style.display = 'flex';
+            $('mindmap-empty').style.display = 'none';
 
-      // Show benchmark results
-      $('benchmark-results').style.display = 'block';
+            container.innerHTML = `<div class="mermaid" id="mindmap-mermaid">${code}</div>`;
 
-      // Update cards
-      const m = data.metrics;
-      $('metric-p1').textContent = `${(m.precision_at_1 * 100).toFixed(0)}%`;
-      $('metric-p3').textContent = `${(m.precision_at_3 * 100).toFixed(0)}%`;
-      $('metric-p5').textContent = `${(m.precision_at_5 * 100).toFixed(0)}%`;
-      $('metric-mrr').textContent = m.mrr.toFixed(2);
+            if (window.mermaid) {
+              mermaid.init(undefined, document.querySelectorAll('.mermaid'));
+            }
+            toast('Mind-Map successfully generated!', 'success');
+          } catch (err) {
+            toast(err.message, 'error');
+          } finally {
+            btn.disabled = false;
+            btn.textContent = oldText;
+          }
+        }
 
+        // --- Leitner Active Recall Arena SRS ---
+        const DEFAULT_LEITNER_CARDS = {
+          en: [
+            {
+              term: 'Photosynthesis',
+              definition:
+                'Process where plants convert light into chemical energy.',
+              box: 1,
+            },
+            {
+              term: 'CPU cache',
+              definition: 'Small, fast memory that stores frequently used data.',
+              box: 1,
+            },
+            {
+              term: 'Derivative',
+              definition: 'Measures the rate of change of a function.',
+              box: 1,
+            },
+            {
+              term: 'Internet Protocol (IP)',
+              definition: 'Addressing and routing protocol for data packets.',
+              box: 1,
+            },
+            {
+              term: 'Energy conservation',
+              definition: 'Total energy remains constant in a closed system.',
+              box: 1,
+            },
+          ],
+          vi: [
+            {
+              term: 'Quang hợp',
+              definition:
+                'Quá trình thực vật biến đổi ánh sáng thành năng lượng hóa học.',
+              box: 1,
+            },
+            {
+              term: 'Bộ nhớ cache CPU',
+              definition: 'Bộ nhớ nhỏ, nhanh, lưu dữ liệu dùng thường xuyên.',
+              box: 1,
+            },
+            {
+              term: 'Đạo hàm',
+              definition: 'Đo tốc độ thay đổi của hàm số tại một điểm.',
+              box: 1,
+            },
+            {
+              term: 'Internet Protocol (IP)',
+              definition: 'Giao thức địa chỉ và định tuyến gói dữ liệu.',
+              box: 1,
+            },
+            {
+              term: 'Bảo toàn năng lượng',
+              definition: 'Tổng năng lượng trong hệ kín không đổi.',
+              box: 1,
+            },
+          ],
+        };
+
+        const leitnerState = {
+          cards: [],
+          index: 0,
+          flipped: false,
+          xp: 0,
+          level: 1,
+        };
+
+        function loadLeitnerState() {
+          const saved = localStorage.getItem('studybot-leitner');
+          if (saved) {
+            try {
+              const parsed = JSON.parse(saved);
+              leitnerState.cards = parsed.cards || [];
+              leitnerState.xp = parsed.xp || 0;
+              leitnerState.level = parsed.level || 1;
+            } catch (e) {
+              console.error('Failed to load Leitner state', e);
+            }
+          }
+
+          if (!leitnerState.cards || leitnerState.cards.length === 0) {
+            leitnerState.cards =
+              DEFAULT_LEITNER_CARDS[currentLang] || DEFAULT_LEITNER_CARDS.en;
+            leitnerState.xp = 0;
+            leitnerState.level = 1;
+          }
+        }
+
+        function saveLeitnerState() {
+          localStorage.setItem(
+            'studybot-leitner',
+            JSON.stringify({
+              cards: leitnerState.cards,
+              xp: leitnerState.xp,
+              level: leitnerState.level,
+            })
+          );
+        }
+
+        function updateLeitnerStats() {
+          const counts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+          leitnerState.cards.forEach((c) => {
+            counts[c.box] = (counts[c.box] || 0) + 1;
+          });
+
+          for (let i = 1; i <= 5; i++) {
+            const el = $(`box-${i}-count`);
+            if (el) el.textContent = counts[i];
+          }
+
+          const currentLevel = Math.floor(leitnerState.xp / 100) + 1;
+          if (currentLevel > leitnerState.level) {
+            leitnerState.level = currentLevel;
+            showLevelUp(currentLevel);
+          }
+
+          const xpLvlEl = $('xp-level');
+          if (xpLvlEl) xpLvlEl.textContent = leitnerState.level;
+
+          const progress = leitnerState.xp % 100;
+          const xpTextEl = $('xp-text');
+          if (xpTextEl)
+            xpTextEl.textContent = `${progress} / 100 XP (Level ${leitnerState.level})`;
+
+          const xpFillEl = $('xp-fill');
+          if (xpFillEl) xpFillEl.style.width = `${progress}%`;
+        }
+
+        function renderLeitnerCard() {
+          const deck = leitnerState.cards;
+          if (!deck.length) {
+            $('leitner-deck-view').style.display = 'none';
+            $('leitner-empty').style.display = 'block';
+            return;
+          }
+          // ============================================================================
+          // Flashcards
+          // ============================================================================
+          const FLASHCARDS = {
+            en: [
+              { term: 'Photosynthesis', definition: 'Process where plants convert light into chemical energy.' },
+              { term: 'CPU cache', definition: 'Small, fast memory that stores frequently used data.' },
+              { term: 'Derivative', definition: 'Measures the rate of change of a function.' },
+              { term: 'Internet Protocol (IP)', definition: 'Addressing and routing protocol for data packets.' },
+              { term: 'Energy conservation', definition: 'Total energy remains constant in a closed system.' }
+            ],
+            vi: [
+              { term: 'Quang hợp', definition: 'Quá trình thực vật biến đổi ánh sáng thành năng lượng hóa học.' },
+              { term: 'Bộ nhớ cache CPU', definition: 'Bộ nhớ nhỏ, nhanh, lưu dữ liệu dùng thường xuyên.' },
+              { term: 'Đạo hàm', definition: 'Đo tốc độ thay đổi của hàm số tại một điểm.' },
+              { term: 'Internet Protocol (IP)', definition: 'Giao thức địa chỉ và định tuyến gói dữ liệu.' },
+              { term: 'Bảo toàn năng lượng', definition: 'Tổng năng lượng trong hệ kín không đổi.' }
+            ]
+          };
+
+          const flashState = {
+            index: 0,
+            flipped: false
+          };
+
+          function getFlashcardDeck() {
+            return FLASHCARDS[currentLang] || FLASHCARDS.en;
+          }
+
+          function renderFlashcard() {
+            const deck = getFlashcardDeck();
+            const progressEl = $('flashcard-progress');
+            const cardEl = $('flashcard');
+            const frontEl = $('flashcard-front');
+            const backEl = $('flashcard-back');
+            const prevBtn = $('flashcard-prev');
+            const nextBtn = $('flashcard-next');
+            const flipBtn = $('flashcard-flip');
+
+            if (!deck.length) {
+              progressEl.textContent = '';
+              frontEl.innerHTML = `<span class="flash-label">${t('flashcardFrontLabel')}</span><span class="flash-text muted">${t('flashcardEmptyFront')}</span>`;
+              backEl.innerHTML = `<span class="flash-label">${t('flashcardBackLabel')}</span><span class="flash-text muted">${t('flashcardEmptyBack')}</span>`;
+              cardEl.classList.remove('flipped');
+              cardEl.disabled = true;
+              prevBtn.disabled = true;
+              nextBtn.disabled = true;
+              flipBtn.disabled = true;
+              return;
+            }
+
+            if (leitnerState.index >= deck.length) {
+              leitnerState.index = 0;
+            }
+
+            const current = deck[leitnerState.index];
+            $('flashcard-progress').textContent = `Card ${leitnerState.index + 1
+              } of ${deck.length}`;
+            $('flashcard-box-num').textContent = current.box;
+
+            $(
+              'flashcard-front'
+            ).innerHTML = `<span class="flash-label">Term</span><span class="flash-text">${current.term}</span>`;
+            $(
+              'flashcard-back'
+            ).innerHTML = `<span class="flash-label">Definition</span><span class="flash-text">${current.definition}</span>`;
+
+            $('flashcard-inner').style.transform = leitnerState.flipped
+              ? 'rotateY(180deg)'
+              : 'rotateY(0deg)';
+          }
+
+          function flipCard() {
+            leitnerState.flipped = !leitnerState.flipped;
+            renderLeitnerCard();
+          }
+
+          function handleLeitnerAnswer(remembered) {
+            const deck = leitnerState.cards;
+            if (!deck.length) return;
+
+            const current = deck[leitnerState.index];
+
+            if (remembered) {
+              current.box = Math.min(5, current.box + 1);
+              leitnerState.xp += 15;
+              toast(
+                'Remembered! Card promoted to Box ' + current.box + ' (+15 XP)',
+                'success'
+              );
+            } else {
+              current.box = 1;
+              leitnerState.xp += 5;
+              toast('Forgot! Card demoted to Box 1 (+5 XP)', 'warn');
+            }
+
+            leitnerState.index = (leitnerState.index + 1) % deck.length;
+            leitnerState.flipped = false;
+
+            saveLeitnerState();
+            updateLeitnerStats();
+            renderLeitnerCard();
+          }
+
+          function showLevelUp(level) {
+            const lvlNumEl = $('level-up-num');
+            if (lvlNumEl) lvlNumEl.textContent = level;
+            $('level-up-overlay').style.display = 'grid';
+          }
+
+          function closeLevelUp() {
+            $('level-up-overlay').style.display = 'none';
+          }
+          if (flashState.index >= deck.length) {
+            flashState.index = 0;
+          }
+          const current = deck[flashState.index];
+          progressEl.textContent = t('flashcardProgress', { index: flashState.index + 1, total: deck.length });
+          frontEl.innerHTML = `<span class="flash-label">${t('flashcardFrontLabel')}</span><span class="flash-text">${current.term}</span>`;
+          backEl.innerHTML = `<span class="flash-label">${t('flashcardBackLabel')}</span><span class="flash-text">${current.definition}</span>`;
+          cardEl.classList.toggle('flipped', flashState.flipped);
+          cardEl.disabled = false;
+          prevBtn.disabled = flashState.index === 0;
+          nextBtn.disabled = flashState.index >= deck.length - 1;
+          flipBtn.disabled = false;
+        }
+
+        function flipFlashcard() {
+          flashState.flipped = !flashState.flipped;
+          renderFlashcard();
+        }
+
+        function moveFlashcard(step) {
+          const deck = getFlashcardDeck();
+          const nextIndex = flashState.index + step;
+          if (nextIndex >= 0 && nextIndex < deck.length) {
+            flashState.index = nextIndex;
+            flashState.flipped = false;
+            renderFlashcard();
+          }
+        }
+
+        $('flashcard').addEventListener('click', flipFlashcard);
+        $('flashcard-flip').addEventListener('click', flipFlashcard);
+        $('flashcard-prev').addEventListener('click', () => moveFlashcard(-1));
+        $('flashcard-next').addEventListener('click', () => moveFlashcard(1));
+
+        // ============================================================================
+        // Language Controls
+        // ============================================================================
+        function initLanguageControls() {
+          document.querySelectorAll('.lang-btn').forEach((btn) => {
+            btn.addEventListener('click', () =>
+              setLanguage(btn.getAttribute('data-lang'))
+            );
+          });
+        }
+        // ============================================================================
+        // Language Controls
+        // ============================================================================
+        function initLanguageControls() {
+          document.querySelectorAll('.lang-btn').forEach(btn => {
+            btn.addEventListener('click', () => setLanguage(btn.getAttribute('data-lang')));
+          });
+        }
+
+        // ============================================================================
+        // RAG Quality Evaluation Benchmark
+        // ============================================================================
+        async function runBenchmark() {
+          const docId = window.selectedDocId || window.lastDocId;
+          if (!docId) {
+            toast(t('benchmarkNeedDoc'), 'warn');
+            return;
+          }
+          // ============================================================================
+          // RAG Quality Evaluation Benchmark
+          // ============================================================================
+          async function runBenchmark() {
+            const docId = window.selectedDocId || window.lastDocId;
+            if (!docId) {
+              toast(t('benchmarkNeedDoc'), 'warn');
+              return;
+            }
+
+            $('benchmark-btn').disabled = true;
+            $('benchmark-status').innerHTML = `<span class="spinner"></span> ${t(
+              'benchmarkStatusRunning'
+            )}`;
+            $('benchmark-results').style.display = 'none';
+            $('benchmark-btn').disabled = true;
+            $('benchmark-status').innerHTML = `<span class="spinner"></span> ${t('benchmarkStatusRunning')}`;
+            $('benchmark-results').style.display = 'none';
+
+            const strategy = $('chunk-strategy').value;
+            const size = $('chunk-size').value;
+            const overlap = $('chunk-overlap').value;
+            const threshold = $('chunk-threshold').value;
+            const strategy = $('chunk-strategy').value;
+            const size = $('chunk-size').value;
+            const overlap = $('chunk-overlap').value;
+            const threshold = $('chunk-threshold').value;
+
+            const payload = {
+              strategy: strategy,
+              size: parseInt(size) || 500,
+              overlap: parseInt(overlap) || 100,
+              threshold: parseFloat(threshold) || 0.3,
+            };
+            const payload = {
+              strategy: strategy,
+              size: parseInt(size) || 500,
+              overlap: parseInt(overlap) || 100,
+              threshold: parseFloat(threshold) || 0.3
+            };
+
+            const res = await call(`/docs/${docId}/evaluate`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload),
+            });
+            const res = await call(`/docs/${docId}/evaluate`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            });
+
+            $('benchmark-btn').disabled = false;
+            $('benchmark-status').textContent = '';
+            $('benchmark-btn').disabled = false;
+            $('benchmark-status').textContent = '';
+
+            if (!res.ok) {
+              toast(
+                t('benchmarkFailed', { detail: res.body.detail || res.status }),
+                'error'
+              );
+              return;
+            }
+            if (!res.ok) {
+              toast(t('benchmarkFailed', { detail: res.body.detail || res.status }), 'error');
+              return;
+            }
+
+            const data = res.body;
+            const data = res.body;
+
+            // Show benchmark results
+            $('benchmark-results').style.display = 'block';
+            // Show benchmark results
+            $('benchmark-results').style.display = 'block';
+
+            // Update cards
+            const m = data.metrics;
+            $('metric-p1').textContent = `${(m.precision_at_1 * 100).toFixed(0)}%`;
+            $('metric-p3').textContent = `${(m.precision_at_3 * 100).toFixed(0)}%`;
+            $('metric-p5').textContent = `${(m.precision_at_5 * 100).toFixed(0)}%`;
+            $('metric-mrr').textContent = m.mrr.toFixed(2);
+            // Update cards
+            const m = data.metrics;
+            $('metric-p1').textContent = `${(m.precision_at_1 * 100).toFixed(0)}%`;
+            $('metric-p3').textContent = `${(m.precision_at_3 * 100).toFixed(0)}%`;
+            $('metric-p5').textContent = `${(m.precision_at_5 * 100).toFixed(0)}%`;
+            $('metric-mrr').textContent = m.mrr.toFixed(2);
+
+            // Populate individual query results
+            $('benchmark-queries').innerHTML = data.queries
+              .map((q, qidx) => {
+                return `
+      <div style="border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.9rem; background: var(--bg); margin-bottom: 0.5rem; overflow: hidden; min-width: 0;">
+        <div style="font-weight: 700; font-size: 0.9rem; margin-bottom: 0.4rem; color: var(--text); word-break: break-word;">
+          ${t('benchmarkQuestionLabel', { index: qidx + 1, query: q.query })}
       // Populate individual query results
       $('benchmark-queries').innerHTML = data.queries.map((q, qidx) => {
         return `
-      <div style="border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.9rem; background: var(--bg); margin-bottom: 0.5rem;">
+                  < div style = "border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.9rem; background: var(--bg); margin-bottom: 0.5rem;" >
         <div style="font-weight: 700; font-size: 0.9rem; margin-bottom: 0.4rem; color: var(--text);">
           ${t('benchmarkQuestionLabel', { index: qidx + 1, query: q.query })}
         </div>
-        <div style="font-size: 0.74rem; color: var(--muted); margin-bottom: 0.6rem; display: flex; justify-content: space-between;">
-          <span>${t('benchmarkTargetKeywords')}: <code>${q.keywords.join(', ')}</code></span>
-          <span style="font-weight:600; color: ${q.metrics.mrr > 0 ? 'var(--success)' : 'var(--error)'}">
-            ${t('benchmarkMrrLabel')}: ${q.metrics.mrr.toFixed(2)} | ${t('benchmarkP3Label')}: ${(q.metrics.precision_at_3 * 100).toFixed(0)}%
+        <div style="font-size: 0.74rem; color: var(--muted); margin-bottom: 0.6rem; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.35rem; min-width: 0;">
+          <span style="word-break: break-word; min-width: 0; flex: 1 1 auto;">${t(
+            'benchmarkTargetKeywords'
+          )}: <code style="word-break: break-all;">${q.keywords.join(
+              ', '
+            )}</code></span>
+          <span style="font-weight:600; color: ${
+            q.metrics.mrr > 0 ? 'var(--success)' : 'var(--error)'
+          }; white-space: nowrap; flex-shrink: 0;">
+            ${t('benchmarkMrrLabel')}: ${q.metrics.mrr.toFixed(2)} | ${t(
+              'benchmarkP3Label'
+            )}: ${(q.metrics.precision_at_3 * 100).toFixed(0)}%
           </span>
         </div>
+        <div style="display: grid; gap: 0.5rem; min-width: 0;">
+          ${q.retrieved
+            .map(
+              (r) => `
+            <div style="padding: 0.6rem; background: var(--card); border-left: 3px solid ${
+              r.relevant ? 'var(--success)' : 'var(--error)'
+            }; font-size: 0.78rem; border-radius: 0 4px 4px 0; border-top: 1px solid var(--border); border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); overflow: hidden; min-width: 0;">
+              <div style="display:flex; justify-content: space-between; flex-wrap: wrap; gap: 0.25rem; font-weight:600; font-size: 0.72rem; color: var(--muted); margin-bottom:0.25rem; min-width: 0;">
+                <span style="white-space: nowrap;">${t('benchmarkChunkLabel', {
+                  chunk: r.chunk,
+                  score: r.score.toFixed(2),
+                })}</span>
+                <span style="color: ${
+                  r.relevant ? 'var(--success)' : 'var(--error)'
+                }; white-space: nowrap;">${
+                r.relevant ? t('benchmarkRelevant') : t('benchmarkIrrelevant')
+              }</span>
         <div style="display: grid; gap: 0.5rem;">
           ${q.retrieved.map(r => `
             <div style="padding: 0.6rem; background: var(--card); border-left: 3px solid ${r.relevant ? 'var(--success)' : 'var(--error)'}; font-size: 0.78rem; border-radius: 0 4px 4px 0; border-top: 1px solid var(--border); border-right: 1px solid var(--border); border-bottom: 1px solid var(--border);">
@@ -1040,16 +2976,25 @@
                 <span>${t('benchmarkChunkLabel', { chunk: r.chunk, score: r.score.toFixed(2) })}</span>
                 <span style="color: ${r.relevant ? 'var(--success)' : 'var(--error)'}">${r.relevant ? t('benchmarkRelevant') : t('benchmarkIrrelevant')}</span>
               </div>
-              <div style="white-space: pre-wrap; font-family: var(--font-sans); line-height:1.4; color: var(--text);">${r.text.replace(/</g, '&lt;')}</div>
+              <div style="white-space: pre-wrap; word-break: break-word; overflow-wrap: break-word; font-family: var(--font-sans); line-height:1.4; color: var(--text); max-height: 8rem; overflow-y: auto;">${r.text.replace(
+                /</g,
+                '&lt;'
+              )}</div>
             </div>
-          `).join('')}
+          `
+            )
+            .join('')}
         </div>
       </div>
     `;
+          })
+          .join('');
       }).join('');
 
       toast(t('benchmarkSuccess'), 'success');
     }
+        toast(t('benchmarkSuccess'), 'success');
+      }
 
     // ============================================================================
     // Doc list
@@ -1058,6 +3003,13 @@
       const res = await call('/docs/list');
       if (!res.ok || !res.body.docs || !res.body.docs.length) {
         $('docs').innerHTML = `
+      // ============================================================================
+      // Doc list
+      // ============================================================================
+      async function refresh() {
+        const res = await call('/docs/list');
+        if (!res.ok || !res.body.docs || !res.body.docs.length) {
+          $('docs').innerHTML = `
       <div class="empty">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 44px; height: 44px; margin-bottom: 0.5rem; opacity: 0.4;">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
@@ -1068,14 +3020,30 @@
         $('benchmark-section').style.display = 'none';
         return;
       }
+          $('benchmark-section').style.display = 'none';
+          return;
+        }
 
       $('benchmark-section').style.display = 'block';
+        $('benchmark-section').style.display = 'block';
 
       if (!window.lastDocId) {
         window.lastDocId = res.body.docs[0].doc_id;
         window.lastDocName = res.body.docs[0].filename;
       }
+        if (!window.lastDocId) {
+          window.lastDocId = res.body.docs[0].doc_id;
+          window.lastDocName = res.body.docs[0].filename;
+        }
 
+        $('docs').innerHTML = res.body.docs
+          .map((d) => {
+            const isSelected =
+              d.doc_id === (window.selectedDocId || window.lastDocId);
+            if (isSelected) {
+              window.selectedDocId = d.doc_id;
+              window.selectedDocName = d.filename;
+            }
       $('docs').innerHTML = res.body.docs.map(d => {
         const isSelected = d.doc_id === (window.selectedDocId || window.lastDocId);
         if (isSelected) {
@@ -1083,14 +3051,27 @@
           window.selectedDocName = d.filename;
         }
 
-        const hint = d.filename.toLowerCase().includes('photosynthesis')
-          ? `<span class="doc-hint">💡 ${t('docRecommended')}</span>`
-          : '';
+            const hint = d.filename.toLowerCase().includes('photosynthesis')
+              ? `< span class="doc-hint" >💡 ${ t('docRecommended') }</span > `
+              : '';
 
-        return `
+            return `
+                  < div class="doc-item" style = "cursor: pointer; ${
+                isSelected
+                  ? 'border-color: var(--accent); background: rgba(var(--accent-rgb), 0.08);'
+                  : ''
+              }" onclick="selectDoc('${d.doc_id}', '${d.filename}')">
+        const hint = d.filename.toLowerCase().includes('photosynthesis')
+              ? `<span class="doc-hint">💡 ${t('docRecommended')}</span>`
+              : '';
+
+            return `
       <div class="doc-item" style="cursor: pointer; ${isSelected ? 'border-color: var(--accent); background: rgba(var(--accent-rgb), 0.08);' : ''}" onclick="selectDoc('${d.doc_id}', '${d.filename}')">
         <div class="doc-item-left">
-          <div class="doc-icon" style="${isSelected ? 'color: var(--accent); background: rgba(var(--accent-rgb), 0.15);' : ''}">
+          <div class="doc-icon" style="${isSelected
+                ? 'color: var(--accent); background: rgba(var(--accent-rgb), 0.15);'
+                : ''
+              }">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
               <polyline points="14 2 14 8 20 8"></polyline>
@@ -1101,16 +3082,25 @@
           </div>
           <div class="doc-item-info">
             <div class="name">
-              <span class="name-text">${isSelected ? '🔹 ' : ''}${d.filename || d.doc_id}</span>
+              <span class="name-text" title="${d.filename || d.doc_id}">${isSelected ? '🔹 ' : ''}${d.filename || d.doc_id
+              }</span>
               ${hint}
             </div>
+            <div class="meta">${t('docMeta', {
+                chars: (d.chars || 0).toLocaleString(),
+                size: (d.size / 1024).toFixed(1),
+              })}</div>
             <div class="meta">${t('docMeta', { chars: (d.chars || 0).toLocaleString(), size: (d.size / 1024).toFixed(1) })}</div>
           </div>
         </div>
         <div class="doc-item-right">
           <div class="doc-id">${(d.doc_id || '').slice(0, 8)}</div>
-          <div class="doc-state">${isSelected ? t('docActive') : t('docSelect')}</div>
-          <button class="ghost delete-btn" onclick="event.stopPropagation(); deleteDocument('${d.doc_id}', '${d.filename.replace(/'/g, "\\'")}')" title="${t('docDeleteTitle')}">
+          <div class="doc-state">${isSelected ? t('docActive') : t('docSelect')
+              }</div>
+          <button class="ghost delete-btn" onclick="event.stopPropagation(); deleteDocument('${d.doc_id
+              }', '${d.filename.replace(/'/g, "\\'")}')" title="${t(
+                'docDeleteTitle'
+              )}">
             <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="3 6 5 6 21 6"></polyline>
               <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
@@ -1120,6 +3110,9 @@
         </div>
       </div>
     `;
+          })
+          .join('');
+        }
       }).join('');
     }
 
@@ -1127,9 +3120,48 @@
       window.selectedDocId = docId;
       window.selectedDocName = filename;
       toast(t('docSelectedToast', { filename }), 'info');
+      // Reset quiz state when doc changes so tab will auto-load new doc's quiz
+      if (quizState.sourceDocId !== docId) {
+        quizState.sourceDocId = null;
+        initQuiz(null);
+      }
+      updateQuizDocLabel();
+      refresh();
+    }
+    function selectDoc(docId, filename) {
+      window.selectedDocId = docId;
+      window.selectedDocName = filename;
+      toast(t('docSelectedToast', { filename }), 'info');
       refresh();
     }
 
+    async function deleteDocument(docId, filename) {
+      if (!confirm(t('docDeleteConfirm', { filename }))) {
+        return;
+      }
+
+      toast(t('docDeleteProgress', { filename }), 'info');
+      const res = await call(`/docs/${docId}`, { method: 'DELETE' });
+
+      if (!res.ok) {
+        toast(
+          t('docDeleteFailed', { detail: res.body.detail || res.status }),
+          'error'
+        );
+        return;
+      }
+
+      toast(t('docDeleteSuccess', { filename }), 'success');
+
+      if (window.selectedDocId === docId || window.lastDocId === docId) {
+        window.selectedDocId = null;
+        window.selectedDocName = null;
+        window.lastDocId = null;
+        window.lastDocName = null;
+      }
+
+      refresh();
+    }
     async function deleteDocument(docId, filename) {
       if (!confirm(t('docDeleteConfirm', { filename }))) {
         return;
@@ -1158,6 +3190,22 @@
     function filterDocs() {
       const query = $('doc-search').value.toLowerCase().trim();
       const items = document.querySelectorAll('.doc-item');
+      items.forEach((item) => {
+        // Search within the name element
+        const nameEl = item.querySelector('.name');
+        if (nameEl) {
+          const name = nameEl.textContent.toLowerCase();
+          if (name.includes(query)) {
+            item.style.display = 'flex';
+          } else {
+            item.style.display = 'none';
+          }
+        }
+      });
+    }
+    function filterDocs() {
+      const query = $('doc-search').value.toLowerCase().trim();
+      const items = document.querySelectorAll('.doc-item');
       items.forEach(item => {
         // Search within the name element
         const nameEl = item.querySelector('.name');
@@ -1175,373 +3223,449 @@
     // ============================================================================
     // Boot
     // ============================================================================
-    initLanguageControls();
-    setLanguage(currentLang);
 
     // ============================================================================
-    // I18N & Flashcard AI Generation
+    // Main Application Lifecycle
     // ============================================================================
-    // ============================================================================
-    // i18n
-    // ============================================================================
-    const I18N = {
-      en: {
-        pageTitle: 'StudyBot — AI Study Buddy',
-        tagline: 'AI Study Buddy — upload notes, ask questions, get cited answers',
-        statusLoading: 'Loading system status...',
-        statusOffline: 'backend offline',
-        statusTenant: 'tenant',
-        statusLocal: 'local',
-        statusRemote: 'remote',
-        libraryTitle: 'Your Library',
-        refresh: 'Refresh',
-        libraryEmpty: 'No documents yet — upload one above.',
-        uploadTitle: 'Upload a lecture',
-        uploadMeta: 'PDF, TXT, or Markdown',
-        uploadDragStrong: 'Drag a file here',
-        uploadDragOr: 'or',
-        uploadDragBrowse: 'click to browse',
-        uploadHintPrefix: 'Max ~10MB. Try a Wikipedia article from ',
-        uploadHintSuffix: '.',
-        askTitle: 'Ask a question',
-        askMeta: 'Grounded in your uploaded notes',
-        questionPlaceholder: 'Ask your AI buddy about the uploaded notes...',
-        askButton: 'Ask',
-        practiceTitle: 'Practice Studio',
-        practiceSubtitle: 'Quizzes and flashcards built from your notes',
-        practicePill: 'New',
-        quizTitle: 'Quiz Sprint',
-        quizMeta: 'Tap through questions',
-        quizDeck: 'Adaptive mini-quiz',
-        quizPrev: 'Previous',
-        quizReset: 'Reset',
-        quizNext: 'Next',
-        flashcardTitle: 'Flashcards',
-        flashcardMeta: 'Flip to recall',
-        flashcardDeck: 'Memory deck',
-        flashcardTip: 'Space your review',
-        flashcardPrev: 'Prev',
-        flashcardFlip: 'Flip',
-        flashcardNext: 'Next',
-        debugSummary: 'Raw API responses (debug)',
-        languageGroup: 'Language switcher',
-        toggleThemeTitle: 'Toggle light/dark theme',
-        themeSwitched: 'Switched to {mode} mode',
-        themeLight: 'light',
-        themeDark: 'dark',
-        toastAskEmpty: 'Type a question first',
-        fileTooLarge: 'File is too large ({size} MB). Maximum size allowed is {max}MB.',
-        uploading: 'Uploading {filename} ({size} KB)...',
-        uploadFailed: 'Upload failed: {detail}',
-        uploadFailedShort: 'Upload failed',
-        uploadSuccessChars: '{chars} chars extracted & indexed',
-        uploadSuccessDoc: 'doc_id: {docId}',
-        uploadedToast: 'Uploaded {filename}',
-        welcomeMessage: 'Hello! I am your AI Study Buddy. Upload your lecture notes on the left, then ask me anything about them. I will research the content and give you answers with detailed citations.',
-        labelYou: 'You',
-        labelBot: 'StudyBot',
-        errorQuery: 'Error occurred while querying the notes.',
-        citationsTitle: 'Citations from your documents',
-        citationChunk: 'chunk {chunk}',
-        citationScore: 'score {score}',
-        citationsNone: 'No citations matched.',
-        docMeta: '{chars} chars · {size} KB',
-        debugEmpty: 'No requests yet.',
-        quizProgress: 'Question {index} of {total}',
-        quizScore: 'Score {score}/{total}',
-        quizCorrect: 'Correct',
-        quizIncorrect: 'Incorrect',
-        quizExplanation: 'Explanation',
-        flashcardProgress: 'Card {index} of {total}',
-        flashcardFrontLabel: 'Term',
-        flashcardBackLabel: 'Definition',
-        flashcardAria: 'Flip flashcard',
-        flashcardTopicPlaceholder: 'Enter topic for AI...',
-        flashcardEmptyFront: 'No cards yet',
-        flashcardEmptyBack: 'Add one below',
-        docSearchPlaceholder: '🔍 Search library...',
-        docSearchLabel: 'Search documents',
-        chunkingSummary: 'Chunking settings',
-        chunkingStrategyLabel: 'Chunking strategy',
-        chunkingStrategyFixed: 'Fixed-size (sentence-aware)',
-        chunkingStrategyStructural: 'Structural (Markdown headers)',
-        chunkingStrategySemantic: 'Local semantic (Jaccard)',
-        chunkingSizeLabel: 'Chunk size (characters)',
-        chunkingOverlapLabel: 'Overlap (characters)',
-        chunkingThresholdLabel: 'Semantic distance threshold',
-        uploadChunkPrefix: ' (using ',
-        uploadChunkSuffix: ' chunking)',
-        benchmarkTitle: 'RAG Quality Dashboard',
-        benchmarkMeta: 'Evaluate chunking quality',
-        benchmarkIntroPrefix: 'We automatically run ',
-        benchmarkIntroStrong: '5 test questions',
-        benchmarkIntroSuffix: ' about Photosynthesis, compare retrieved context with ground-truth keywords, and score retrieval accuracy. Adjust chunking in Step 1 and rerun to see accuracy changes in real time.',
-        benchmarkRunButton: 'Run benchmark evaluation',
-        benchmarkStatusRunning: 'Running benchmark evaluation...',
-        benchmarkMetricsTitle: 'RAG quality metrics',
-        benchmarkMetricP1: 'Top-1 accuracy',
-        benchmarkMetricP3: 'Top-3 accuracy',
-        benchmarkMetricP5: 'Top-5 accuracy',
-        benchmarkMetricMrr: 'Mean reciprocal rank',
-        benchmarkDetailsTitle: 'Retrieval details for 5 test questions',
-        benchmarkNeedDoc: 'Please upload or select a document first.',
-        benchmarkFailed: 'Evaluation failed: {detail}',
-        benchmarkSuccess: 'Evaluation completed successfully.',
-        benchmarkQuestionLabel: 'Q{index}: {query}',
-        benchmarkTargetKeywords: 'Target keywords',
-        benchmarkMrrLabel: 'MRR',
-        benchmarkP3Label: 'P@3',
-        benchmarkChunkLabel: 'Chunk {chunk} (Score: {score})',
-        benchmarkRelevant: '✓ Relevant (match)',
-        benchmarkIrrelevant: '✗ Irrelevant (no match)',
-        docRecommended: 'Recommended',
-        docActive: 'Active',
-        docSelect: 'Select',
-        docDelete: 'Delete',
-        docDeleteTitle: 'Delete document',
-        docSelectedToast: 'Selected document: {filename}',
-        docDeleteConfirm: 'Are you sure you want to delete "{filename}"? This will delete the file from storage and clear its vector index.',
-        docDeleteProgress: 'Deleting {filename}...',
-        docDeleteFailed: 'Delete failed: {detail}',
-        docDeleteSuccess: 'Deleted {filename}'
-      },
-      vi: {
-        pageTitle: 'StudyBot — Trợ lý học tập AI',
-        tagline: 'Trợ lý học tập AI — tải tài liệu, hỏi đáp, nhận câu trả lời kèm trích dẫn',
-        statusLoading: 'Đang tải trạng thái hệ thống...',
-        statusOffline: 'backend không hoạt động',
-        statusTenant: 'tenant',
-        statusLocal: 'cục bộ',
-        statusRemote: 'từ xa',
-        libraryTitle: 'Thư viện của bạn',
-        refresh: 'Làm mới',
-        libraryEmpty: 'Chưa có tài liệu — hãy tải lên ở trên.',
-        uploadTitle: 'Tải bài giảng',
-        uploadMeta: 'PDF, TXT, hoặc Markdown',
-        uploadDragStrong: 'Kéo file vào đây',
-        uploadDragOr: 'hoặc',
-        uploadDragBrowse: 'bấm để chọn file',
-        uploadHintPrefix: 'Tối đa ~10MB. Thử một bài Wikipedia trong ',
-        uploadHintSuffix: '.',
-        askTitle: 'Đặt câu hỏi',
-        askMeta: 'Nền tảng từ ghi chú của bạn',
-        questionPlaceholder: 'Hỏi trợ lý AI về nội dung vừa tải lên...',
-        askButton: 'Hỏi',
-        practiceTitle: 'Phòng luyện tập',
-        practiceSubtitle: 'Quiz và flashcard từ ghi chú của bạn',
-        practicePill: 'Mới',
-        quizTitle: 'Quiz Tăng Tốc',
-        quizMeta: 'Trả lời từng câu',
-        quizDeck: 'Bộ quiz linh hoạt',
-        quizPrev: 'Quay lại',
-        quizReset: 'Làm lại',
-        quizNext: 'Tiếp theo',
-        flashcardTitle: 'Flashcard',
-        flashcardMeta: 'Lật để nhớ',
-        flashcardDeck: 'Bộ thẻ ghi nhớ',
-        flashcardTip: 'Ôn lại theo chu kỳ',
-        flashcardPrev: 'Trước',
-        flashcardFlip: 'Lật thẻ',
-        flashcardNext: 'Tiếp',
-        debugSummary: 'Phản hồi API (debug)',
-        languageGroup: 'Chọn ngôn ngữ',
-        toggleThemeTitle: 'Chuyển giao diện sáng/tối',
-        themeSwitched: 'Đã chuyển sang chế độ {mode}',
-        themeLight: 'sáng',
-        themeDark: 'tối',
-        toastAskEmpty: 'Hãy nhập câu hỏi trước',
-        fileTooLarge: 'File vượt quá dung lượng cho phép ({size} MB). Dung lượng tối đa là {max}MB.',
-        uploading: 'Đang tải {filename} ({size} KB)...',
-        uploadFailed: 'Tải lên thất bại: {detail}',
-        uploadFailedShort: 'Tải lên thất bại',
-        uploadSuccessChars: '{chars} ký tự đã được tách và lập chỉ mục',
-        uploadSuccessDoc: 'doc_id: {docId}',
-        uploadedToast: 'Đã tải {filename}',
-        welcomeMessage: 'Xin chào! Tôi là trợ lý học tập AI. Hãy tải bài giảng ở bên trái, sau đó đặt bất kỳ câu hỏi nào. Tôi sẽ trả lời và trích dẫn chi tiết.',
-        labelYou: 'Bạn',
-        labelBot: 'StudyBot',
-        errorQuery: 'Đã xảy ra lỗi khi truy vấn ghi chú.',
-        citationsTitle: 'Trích dẫn từ tài liệu của bạn',
-        citationChunk: 'phần {chunk}',
-        citationScore: 'điểm {score}',
-        citationsNone: 'Không tìm thấy trích dẫn phù hợp.',
-        docMeta: '{chars} ký tự · {size} KB',
-        debugEmpty: 'Chưa có yêu cầu nào.',
-        quizProgress: 'Câu {index} / {total}',
-        quizScore: 'Điểm {score}/{total}',
-        quizCorrect: 'Đúng',
-        quizIncorrect: 'Sai',
-        quizExplanation: 'Giải thích',
-        flashcardProgress: 'Thẻ {index} / {total}',
-        flashcardFrontLabel: 'Khái niệm',
-        flashcardBackLabel: 'Định nghĩa',
-        flashcardAria: 'Lật flashcard',
-        flashcardTopicPlaceholder: 'Nhập chủ đề cho AI...',
-        flashcardEmptyFront: 'Chưa có thẻ nào',
-        flashcardEmptyBack: 'Hãy thêm thẻ mới',
-        docSearchPlaceholder: '🔍 Tìm tài liệu...',
-        docSearchLabel: 'Tìm kiếm tài liệu',
-        chunkingSummary: 'Cấu hình tách',
-        chunkingStrategyLabel: 'Chiến lược chunking',
-        chunkingStrategyFixed: 'Kích thước cố định (theo câu)',
-        chunkingStrategyStructural: 'Cấu trúc (tiêu đề Markdown)',
-        chunkingStrategySemantic: 'Ngữ nghĩa cục bộ (Jaccard)',
-        chunkingSizeLabel: 'Kích thước chunk (ký tự)',
-        chunkingOverlapLabel: 'Overlap gối đầu (ký tự)',
-        chunkingThresholdLabel: 'Ngưỡng khoảng cách ngữ nghĩa',
-        uploadChunkPrefix: ' (dùng ',
-        uploadChunkSuffix: ' chunking)',
-        benchmarkTitle: 'Bảng chất lượng RAG',
-        benchmarkMeta: 'Đánh giá chất lượng tách',
-        benchmarkIntroPrefix: 'Hệ thống tự động chạy ',
-        benchmarkIntroStrong: '5 câu hỏi kiểm thử',
-        benchmarkIntroSuffix: ' về quang hợp, đối chiếu ngữ cảnh truy xuất với từ khóa chuẩn để chấm độ chính xác. Hãy chỉnh cấu hình tách ở Bước 1 và chạy lại để xem độ chính xác thay đổi theo thời gian thực.',
-        benchmarkRunButton: 'Chạy đánh giá benchmark',
-        benchmarkStatusRunning: 'Đang chạy đánh giá benchmark...',
-        benchmarkMetricsTitle: 'Chỉ số chất lượng RAG',
-        benchmarkMetricP1: 'Độ chính xác top-1',
-        benchmarkMetricP3: 'Độ chính xác top-3',
-        benchmarkMetricP5: 'Độ chính xác top-5',
-        benchmarkMetricMrr: 'Thứ hạng trung bình',
-        benchmarkDetailsTitle: 'Chi tiết truy xuất 5 câu hỏi kiểm thử',
-        benchmarkNeedDoc: 'Vui lòng tải lên hoặc chọn tài liệu trước.',
-        benchmarkFailed: 'Đánh giá thất bại: {detail}',
-        benchmarkSuccess: 'Đánh giá hoàn tất.',
-        benchmarkQuestionLabel: 'Câu {index}: {query}',
-        benchmarkTargetKeywords: 'Từ khóa mục tiêu',
-        benchmarkMrrLabel: 'MRR',
-        benchmarkP3Label: 'P@3',
-        benchmarkChunkLabel: 'Chunk {chunk} (Điểm: {score})',
-        benchmarkRelevant: '✓ Phù hợp (khớp)',
-        benchmarkIrrelevant: '✗ Không phù hợp (không khớp)',
-        docRecommended: 'Nên dùng',
-        docActive: 'Đang chọn',
-        docSelect: 'Chọn',
-        docDelete: 'Xóa',
-        docDeleteTitle: 'Xóa tài liệu',
-        docSelectedToast: 'Đã chọn tài liệu: {filename}',
-        docDeleteConfirm: 'Bạn chắc chắn muốn xóa "{filename}"? Thao tác này sẽ xóa file khỏi bộ nhớ và làm sạch chỉ mục vector.',
-        docDeleteProgress: 'Đang xóa {filename}...',
-        docDeleteFailed: 'Xóa thất bại: {detail}',
-        docDeleteSuccess: 'Đã xóa {filename}'
-      }
-    };
 
-    let currentLang = document.documentElement.getAttribute('data-lang') || 'en';
+    document.addEventListener('DOMContentLoaded', () => {
+      initLanguageControls();
 
-    function t(key, vars = {}) {
-      const dict = I18N[currentLang] || I18N.en;
-      let str = dict[key] || I18N.en[key] || key;
-      Object.keys(vars).forEach(k => {
-        str = str.replace(new RegExp(`\\{${k}\\}`, 'g'), vars[k]);
-      });
-      return str;
-    }
-
-    function applyI18n() {
-      document.documentElement.lang = currentLang;
-      document.documentElement.setAttribute('data-lang', currentLang);
-      document.title = t('pageTitle');
-
-      document.querySelectorAll('[data-i18n]').forEach(el => {
-        const key = el.getAttribute('data-i18n');
-        el.textContent = t(key);
-      });
-
-      document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
-        const key = el.getAttribute('data-i18n-placeholder');
-        el.setAttribute('placeholder', t(key));
-      });
-
-      document.querySelectorAll('[data-i18n-title]').forEach(el => {
-        const key = el.getAttribute('data-i18n-title');
-        el.setAttribute('title', t(key));
-      });
-
-      document.querySelectorAll('[data-i18n-aria]').forEach(el => {
-        const key = el.getAttribute('data-i18n-aria');
-        el.setAttribute('aria-label', t(key));
-      });
-
-      const debugLog = $('debug-log');
-      if (debugLog && debugLog.getAttribute('data-empty') === 'true') {
-        debugLog.textContent = t('debugEmpty');
-      }
-    }
-
-    function setLanguage(lang) {
-      currentLang = I18N[lang] ? lang : 'en';
-      localStorage.setItem('studybot-lang', currentLang);
+      currentLang = localStorage.getItem('studybot-lang') || 'en';
       applyI18n();
       updateLangButtons();
       renderWelcomeMessage();
       loadStatus();
       refresh();
       initQuiz();
-      flashState.index = 0;
-      flashState.flipped = false;
-      renderFlashcard();
-    }
 
-    function updateLangButtons() {
-      document.querySelectorAll('.lang-btn').forEach(btn => {
-        const isActive = btn.getAttribute('data-lang') === currentLang;
-        btn.classList.toggle('active', isActive);
-        btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
-      });
-    }
-
-    // ============================================================================
-    // Light/Dark Theme Switcher
-
-
-    async function generateFlashcards() {
-      const topic = $('flashcard-topic').value.trim();
-      if (!topic) {
-        toast('Please enter a topic first', 'warn');
-        return;
+      loadLeitnerState();
+      updateLeitnerStats();
+      if (leitnerState.cards && leitnerState.cards.length > 0) {
+        const emptyEl = $('leitner-empty');
+        const viewEl = $('leitner-deck-view');
+        if (emptyEl) emptyEl.style.display = 'none';
+        if (viewEl) viewEl.style.display = 'block';
+        renderLeitnerCard();
       }
 
-      $('btn-generate-flashcards').disabled = true;
-      $('btn-generate-flashcards').innerHTML = '<span class="spinner"></span>';
-
-      const docId = window.selectedDocId || window.lastDocId;
-      const payload = {
-        topic: topic,
-        limit: 5,
-        doc_id: docId || null
-      };
-
-      const res = await call('/flashcards', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      $('btn-generate-flashcards').disabled = false;
-      $('btn-generate-flashcards').textContent = 'Generate AI';
-
-      if (!res.ok) {
-        toast('Failed to generate flashcards', 'error');
-        return;
+      if (window.mermaid) {
+        mermaid.initialize({
+          startOnLoad: false,
+          theme:
+            document.documentElement.getAttribute('data-theme') === 'dark'
+              ? 'dark'
+              : 'default',
+          securityLevel: 'loose',
+        });
       }
 
-      const newCards = res.body.flashcards;
-      if (newCards && newCards.length > 0) {
-        FLASHCARDS[currentLang] = newCards.map(c => ({ term: c.front, definition: c.back }));
-        flashState.index = 0;
-        flashState.flipped = false;
-        renderFlashcard();
-        toast('Flashcards generated!', 'success');
-      } else {
-        toast('No flashcards generated.', 'warn');
+      const fileInput = $('file');
+      if (fileInput) {
+        fileInput.addEventListener('change', (e) => {
+          const file = e.target.files[0];
+          if (file) {
+            doUpload(file);
+            e.target.value = '';
+          }
+        });
       }
-    }
 
-    document.addEventListener('DOMContentLoaded', () => {
-      applyI18n();
+      const dropZone = $('drop');
+      if (dropZone) {
+        dropZone.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          dropZone.classList.add('drag-over');
+        });
+        dropZone.addEventListener('dragleave', () => {
+          dropZone.classList.remove('drag-over');
+        });
+        dropZone.addEventListener('drop', (e) => {
+          e.preventDefault();
+          dropZone.classList.remove('drag-over');
+          const file = e.dataTransfer.files[0];
+          if (file) doUpload(file);
+        });
+      }
     });
   </script>
+</body>
+// ============================================================================
+// Boot
+// ============================================================================
+initLanguageControls();
+setLanguage(currentLang);
+
+// ============================================================================
+// I18N & Flashcard AI Generation
+// ============================================================================
+// ============================================================================
+// i18n
+// ============================================================================
+const I18N = {
+en: {
+pageTitle: 'StudyBot — AI Study Buddy',
+tagline: 'AI Study Buddy — upload notes, ask questions, get cited answers',
+statusLoading: 'Loading system status...',
+statusOffline: 'backend offline',
+statusTenant: 'tenant',
+statusLocal: 'local',
+statusRemote: 'remote',
+libraryTitle: 'Your Library',
+refresh: 'Refresh',
+libraryEmpty: 'No documents yet — upload one above.',
+uploadTitle: 'Upload a lecture',
+uploadMeta: 'PDF, TXT, or Markdown',
+uploadDragStrong: 'Drag a file here',
+uploadDragOr: 'or',
+uploadDragBrowse: 'click to browse',
+uploadHintPrefix: 'Max ~10MB. Try a Wikipedia article from ',
+uploadHintSuffix: '.',
+askTitle: 'Ask a question',
+askMeta: 'Grounded in your uploaded notes',
+questionPlaceholder: 'Ask your AI buddy about the uploaded notes...',
+askButton: 'Ask',
+practiceTitle: 'Practice Studio',
+practiceSubtitle: 'Quizzes and flashcards built from your notes',
+practicePill: 'New',
+quizTitle: 'Quiz Sprint',
+quizMeta: 'Tap through questions',
+quizDeck: 'Adaptive mini-quiz',
+quizPrev: 'Previous',
+quizReset: 'Reset',
+quizNext: 'Next',
+flashcardTitle: 'Flashcards',
+flashcardMeta: 'Flip to recall',
+flashcardDeck: 'Memory deck',
+flashcardTip: 'Space your review',
+flashcardPrev: 'Prev',
+flashcardFlip: 'Flip',
+flashcardNext: 'Next',
+debugSummary: 'Raw API responses (debug)',
+languageGroup: 'Language switcher',
+toggleThemeTitle: 'Toggle light/dark theme',
+themeSwitched: 'Switched to {mode} mode',
+themeLight: 'light',
+themeDark: 'dark',
+toastAskEmpty: 'Type a question first',
+fileTooLarge: 'File is too large ({size} MB). Maximum size allowed is {max}MB.',
+uploading: 'Uploading {filename} ({size} KB)...',
+uploadFailed: 'Upload failed: {detail}',
+uploadFailedShort: 'Upload failed',
+uploadSuccessChars: '{chars} chars extracted & indexed',
+uploadSuccessDoc: 'doc_id: {docId}',
+uploadedToast: 'Uploaded {filename}',
+welcomeMessage: 'Hello! I am your AI Study Buddy. Upload your lecture notes on the left, then ask me anything about
+them. I will research the content and give you answers with detailed citations.',
+labelYou: 'You',
+labelBot: 'StudyBot',
+errorQuery: 'Error occurred while querying the notes.',
+citationsTitle: 'Citations from your documents',
+citationChunk: 'chunk {chunk}',
+citationScore: 'score {score}',
+citationsNone: 'No citations matched.',
+docMeta: '{chars} chars · {size} KB',
+debugEmpty: 'No requests yet.',
+quizProgress: 'Question {index} of {total}',
+quizScore: 'Score {score}/{total}',
+quizCorrect: 'Correct',
+quizIncorrect: 'Incorrect',
+quizExplanation: 'Explanation',
+flashcardProgress: 'Card {index} of {total}',
+flashcardFrontLabel: 'Term',
+flashcardBackLabel: 'Definition',
+flashcardAria: 'Flip flashcard',
+flashcardTopicPlaceholder: 'Enter topic for AI...',
+flashcardEmptyFront: 'No cards yet',
+flashcardEmptyBack: 'Add one below',
+docSearchPlaceholder: '🔍 Search library...',
+docSearchLabel: 'Search documents',
+chunkingSummary: 'Chunking settings',
+chunkingStrategyLabel: 'Chunking strategy',
+chunkingStrategyFixed: 'Fixed-size (sentence-aware)',
+chunkingStrategyStructural: 'Structural (Markdown headers)',
+chunkingStrategySemantic: 'Local semantic (Jaccard)',
+chunkingSizeLabel: 'Chunk size (characters)',
+chunkingOverlapLabel: 'Overlap (characters)',
+chunkingThresholdLabel: 'Semantic distance threshold',
+uploadChunkPrefix: ' (using ',
+uploadChunkSuffix: ' chunking)',
+benchmarkTitle: 'RAG Quality Dashboard',
+benchmarkMeta: 'Evaluate chunking quality',
+benchmarkIntroPrefix: 'We automatically run ',
+benchmarkIntroStrong: '5 test questions',
+benchmarkIntroSuffix: ' about Photosynthesis, compare retrieved context with ground-truth keywords, and score retrieval
+accuracy. Adjust chunking in Step 1 and rerun to see accuracy changes in real time.',
+benchmarkRunButton: 'Run benchmark evaluation',
+benchmarkStatusRunning: 'Running benchmark evaluation...',
+benchmarkMetricsTitle: 'RAG quality metrics',
+benchmarkMetricP1: 'Top-1 accuracy',
+benchmarkMetricP3: 'Top-3 accuracy',
+benchmarkMetricP5: 'Top-5 accuracy',
+benchmarkMetricMrr: 'Mean reciprocal rank',
+benchmarkDetailsTitle: 'Retrieval details for 5 test questions',
+benchmarkNeedDoc: 'Please upload or select a document first.',
+benchmarkFailed: 'Evaluation failed: {detail}',
+benchmarkSuccess: 'Evaluation completed successfully.',
+benchmarkQuestionLabel: 'Q{index}: {query}',
+benchmarkTargetKeywords: 'Target keywords',
+benchmarkMrrLabel: 'MRR',
+benchmarkP3Label: 'P@3',
+benchmarkChunkLabel: 'Chunk {chunk} (Score: {score})',
+benchmarkRelevant: '✓ Relevant (match)',
+benchmarkIrrelevant: '✗ Irrelevant (no match)',
+docRecommended: 'Recommended',
+docActive: 'Active',
+docSelect: 'Select',
+docDelete: 'Delete',
+docDeleteTitle: 'Delete document',
+docSelectedToast: 'Selected document: {filename}',
+docDeleteConfirm: 'Are you sure you want to delete "{filename}"? This will delete the file from storage and clear its
+vector index.',
+docDeleteProgress: 'Deleting {filename}...',
+docDeleteFailed: 'Delete failed: {detail}',
+docDeleteSuccess: 'Deleted {filename}'
+},
+vi: {
+pageTitle: 'StudyBot — Trợ lý học tập AI',
+tagline: 'Trợ lý học tập AI — tải tài liệu, hỏi đáp, nhận câu trả lời kèm trích dẫn',
+statusLoading: 'Đang tải trạng thái hệ thống...',
+statusOffline: 'backend không hoạt động',
+statusTenant: 'tenant',
+statusLocal: 'cục bộ',
+statusRemote: 'từ xa',
+libraryTitle: 'Thư viện của bạn',
+refresh: 'Làm mới',
+libraryEmpty: 'Chưa có tài liệu — hãy tải lên ở trên.',
+uploadTitle: 'Tải bài giảng',
+uploadMeta: 'PDF, TXT, hoặc Markdown',
+uploadDragStrong: 'Kéo file vào đây',
+uploadDragOr: 'hoặc',
+uploadDragBrowse: 'bấm để chọn file',
+uploadHintPrefix: 'Tối đa ~10MB. Thử một bài Wikipedia trong ',
+uploadHintSuffix: '.',
+askTitle: 'Đặt câu hỏi',
+askMeta: 'Nền tảng từ ghi chú của bạn',
+questionPlaceholder: 'Hỏi trợ lý AI về nội dung vừa tải lên...',
+askButton: 'Hỏi',
+practiceTitle: 'Phòng luyện tập',
+practiceSubtitle: 'Quiz và flashcard từ ghi chú của bạn',
+practicePill: 'Mới',
+quizTitle: 'Quiz Tăng Tốc',
+quizMeta: 'Trả lời từng câu',
+quizDeck: 'Bộ quiz linh hoạt',
+quizPrev: 'Quay lại',
+quizReset: 'Làm lại',
+quizNext: 'Tiếp theo',
+flashcardTitle: 'Flashcard',
+flashcardMeta: 'Lật để nhớ',
+flashcardDeck: 'Bộ thẻ ghi nhớ',
+flashcardTip: 'Ôn lại theo chu kỳ',
+flashcardPrev: 'Trước',
+flashcardFlip: 'Lật thẻ',
+flashcardNext: 'Tiếp',
+debugSummary: 'Phản hồi API (debug)',
+languageGroup: 'Chọn ngôn ngữ',
+toggleThemeTitle: 'Chuyển giao diện sáng/tối',
+themeSwitched: 'Đã chuyển sang chế độ {mode}',
+themeLight: 'sáng',
+themeDark: 'tối',
+toastAskEmpty: 'Hãy nhập câu hỏi trước',
+fileTooLarge: 'File vượt quá dung lượng cho phép ({size} MB). Dung lượng tối đa là {max}MB.',
+uploading: 'Đang tải {filename} ({size} KB)...',
+uploadFailed: 'Tải lên thất bại: {detail}',
+uploadFailedShort: 'Tải lên thất bại',
+uploadSuccessChars: '{chars} ký tự đã được tách và lập chỉ mục',
+uploadSuccessDoc: 'doc_id: {docId}',
+uploadedToast: 'Đã tải {filename}',
+welcomeMessage: 'Xin chào! Tôi là trợ lý học tập AI. Hãy tải bài giảng ở bên trái, sau đó đặt bất kỳ câu hỏi nào. Tôi sẽ
+trả lời và trích dẫn chi tiết.',
+labelYou: 'Bạn',
+labelBot: 'StudyBot',
+errorQuery: 'Đã xảy ra lỗi khi truy vấn ghi chú.',
+citationsTitle: 'Trích dẫn từ tài liệu của bạn',
+citationChunk: 'phần {chunk}',
+citationScore: 'điểm {score}',
+citationsNone: 'Không tìm thấy trích dẫn phù hợp.',
+docMeta: '{chars} ký tự · {size} KB',
+debugEmpty: 'Chưa có yêu cầu nào.',
+quizProgress: 'Câu {index} / {total}',
+quizScore: 'Điểm {score}/{total}',
+quizCorrect: 'Đúng',
+quizIncorrect: 'Sai',
+quizExplanation: 'Giải thích',
+flashcardProgress: 'Thẻ {index} / {total}',
+flashcardFrontLabel: 'Khái niệm',
+flashcardBackLabel: 'Định nghĩa',
+flashcardAria: 'Lật flashcard',
+flashcardTopicPlaceholder: 'Nhập chủ đề cho AI...',
+flashcardEmptyFront: 'Chưa có thẻ nào',
+flashcardEmptyBack: 'Hãy thêm thẻ mới',
+docSearchPlaceholder: '🔍 Tìm tài liệu...',
+docSearchLabel: 'Tìm kiếm tài liệu',
+chunkingSummary: 'Cấu hình tách',
+chunkingStrategyLabel: 'Chiến lược chunking',
+chunkingStrategyFixed: 'Kích thước cố định (theo câu)',
+chunkingStrategyStructural: 'Cấu trúc (tiêu đề Markdown)',
+chunkingStrategySemantic: 'Ngữ nghĩa cục bộ (Jaccard)',
+chunkingSizeLabel: 'Kích thước chunk (ký tự)',
+chunkingOverlapLabel: 'Overlap gối đầu (ký tự)',
+chunkingThresholdLabel: 'Ngưỡng khoảng cách ngữ nghĩa',
+uploadChunkPrefix: ' (dùng ',
+uploadChunkSuffix: ' chunking)',
+benchmarkTitle: 'Bảng chất lượng RAG',
+benchmarkMeta: 'Đánh giá chất lượng tách',
+benchmarkIntroPrefix: 'Hệ thống tự động chạy ',
+benchmarkIntroStrong: '5 câu hỏi kiểm thử',
+benchmarkIntroSuffix: ' về quang hợp, đối chiếu ngữ cảnh truy xuất với từ khóa chuẩn để chấm độ chính xác. Hãy chỉnh cấu
+hình tách ở Bước 1 và chạy lại để xem độ chính xác thay đổi theo thời gian thực.',
+benchmarkRunButton: 'Chạy đánh giá benchmark',
+benchmarkStatusRunning: 'Đang chạy đánh giá benchmark...',
+benchmarkMetricsTitle: 'Chỉ số chất lượng RAG',
+benchmarkMetricP1: 'Độ chính xác top-1',
+benchmarkMetricP3: 'Độ chính xác top-3',
+benchmarkMetricP5: 'Độ chính xác top-5',
+benchmarkMetricMrr: 'Thứ hạng trung bình',
+benchmarkDetailsTitle: 'Chi tiết truy xuất 5 câu hỏi kiểm thử',
+benchmarkNeedDoc: 'Vui lòng tải lên hoặc chọn tài liệu trước.',
+benchmarkFailed: 'Đánh giá thất bại: {detail}',
+benchmarkSuccess: 'Đánh giá hoàn tất.',
+benchmarkQuestionLabel: 'Câu {index}: {query}',
+benchmarkTargetKeywords: 'Từ khóa mục tiêu',
+benchmarkMrrLabel: 'MRR',
+benchmarkP3Label: 'P@3',
+benchmarkChunkLabel: 'Chunk {chunk} (Điểm: {score})',
+benchmarkRelevant: '✓ Phù hợp (khớp)',
+benchmarkIrrelevant: '✗ Không phù hợp (không khớp)',
+docRecommended: 'Nên dùng',
+docActive: 'Đang chọn',
+docSelect: 'Chọn',
+docDelete: 'Xóa',
+docDeleteTitle: 'Xóa tài liệu',
+docSelectedToast: 'Đã chọn tài liệu: {filename}',
+docDeleteConfirm: 'Bạn chắc chắn muốn xóa "{filename}"? Thao tác này sẽ xóa file khỏi bộ nhớ và làm sạch chỉ mục
+vector.',
+docDeleteProgress: 'Đang xóa {filename}...',
+docDeleteFailed: 'Xóa thất bại: {detail}',
+docDeleteSuccess: 'Đã xóa {filename}'
+}
+};
+
+let currentLang = document.documentElement.getAttribute('data-lang') || 'en';
+
+function t(key, vars = {}) {
+const dict = I18N[currentLang] || I18N.en;
+let str = dict[key] || I18N.en[key] || key;
+Object.keys(vars).forEach(k => {
+str = str.replace(new RegExp(`\\{${k}\\}`, 'g'), vars[k]);
+});
+return str;
+}
+
+function applyI18n() {
+document.documentElement.lang = currentLang;
+document.documentElement.setAttribute('data-lang', currentLang);
+document.title = t('pageTitle');
+
+document.querySelectorAll('[data-i18n]').forEach(el => {
+const key = el.getAttribute('data-i18n');
+el.textContent = t(key);
+});
+
+document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+const key = el.getAttribute('data-i18n-placeholder');
+el.setAttribute('placeholder', t(key));
+});
+
+document.querySelectorAll('[data-i18n-title]').forEach(el => {
+const key = el.getAttribute('data-i18n-title');
+el.setAttribute('title', t(key));
+});
+
+document.querySelectorAll('[data-i18n-aria]').forEach(el => {
+const key = el.getAttribute('data-i18n-aria');
+el.setAttribute('aria-label', t(key));
+});
+
+const debugLog = $('debug-log');
+if (debugLog && debugLog.getAttribute('data-empty') === 'true') {
+debugLog.textContent = t('debugEmpty');
+}
+}
+
+function setLanguage(lang) {
+currentLang = I18N[lang] ? lang : 'en';
+localStorage.setItem('studybot-lang', currentLang);
+applyI18n();
+updateLangButtons();
+renderWelcomeMessage();
+loadStatus();
+refresh();
+initQuiz();
+flashState.index = 0;
+flashState.flipped = false;
+renderFlashcard();
+}
+
+function updateLangButtons() {
+document.querySelectorAll('.lang-btn').forEach(btn => {
+const isActive = btn.getAttribute('data-lang') === currentLang;
+btn.classList.toggle('active', isActive);
+btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+});
+}
+
+// ============================================================================
+// Light/Dark Theme Switcher
+
+
+async function generateFlashcards() {
+const topic = $('flashcard-topic').value.trim();
+if (!topic) {
+toast('Please enter a topic first', 'warn');
+return;
+}
+
+$('btn-generate-flashcards').disabled = true;
+$('btn-generate-flashcards').innerHTML = '<span class="spinner"></span>';
+
+const docId = window.selectedDocId || window.lastDocId;
+const payload = {
+topic: topic,
+limit: 5,
+doc_id: docId || null
+};
+
+const res = await call('/flashcards', {
+method: 'POST',
+headers: { 'Content-Type': 'application/json' },
+body: JSON.stringify(payload)
+});
+
+$('btn-generate-flashcards').disabled = false;
+$('btn-generate-flashcards').textContent = 'Generate AI';
+
+if (!res.ok) {
+toast('Failed to generate flashcards', 'error');
+return;
+}
+
+const newCards = res.body.flashcards;
+if (newCards && newCards.length > 0) {
+FLASHCARDS[currentLang] = newCards.map(c => ({ term: c.front, definition: c.back }));
+flashState.index = 0;
+flashState.flipped = false;
+renderFlashcard();
+toast('Flashcards generated!', 'success');
+} else {
+toast('No flashcards generated.', 'warn');
+}
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+applyI18n();
+});
+</script>
 </body>
 
 </html>

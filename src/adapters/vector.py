@@ -23,10 +23,17 @@ class BedrockKBVector:
 
     def __init__(self, kb_id: str, region: str):
         import boto3
+        from botocore.config import Config
         if not kb_id:
             raise ValueError("VECTOR_BEDROCK_KB_ID must be set for Bedrock KB backend")
         self.kb_id = kb_id
-        self.agent_runtime = boto3.client("bedrock-agent-runtime", region_name=region)
+        # Use short connect (2.0s) and read (4.0s) timeouts to avoid hanging Lambda
+        config_boto = Config(
+            connect_timeout=2.0,
+            read_timeout=4.0,
+            retries={"max_attempts": 1}
+        )
+        self.agent_runtime = boto3.client("bedrock-agent-runtime", region_name=region, config=config_boto)
 
     def ingest(self, doc_id: str, text: str, metadata: Optional[dict] = None, **kwargs) -> None:
         # Ingestion is typically S3-event driven. Trigger a manual sync if needed
@@ -144,7 +151,32 @@ class LocalVector:
         for i, chunk in enumerate(chunks):
             self.docs.append((f"{doc_id}#{i}", chunk, {**md, "doc_id": doc_id, "chunk_idx": i}))
 
+    def _seed_default_document(self, user_id: str) -> None:
+        default_text = (
+            "Photosynthesis is the process used by plants, algae and certain bacteria to convert light energy into chemical energy. "
+            "Photosynthesis occurs in chloroplasts, which contain chlorophyll pigments that absorb light wavelengths. "
+            "The light-dependent phase occurs in the thylakoid membrane where light reactions split water molecules, releasing oxygen as a byproduct. "
+            "ATP and NADPH are synthesized to power the Calvin Cycle. "
+            "The light-independent phase, also known as the Calvin Cycle, occurs in the stroma where carbon dioxide fixation takes place. "
+            "Sugars are produced during the Calvin Cycle to store chemical energy. "
+            "Some exceptions exist in parasitic plants that do not perform photosynthesis."
+        )
+        self.ingest(
+            doc_id="default-photosynthesis-doc",
+            text=default_text,
+            metadata={
+                "user_id": user_id,
+                "filename": "Photosynthesis_Overview.txt",
+                "extraction_strategy": "plain_text",
+                "asset_prefix": ""
+            }
+        )
+
     def search(self, query: str, top_k: int = 5, filter: Optional[dict] = None) -> list:
+        user_id = filter.get("user_id") if filter else "test-user-001"
+        if not self.docs:
+            self._seed_default_document(user_id)
+
         q_tokens = set(self._tokens(query))
         results = []
         for chunk_id, text, md in self.docs:

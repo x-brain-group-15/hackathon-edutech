@@ -17,13 +17,24 @@ def _env(name: str, default: str = "") -> str:
 class Config:
     # AI
     ai_backend: str = _env("AI_BACKEND", "local")
-    ai_model_id: str = _env("AI_MODEL_ID", "anthropic.claude-3-5-haiku-20241022-v1:0")
+    ai_model_id: str = _env("AI_MODEL_ID", "apac.anthropic.claude-3-5-sonnet-20240620-v1:0")
+    ai_model_fallbacks: str = _env(
+        "AI_MODEL_FALLBACKS",
+        "anthropic.claude-sonnet-4-5-20250929-v1:0,"
+        "amazon.nova-2-lite-v1:0,"
+        "amazon.nova-lite-v1:0,"
+        "anthropic.claude-haiku-4-5-20251001-v1:0,"
+        "anthropic.claude-sonnet-4-6,"
+        "amazon.nova-pro-v1:0,"
+        "anthropic.claude-3-haiku-20240307-v1:0"
+    )
     aws_region: str = _env("AWS_REGION", "ap-southeast-1")
 
     # Storage
     storage_backend: str = _env("STORAGE_BACKEND", "local")
     storage_bucket: str = _env("STORAGE_BUCKET", "")
     storage_local_dir: str = _env("STORAGE_LOCAL_DIR", "./_data/uploads")
+    flashcard_bucket: str = _env("FLASHCARD_BUCKET", "")
 
     # UserStore
     userstore_backend: str = _env("USERSTORE_BACKEND", "sqlite")

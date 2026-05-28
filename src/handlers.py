@@ -1,8 +1,11 @@
-﻿"""Endpoint handlers. Pure business logic — knows nothing about FastAPI or AWS specifics."""
+"""Endpoint handlers. Pure business logic — knows nothing about FastAPI or AWS specifics."""
 import uuid
 import json
 import time
 import logging
+import re
+import hashlib
+import random
 import traceback
 from typing import Optional
 
@@ -50,6 +53,121 @@ CONTEXT:
 {context}
 """
 
+SOCRATIC_PROMPT = """You are a Socratic tutor assisting a student based on their lecture notes.
+Your goal is to guide the student to discover the answer themselves through thought-provoking leading questions, rather than giving the answer directly.
+
+Guidelines:
+1. NEVER give the direct answer to the student's question.
+2. Formulate your response as a gentle, encouraging question or series of short prompts that guide their logic based ONLY on the provided context.
+3. Be supportive, friendly, and act like a wise professor.
+4. Keep your responses relatively short (under 4 sentences).
+
+Context from lecture notes:
+{context}
+
+Student's Question: {question}
+
+Response:"""
+
+MINDMAP_PROMPT = """You are a study assistant. Analyze the provided lecture notes and generate an interactive mind-map of the core concepts in the Mermaid.js `mindmap` diagram format.
+
+Guidelines:
+1. Start your response EXACTLY with `mindmap` (no header, no other text).
+2. Use valid Mermaid.js `mindmap` syntax. Example syntax:
+mindmap
+  root((Photosynthesis))
+    Light Reactions
+      Inputs
+        Water
+        Light
+      Outputs
+        Oxygen
+        ATP
+        NADPH
+    Calvin Cycle
+      Inputs
+        CO2
+        ATP
+        NADPH
+      Outputs
+        G3P Sugar
+3. Do NOT use any special characters like parentheses, brackets, or quotes in node names unless escaped. Keep node names short (1-4 words).
+4. Focus on the most important testable concepts and structural connections in the lecture notes.
+5. Return ONLY the raw code block starting with `mindmap` and ending with the final node. Do NOT wrap it in markdown code blocks like ```mermaid. Just output the raw mermaid code directly.
+
+LECTURE NOTES:
+{context}
+"""
+
+CORNELL_PROMPT = """You are a study assistant. Analyze the provided lecture notes and generate a highly structured study guide in the prestigious Cornell Note-taking format.
+
+Your response must be returned strictly as a JSON object with the following three fields:
+1. "cues": a list of objects, each containing "keyword" (a key question, formula, or cue term) and "association" (what section or concept it points to). Generate at least 5 cues.
+2. "notes": a list of detailed, structured study points (bullet points, structured facts, definitions, or equations) matching the cues on the left. Generate at least 5 points.
+3. "summary": a concise, 2-3 sentence summary summarizing the absolute core takeaway of the entire lecture.
+
+Return the output STRICTLY as a raw JSON object. Do NOT wrap it in markdown code blocks or add any text before or after the JSON.
+
+LECTURE NOTES:
+{context}
+"""
+
+QUIZ_PROMPT = """You are a practice quiz generator for a student.
+Create exactly {num_questions} multiple-choice questions from ONLY the lecture-note context below.
+
+Return STRICTLY a raw JSON array. Do not include markdown fences, labels, commentary, or text before or after the JSON.
+Each array item must match this schema:
+{{
+  "id": "short-stable-id",
+  "question": "question text",
+  "options": ["option A", "option B", "option C", "option D"],
+  "correct_answer": "the exact option text that is correct",
+  "explanation": "brief explanation grounded in the context"
+}}
+
+Rules:
+- Use 4 options per question.
+- Exactly one option must match correct_answer.
+- Do not invent facts outside the context.
+- Keep questions clear and testable.
+
+LECTURE-NOTE CONTEXT:
+{context}
+"""
+
+CHUNK_SUMMARY_PROMPT = """You are a study assistant. Read the following excerpt from a lecture document and extract the key knowledge points.
+
+Return a concise bullet-point summary of the most important facts, definitions, and concepts in this excerpt. Be specific and factual. Do not add information not present in the text.
+
+EXCERPT:
+{chunk}
+
+KEY POINTS:"""
+
+QUIZ_FROM_SUMMARY_PROMPT = """You are a practice quiz generator for a student.
+Create exactly {num_questions} multiple-choice questions based ONLY on the summarized lecture notes below.
+
+Return STRICTLY a raw JSON array. Do not include markdown fences, labels, commentary, or text before or after the JSON.
+Each array item must match this schema:
+{{
+  "id": "short-stable-id",
+  "question": "question text",
+  "options": ["option A", "option B", "option C", "option D"],
+  "correct_answer": "the exact option text that is correct",
+  "explanation": "brief explanation grounded in the notes"
+}}
+
+Rules:
+- Use 4 options per question.
+- Exactly one option must match correct_answer.
+- Do not invent facts outside the notes.
+- Keep questions clear and testable.
+- Spread questions across different topics in the notes.
+
+SUMMARIZED LECTURE NOTES:
+{context}
+"""
+
 def _put_cloudwatch_metric(metric_name: str, value: float, unit: str, aws_region: str, status: str = "Success"):
     """Real-world scenario: Put custom metrics to CloudWatch to monitor AI operations."""
     try:
@@ -86,6 +204,49 @@ def _extract_text(filename: str, data: bytes) -> str:
         return data.decode("utf-8", errors="replace")
     except Exception:
         return ""
+
+
+def _get_document_text(user_id: str, doc_id: str, filename: str, storage) -> str:
+    """Helper to fetch document text. First attempts to read pre-extracted plain text
+    from S3 (highly optimized, low-memory), falling back to raw PDF/txt parsing if absent.
+    """
+    # 1. Try to fetch already-extracted plain text from S3 (highly optimized)
+    try:
+        txt_key = f"{user_id}/{doc_id}/extracted_text.txt"
+        txt_data = storage.get(txt_key)
+        return txt_data.decode("utf-8", errors="replace")
+    except Exception:
+        pass
+
+    # 2. Fall back to parsing the raw file if extracted_text.txt doesn't exist
+    if filename and filename != "unknown":
+        try:
+            key = f"{user_id}/{doc_id}/{filename}"
+            data = storage.get(key)
+            return _extract_text(filename, data)
+        except Exception as e:
+            print(f"Error getting document text for doc_id {doc_id}: {e}")
+
+    # 3. Scan the folder for any usable file (handles missing/unknown filename)
+    try:
+        prefix = f"{user_id}/{doc_id}/"
+        keys = storage.list(prefix)
+        for key in keys:
+            fname = key.split("/")[-1]
+            if fname.endswith(".metadata.json") or fname == "extracted_text.txt":
+                continue
+            try:
+                data = storage.get(key)
+                text = _extract_text(fname, data)
+                if text.strip():
+                    return text
+            except Exception:
+                continue
+    except Exception as e:
+        print(f"Error scanning folder for doc_id {doc_id}: {e}")
+
+    return ""
+
 
 def handle_upload(
     user_id: str,
@@ -139,6 +300,12 @@ def handle_upload(
         else:
             text = _extract_text(filename, data)
         log_step("upload", "extract_text_done", user_id=user_id, doc_id=doc_id, filename=filename, chars_extracted=len(text))
+
+        # Save pre-extracted plain text to S3 for lightning-fast, OOM-free future retrieval by other features
+        try:
+            storage.put(f"{user_id}/{doc_id}/extracted_text.txt", text.encode("utf-8"))
+        except Exception as text_save_err:
+            log_step("upload", "save_extracted_text_failed", error=str(text_save_err))
 
         if text.strip():
             log_step("upload", "vector_ingest_start", user_id=user_id, doc_id=doc_id, filename=filename, strategy=strategy or "default")
@@ -238,6 +405,7 @@ def handle_query(
     vector_store,
     vector_backend: str,
     bedrock_kb_id: str,
+    socratic: bool = False,
 ) -> dict:
     """RAG flow: retrieve user's relevant chunks → call AI with context → log + return."""
 
@@ -248,10 +416,101 @@ def handle_query(
         "query_received",
         user_id=user_id,
         question=question,
-        vector_backend=vector_backend
+        vector_backend=vector_backend,
+        socratic=socratic
     )
 
     try:
+        if socratic:
+            log_step(
+                "rag_query",
+                "socratic_mode_start",
+                user_id=user_id
+            )
+            
+            # Retrieve chunks
+            chunks = []
+            if vector_backend == "bedrock_kb":
+                log_step(
+                    "rag_query",
+                    "bedrock_retrieve_start",
+                    user_id=user_id,
+                    kb_id=bedrock_kb_id
+                )
+                try:
+                    ret_res = ai_client.agent_runtime.retrieve(
+                        knowledgeBaseId=bedrock_kb_id,
+                        retrievalQuery={"text": question},
+                        retrievalConfiguration={
+                            "vectorSearchConfiguration": {
+                                "numberOfResults": 5
+                            }
+                        }
+                    )
+                    for i, r in enumerate(ret_res.get("retrievalResults", [])):
+                        chunks.append({
+                            "text": r["content"]["text"],
+                            "chunk": i + 1,
+                            "score": r.get("score", 0),
+                        })
+                except Exception as e:
+                    logger.warning(f"Bedrock KB retrieve failed, falling back to local vector: {e}")
+                    try:
+                        from src.adapters.factory import _local_vector_singleton
+                        if _local_vector_singleton:
+                            chunks = _local_vector_singleton.search(
+                                question,
+                                top_k=5,
+                                filter={"user_id": user_id}
+                            )
+                    except Exception as le:
+                        logger.warning(f"Local vector fallback failed: {le}")
+            else:
+                try:
+                    chunks = vector_store.search(
+                        question,
+                        top_k=5,
+                        filter={"user_id": user_id}
+                    )
+                except Exception as e:
+                    logger.warning(f"Local vector search failed: {e}")
+
+            if not chunks:
+                prompt = SOCRATIC_PROMPT.format(
+                    context="",
+                    question=question
+                )
+                answer = ai_client.invoke(prompt, max_tokens=512)
+                citations = []
+            else:
+                context = "\n\n".join(
+                    f"[chunk {c.get('chunk', i+1)}] {c['text']}"
+                    for i, c in enumerate(chunks)
+                )
+                prompt = SOCRATIC_PROMPT.format(
+                    context=context,
+                    question=question
+                )
+                answer = ai_client.invoke(prompt, max_tokens=512)
+                
+                citations = []
+                for c in chunks:
+                    citations.append({
+                        "chunk": c.get("chunk", 1),
+                        "score": c.get("score", 1.0),
+                        "text": c["text"],
+                    })
+
+            latency_ms = int((time.time() - start_time) * 1000)
+            _put_cloudwatch_metric("SocraticQueryLatency", latency_ms, "Milliseconds", "ap-southeast-1", "Success")
+            
+            try:
+                userstore.log_query(user_id, question, answer, doc_id=None)
+            except Exception:
+                pass
+
+            return {"answer": answer, "citations": citations}
+
         if vector_backend == "bedrock_kb":
             log_step(
                 "rag_query",
@@ -300,10 +559,14 @@ def handle_query(
             )
 
             if not chunks:
-                answer = "No relevant content found in your uploaded documents. Upload some first."
+                prompt = PROMPT_TEMPLATE.format(
+                    context="",
+                    question=question
+                )
+                answer = ai_client.invoke(prompt, max_tokens=512)
                 citations = []
-                input_tokens = 0
-                output_tokens = 0
+                input_tokens = len(prompt.split())
+                output_tokens = len(answer.split())
 
                 log_step(
                     "rag_query",
@@ -473,6 +736,469 @@ def handle_recent_queries(user_id: str, userstore, limit: int = 10) -> dict:
     return {"user_id": user_id, "queries": queries}
 
 
+def _clean_json_response(response: str) -> str:
+    clean_json = response.strip()
+    if clean_json.startswith("```json"):
+        clean_json = clean_json[7:]
+    elif clean_json.startswith("```"):
+        clean_json = clean_json[3:]
+    if clean_json.endswith("```"):
+        clean_json = clean_json[:-3]
+    return clean_json.strip()
+
+
+def _normalize_quiz_items(raw_items, num_questions: int) -> list[dict]:
+    if not isinstance(raw_items, list):
+        raise ValueError("Quiz model response must be a JSON array")
+
+    normalized = []
+    for index, item in enumerate(raw_items[:num_questions], start=1):
+        if not isinstance(item, dict):
+            continue
+
+        options = item.get("options") or []
+        if not isinstance(options, list):
+            continue
+        options = [str(option).strip() for option in options if str(option).strip()]
+        if len(options) < 2:
+            continue
+
+        correct_answer = item.get("correct_answer", item.get("answer"))
+        if isinstance(correct_answer, int):
+            correct_answer = options[correct_answer] if 0 <= correct_answer < len(options) else ""
+        correct_answer = str(correct_answer or "").strip()
+        if correct_answer not in options:
+            continue
+
+        options = _randomize_options(options, correct_answer)
+
+        normalized.append({
+            "id": str(item.get("id") or f"q{index}"),
+            "question": str(item.get("question") or "").strip(),
+            "options": options,
+            "correct_answer": correct_answer,
+            "explanation": str(item.get("explanation") or "").strip(),
+        })
+
+    if not normalized:
+        raise ValueError("Quiz model response did not contain valid quiz items")
+    return _avoid_all_correct_answers_at_a(normalized)
+
+
+def _is_bedrock_fallback_error(exc: Exception) -> bool:
+    message = str(exc)
+    return (
+        "ThrottlingException" in message
+        or "Too many tokens per day" in message
+        or "Too many requests" in message
+        or "rate exceeded" in message.lower()
+        or "NoCredentialsError" in message
+        or "Unable to locate credentials" in message
+        or "ExpiredToken" in message
+        or "UnrecognizedClientException" in message
+    )
+
+
+def _hash_int(value: str) -> int:
+    return int(hashlib.sha256(value.encode("utf-8")).hexdigest()[:12], 16)
+
+
+def _randomize_options(options: list[str], correct_answer: str) -> list[str]:
+    clean_options = _dedupe_preserve_order(options)
+    distractors = [option for option in clean_options if option != correct_answer]
+    selected = [correct_answer, *distractors[:3]]
+    random.SystemRandom().shuffle(selected)
+    return selected
+
+
+def _avoid_all_correct_answers_at_a(quiz_items: list[dict]) -> list[dict]:
+    if len(quiz_items) < 2:
+        return quiz_items
+    if any(item["options"].index(item["correct_answer"]) != 0 for item in quiz_items):
+        return quiz_items
+
+    for offset, item in enumerate(quiz_items[1:], start=1):
+        options = item["options"]
+        if len(options) > 1:
+            target_index = offset % len(options)
+            options[0], options[target_index] = options[target_index], options[0]
+    return quiz_items
+
+
+def _dedupe_preserve_order(items: list[str]) -> list[str]:
+    seen = set()
+    result = []
+    for item in items:
+        clean = re.sub(r"\s+", " ", item).strip()
+        if not clean:
+            continue
+        key = clean.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(clean)
+    return result
+
+
+def _is_clean_quiz_text(text: str) -> bool:
+    stripped = text.strip()
+    if not stripped:
+        return False
+    blocked_patterns = ("{|", "|-", "||", "cellspacing=", "style=", "_url:", "_source:")
+    if any(pattern in stripped.lower() for pattern in blocked_patterns):
+        return False
+    if sum(1 for char in stripped if char == "|") >= 2:
+        return False
+    return True
+
+
+def _deterministic_shuffle(items: list[str], seed: str) -> list[str]:
+    return sorted(items, key=lambda item: _hash_int(f"{seed}:{item}"))
+
+
+def _spread_select(items: list, limit: int) -> list:
+    if len(items) <= limit:
+        return items
+    selected = []
+    for i in range(limit):
+        idx = round(i * (len(items) - 1) / max(limit - 1, 1))
+        selected.append(items[idx])
+    return selected
+
+
+def _make_options(correct: str, distractor_pool: list[str], seed: str) -> list[str]:
+    distractors = [
+        item for item in _dedupe_preserve_order(distractor_pool)
+        if item.lower() != correct.lower() and _is_clean_quiz_text(item)
+    ]
+    distractors = _deterministic_shuffle(distractors, seed)[:3]
+    generic_distractors = [
+        "It is not the best match for the selected notes.",
+        "It describes an unrelated concept.",
+        "It reverses the relationship described in the notes.",
+        "It is only a formatting detail, not the core idea.",
+    ]
+    for item in generic_distractors:
+        if len(distractors) >= 3:
+            break
+        if item.lower() != correct.lower() and item not in distractors:
+            distractors.append(item)
+
+    return _randomize_options([correct, *distractors[:3]], correct)
+
+
+def _extract_quiz_facts(chunks: list[dict]) -> tuple[list[dict], list[str]]:
+    raw_text = "\n".join(chunk.get("text", "") for chunk in chunks)
+    lines = [re.sub(r"\s+", " ", line).strip() for line in raw_text.splitlines()]
+    lines = [line for line in lines if line and _is_clean_quiz_text(line)]
+    sentences = [
+        re.sub(r"\s+", " ", sentence).strip()
+        for sentence in re.split(r"(?<=[.!?])\s+", raw_text)
+        if 35 <= len(sentence.strip()) <= 260 and _is_clean_quiz_text(sentence)
+    ]
+
+    facts = []
+
+    for line in lines:
+        match = re.match(r"^[-*]?\s*([^:|]{2,60}):\s+(.{12,220})$", line)
+        if match:
+            term = match.group(1).strip(" -_*")
+            description = match.group(2).strip(" -_*")
+            if not term.lower().startswith(("http", "source", "url")):
+                facts.append({
+                    "kind": "definition",
+                    "topic": term,
+                    "answer": description,
+                    "question": f"In the selected notes, what does '{term}' refer to?",
+                    "source": line,
+                })
+
+    for sentence in sentences:
+        match = re.match(r"^([A-Z][A-Za-z0-9 /()'\\-]{2,70})\s+(is|are|means|refers to)\s+(.{15,180})$", sentence)
+        if match:
+            topic = match.group(1).strip()
+            answer = sentence.rstrip(".")
+            facts.append({
+                "kind": "concept",
+                "topic": topic,
+                "answer": answer,
+                "question": f"What is the best description of {topic}?",
+                "source": sentence,
+            })
+
+    for sentence in sentences:
+        lowered = sentence.lower()
+        if any(marker in lowered for marker in (" used ", " uses ", " occurs ", " includes ", " produces ", " converts ", " solves ")):
+            topic_match = re.match(r"^(.{3,70}?)(?:\s+is|\s+are|\s+uses|\s+used|\s+occurs|\s+includes|\s+produces|\s+converts|\s+solves)\b", sentence)
+            topic = topic_match.group(1).strip(" .:-") if topic_match else "this concept"
+            facts.append({
+                "kind": "relationship",
+                "topic": topic,
+                "answer": sentence.rstrip("."),
+                "question": f"Which statement best matches the notes about {topic}?",
+                "source": sentence,
+            })
+
+    for sentence in sentences:
+        if sentence not in [fact["answer"] for fact in facts]:
+            keyword = sentence.split(" ", 5)[:5]
+            topic = " ".join(keyword).strip(" .:-")
+            facts.append({
+                "kind": "fact",
+                "topic": topic or "the selected notes",
+                "answer": sentence.rstrip("."),
+                "question": f"Which statement is supported by the selected notes about {topic}?",
+                "source": sentence,
+            })
+
+    facts = [
+        fact for fact in facts
+        if 10 <= len(fact["answer"]) <= 220
+        and len(fact["question"]) <= 180
+        and _is_clean_quiz_text(fact["answer"])
+    ]
+    seen_answers = set()
+    unique_facts = []
+    for fact in facts:
+        key = fact["answer"].lower()
+        if key in seen_answers:
+            continue
+        seen_answers.add(key)
+        unique_facts.append(fact)
+
+    distractor_pool = [fact["answer"] for fact in unique_facts] + sentences
+    return unique_facts, _dedupe_preserve_order(distractor_pool)
+
+
+def _fallback_quiz_from_chunks(chunks: list[dict], num_questions: int) -> list[dict]:
+    facts, distractor_pool = _extract_quiz_facts(chunks)
+    selected_facts = _spread_select(facts, num_questions)
+
+    fallback_items = []
+    for index, fact in enumerate(selected_facts, start=1):
+        correct_answer = fact["answer"][:180].rstrip()
+        seed = f"{index}:{fact['question']}:{correct_answer}"
+        options = _make_options(correct_answer, distractor_pool, seed)
+
+        fallback_items.append({
+            "id": f"fallback-q{index}",
+            "question": fact["question"],
+            "options": options,
+            "correct_answer": correct_answer,
+            "explanation": f"Based on the selected notes: {fact['source'][:220]}",
+        })
+
+    if not fallback_items:
+        raise ValueError("Quiz fallback could not find enough document text to generate questions")
+    return _avoid_all_correct_answers_at_a(fallback_items)
+
+
+def handle_generate_quiz(
+    user_id: str,
+    num_questions: int,
+    doc_id: Optional[str],
+    vector_store,
+    ai_client,
+    userstore,
+    storage=None,
+) -> list[dict]:
+    start_time = time.time()
+    num_questions = max(1, min(num_questions, 20))
+
+    # Resolve filename from userstore when doc_id is provided
+    filename = None
+    if doc_id and userstore:
+        docs = userstore.list_docs(user_id)
+        doc = next((d for d in docs if d.get("doc_id") == doc_id), None)
+        if doc:
+            filename = doc.get("filename", "unknown")
+
+    # Step 1: Fetch document text from S3
+    context = ""
+    if doc_id and storage is not None:
+        log_step("generate_quiz", "s3_fetch_start", user_id=user_id, doc_id=doc_id, filename=filename)
+        try:
+            if filename:
+                context = _get_document_text(user_id, doc_id, filename, storage)
+            else:
+                # filename unknown — try extracted_text.txt directly, then scan the folder
+                try:
+                    txt_data = storage.get(f"{user_id}/{doc_id}/extracted_text.txt")
+                    context = txt_data.decode("utf-8", errors="replace")
+                except Exception:
+                    pass
+                if not context.strip():
+                    # Scan folder for any file and try to extract text from it
+                    prefix = f"{user_id}/{doc_id}/"
+                    keys = storage.list(prefix)
+                    for key in keys:
+                        fname = key.split("/")[-1]
+                        if fname.endswith(".metadata.json") or fname == "extracted_text.txt":
+                            continue
+                        try:
+                            data = storage.get(key)
+                            context = _extract_text(fname, data)
+                            if context.strip():
+                                break
+                        except Exception:
+                            continue
+            log_step("generate_quiz", "s3_fetch_done", user_id=user_id, doc_id=doc_id, chars=len(context))
+        except Exception as e:
+            log_step("generate_quiz", "s3_fetch_failed", user_id=user_id, doc_id=doc_id, error=str(e))
+            logger.warning(f"Quiz S3 fetch failed for {doc_id}: {e}")
+
+    if not context.strip():
+        # Fallback: try to reconstruct context from vector_store if available (important for offline tests/local mode)
+        if hasattr(vector_store, "docs") and vector_store.docs:
+            local_doc_chunks = []
+            for chunk_id, text, metadata in vector_store.docs:
+                if metadata.get("user_id") == user_id and (not doc_id or metadata.get("doc_id") == doc_id):
+                    local_doc_chunks.append(text)
+            if local_doc_chunks:
+                context = "\n\n".join(local_doc_chunks)
+
+    if not context.strip():
+        log_step("generate_quiz", "no_content", user_id=user_id, doc_id=doc_id)
+        raise ValueError("No document content found. Upload a document before generating a quiz.")
+
+    # Step 2: Chunk the document using semantic chunking (best for topic-aware splitting)
+    from src.chunker import chunk_semantic, chunk_fixed
+    log_step("generate_quiz", "chunking_start", user_id=user_id, doc_id=doc_id, chars=len(context))
+    chunks = chunk_semantic(context, threshold=0.25)
+    # If semantic chunking produces too few or too many chunks, fall back to fixed
+    if len(chunks) < 2 or len(chunks) > 50:
+        chunks = chunk_fixed(context, size=800, overlap=100)
+    log_step("generate_quiz", "chunking_done", user_id=user_id, doc_id=doc_id, num_chunks=len(chunks))
+
+    # Step 3 (Map): Summarize each chunk into bullet-point key knowledge
+    log_step("generate_quiz", "map_summarize_start", user_id=user_id, doc_id=doc_id, num_chunks=len(chunks))
+    summaries = []
+    for i, chunk in enumerate(chunks):
+        if not chunk.strip():
+            continue
+        try:
+            prompt = CHUNK_SUMMARY_PROMPT.format(chunk=chunk)
+            summary = ai_client.invoke(prompt, max_tokens=512, temperature=0.1)
+            summaries.append(summary.strip())
+            log_step("generate_quiz", "chunk_summarized", user_id=user_id, chunk_index=i, summary_chars=len(summary))
+        except Exception as e:
+            logger.warning(f"Quiz map: chunk {i} summarization failed: {e}")
+            log_step("generate_quiz", "chunk_summarize_fallback", user_id=user_id, chunk_index=i, error=str(e))
+            # Fall back to using the raw chunk text
+            summaries.append(chunk.strip())
+
+    if not summaries:
+        raise ValueError("Failed to summarize document content for quiz generation.")
+
+    log_step("generate_quiz", "map_summarize_done", user_id=user_id, doc_id=doc_id, num_summaries=len(summaries))
+
+    # Step 4 (Reduce): Combine all summaries and generate quiz
+    combined_summary = "\n\n".join(
+        f"--- Section {i+1} ---\n{s}" for i, s in enumerate(summaries)
+    )
+    log_step(
+        "generate_quiz",
+        "reduce_quiz_start",
+        user_id=user_id,
+        doc_id=doc_id,
+        summary_chars=len(combined_summary),
+    )
+
+    prompt = QUIZ_FROM_SUMMARY_PROMPT.format(
+        num_questions=num_questions,
+        context=combined_summary,
+    )
+
+    try:
+        if hasattr(ai_client, "generate_quiz_from_kb"):
+            response = ai_client.generate_quiz_from_kb(prompt, max_tokens=2048, temperature=0.1)
+        else:
+            response = ai_client.invoke(prompt, max_tokens=2048, temperature=0.1)
+    except Exception as e:
+        if not _is_bedrock_fallback_error(e):
+            raise
+        logger.warning(f"Bedrock unavailable during quiz generation; using rule-based fallback: {e}")
+        fallback_chunks = [{"text": s} for s in summaries]
+        quiz_items = _fallback_quiz_from_chunks(fallback_chunks, num_questions)
+        latency_ms = int((time.time() - start_time) * 1000)
+        log_event(
+            "QUIZ_GENERATED",
+            user_id=user_id,
+            doc_id=doc_id,
+            requested_questions=num_questions,
+            returned_questions=len(quiz_items),
+            latency_ms=latency_ms,
+            status="fallback_throttled",
+        )
+        return {"quiz": quiz_items, "saved": False}
+
+    raw_items = json.loads(_clean_json_response(response))
+    quiz_items = _normalize_quiz_items(raw_items, num_questions)
+    log_step("generate_quiz", "reduce_quiz_done", user_id=user_id, doc_id=doc_id, num_questions=len(quiz_items))
+
+    latency_ms = int((time.time() - start_time) * 1000)
+    try:
+        userstore.log_query(
+            user_id=user_id,
+            query=f"Generate practice quiz ({len(quiz_items)} questions)",
+            answer=json.dumps(quiz_items, ensure_ascii=False),
+        )
+    except Exception:
+        pass
+
+    log_event(
+        "QUIZ_GENERATED",
+        user_id=user_id,
+        doc_id=doc_id,
+        requested_questions=num_questions,
+        returned_questions=len(quiz_items),
+        context_chars=len(context),
+        num_chunks=len(chunks),
+        latency_ms=latency_ms,
+        status="success",
+    )
+
+    # Save quiz to S3 if bucket is configured and doc_id is provided
+    saved = False
+    if doc_id and config.flashcard_bucket:
+        try:
+            import boto3
+            s3 = boto3.client("s3", region_name=config.aws_region)
+            key = f"{user_id}/quiz/{doc_id}.json"
+            s3.put_object(
+                Bucket=config.flashcard_bucket,
+                Key=key,
+                Body=json.dumps(quiz_items, ensure_ascii=False).encode("utf-8"),
+                ContentType="application/json",
+            )
+            saved = True
+            log_step("generate_quiz", "s3_save_done", user_id=user_id, doc_id=doc_id, key=key)
+        except Exception as e:
+            logger.warning(f"Quiz S3 save failed for {doc_id}: {e}")
+
+    log_step("generate_quiz", "quiz_completed", user_id=user_id, doc_id=doc_id, latency_ms=latency_ms, status="success")
+    return {"quiz": quiz_items, "saved": saved}
+
+
+def handle_get_quiz(user_id: str, doc_id: str) -> dict:
+    """Load a previously saved quiz from S3. Returns empty list if not found or bucket not configured."""
+    if not config.flashcard_bucket:
+        return {"doc_id": doc_id, "quiz": []}
+    try:
+        import boto3
+        s3 = boto3.client("s3", region_name=config.aws_region)
+        key = f"{user_id}/quiz/{doc_id}.json"
+        resp = s3.get_object(Bucket=config.flashcard_bucket, Key=key)
+        quiz_items = json.loads(resp["Body"].read().decode("utf-8"))
+        log_step("get_quiz", "s3_load_done", user_id=user_id, doc_id=doc_id, count=len(quiz_items))
+        return {"doc_id": doc_id, "quiz": quiz_items}
+    except Exception as e:
+        if "NoSuchKey" in str(type(e).__name__) or "NoSuchKey" in str(e):
+            return {"doc_id": doc_id, "quiz": []}
+        logger.warning(f"Quiz S3 load failed for {doc_id}: {e}")
+        return {"doc_id": doc_id, "quiz": []}
+
+
 def handle_delete_doc(
     user_id: str,
     doc_id: str,
@@ -622,8 +1348,7 @@ def handle_evaluate(
             key=key
         )
 
-        data = storage.get(key)
-        text = _extract_text(filename, data)
+        text = _get_document_text(user_id, doc_id, filename, storage)
 
         log_step(
             "evaluate",
@@ -633,38 +1358,40 @@ def handle_evaluate(
             chars_extracted=len(text)
         )
 
-        if strategy:
-            log_step(
-                "evaluate",
-                "reingest_start",
-                user_id=user_id,
+        # ── Always use a local in-memory index for evaluation ───────────────────
+        # Bedrock KB is async (ingestion may not have completed) and has no
+        # per-document isolation when metadata sidecars are missing.
+        # We build a fresh LocalVector from the doc text so results are
+        # deterministic and isolated to this exact document + strategy.
+        from src.adapters.vector import LocalVector
+        eval_store = LocalVector()
+        if text.strip():
+            eval_store.ingest(
                 doc_id=doc_id,
+                text=text,
+                metadata={"user_id": user_id, "doc_id": doc_id, "filename": filename},
                 strategy=strategy,
                 size=size,
                 overlap=overlap,
-                threshold=threshold
+                threshold=threshold,
             )
 
-            if hasattr(vector_store, "clear_doc"):
-                vector_store.clear_doc(doc_id)
+        num_chunks_total = len(eval_store.docs)
 
-            if text.strip():
+        # Also trigger Bedrock KB sync in the background (best-effort, fire-and-forget)
+        if text.strip() and hasattr(vector_store, "kb_id"):
+            try:
                 vector_store.ingest(
                     doc_id=doc_id,
                     text=text,
-                    metadata={"user_id": user_id, "filename": filename},
+                    metadata={"user_id": user_id, "doc_id": doc_id, "filename": filename},
                     strategy=strategy,
                     size=size,
                     overlap=overlap,
                     threshold=threshold,
                 )
-
-            log_step(
-                "evaluate",
-                "reingest_done",
-                user_id=user_id,
-                doc_id=doc_id
-            )
+            except Exception:
+                pass
 
         probe_questions = [
             {
@@ -688,6 +1415,7 @@ def handle_evaluate(
                 "keywords": ["130 terawatts", "six times", "human civilization", "civilisation"],
             },
         ]
+
 
         queries_results = []
         rr_scores = []
@@ -721,21 +1449,8 @@ def handle_evaluate(
                 query=q
             )
 
-            # Filter by BOTH user_id AND doc_id so we only evaluate chunks
-            # from the specific document — not all documents of this user.
-            chunks = vector_store.search(q, top_k=5, filter={"user_id": user_id, "doc_id": doc_id})
-            if not chunks:
-                # Fallback 1: filter by user_id only (covers cases where doc_id metadata is missing)
-                chunks = vector_store.search(q, top_k=5, filter={"user_id": user_id})
-            if not chunks and hasattr(vector_store, "kb_id"):
-                # Fallback 2: Bedrock KB — metadata sidecars may not have been written yet
-                chunks = vector_store.search(q, top_k=5, filter=None)
-            # Post-filter: if we got chunks from multiple docs, keep only those belonging to this doc
-            if chunks and doc_id:
-                doc_chunks = [c for c in chunks if c.get("doc_id") == doc_id or c.get("metadata", {}).get("doc_id") == doc_id]
-                if doc_chunks:
-                    chunks = doc_chunks
-
+            # Search the temporary local eval store — always accurate & isolated
+            chunks = eval_store.search(q, top_k=5, filter={"doc_id": doc_id})
 
             log_step(
                 "evaluate",
@@ -809,12 +1524,9 @@ def handle_evaluate(
 
         avg_mrr = sum(rr_scores) / len(rr_scores)
 
-        total_chunks = -1
-        if hasattr(vector_store, "docs"):
-            total_chunks = len([
-                d for d in vector_store.docs
-                if d[2].get("doc_id") == doc_id
-            ])
+        # Use the count from our local eval_store (always accurate)
+        total_chunks = num_chunks_total
+
 
         latency_ms = int((time.time() - start_time) * 1000)
 
@@ -880,16 +1592,24 @@ def handle_evaluate(
         raise
 
 
-def handle_generate_flashcards(user_id: str, topic: str, limit: int, doc_id: Optional[str], vector_store, llm_backend) -> dict:
+def handle_generate_flashcards(
+    user_id: str,
+    topic: str,
+    limit: int,
+    doc_id: Optional[str],
+    vector_store,
+    ai_client,
+    aws_region: str
+) -> dict:
     start_time = time.time()
     try:
         context = ""
         if doc_id:
-            results = vector_store.search(doc_id=doc_id, query=topic, limit=10)
+            results = vector_store.search(query=topic, top_k=10, filter={"doc_id": doc_id})
             context = "\n\n".join(r["text"] for r in results)
         
         prompt = FLASHCARD_PROMPT.format(limit=limit, topic=topic, context=context)
-        response = llm_backend.generate(prompt)
+        response = ai_client.invoke(prompt, max_tokens=1024)
         
         # Clean JSON markdown
         clean_json = response.strip()
@@ -912,5 +1632,102 @@ def handle_generate_flashcards(user_id: str, topic: str, limit: int, doc_id: Opt
         latency_ms = int((time.time() - start_time) * 1000)
         _put_cloudwatch_metric("FlashcardGenerationFailure", 1, "Count", "ap-southeast-1", "Failed")
         print(f"Error generating flashcards: {e}")
+        traceback.print_exc()
+        raise
+
+
+def handle_generate_mindmap(
+    user_id: str,
+    doc_id: str,
+    storage,
+    userstore,
+    ai_client,
+) -> dict:
+    """Read document text -> invoke Bedrock to generate Mermaid mindmap."""
+    start_time = time.time()
+    try:
+        docs = userstore.list_docs(user_id)
+        doc = next((d for d in docs if d["doc_id"] == doc_id), None)
+        if not doc:
+            raise ValueError(f"Document {doc_id} not found for user {user_id}")
+            
+        filename = doc.get("filename", "unknown")
+        text = _get_document_text(user_id, doc_id, filename, storage)
+        
+        if not text.strip():
+            raise ValueError("Document has no text content to build a mind-map.")
+            
+        prompt = MINDMAP_PROMPT.format(context=text[:6000])
+        response = ai_client.invoke(prompt, max_tokens=1024)
+        
+        mindmap_code = response.strip()
+        # Clean any accidental wrapping codeblocks
+        if mindmap_code.startswith("```mermaid"):
+            mindmap_code = mindmap_code[10:]
+        elif mindmap_code.startswith("```"):
+            mindmap_code = mindmap_code[3:]
+        if mindmap_code.endswith("```"):
+            mindmap_code = mindmap_code[:-3]
+        mindmap_code = mindmap_code.strip()
+        
+        latency_ms = int((time.time() - start_time) * 1000)
+        _put_cloudwatch_metric("MindMapGenerationLatency", latency_ms, "Milliseconds", "ap-southeast-1", "Success")
+        
+        return {
+            "doc_id": doc_id,
+            "filename": filename,
+            "mindmap": mindmap_code
+        }
+    except Exception as e:
+        print(f"Error generating mindmap: {e}")
+        traceback.print_exc()
+        raise
+
+
+def handle_generate_cornell(
+    user_id: str,
+    doc_id: str,
+    storage,
+    userstore,
+    ai_client,
+) -> dict:
+    """Read document text -> invoke Bedrock to generate Cornell Notes structured JSON."""
+    start_time = time.time()
+    try:
+        docs = userstore.list_docs(user_id)
+        doc = next((d for d in docs if d["doc_id"] == doc_id), None)
+        if not doc:
+            raise ValueError(f"Document {doc_id} not found for user {user_id}")
+            
+        filename = doc.get("filename", "unknown")
+        text = _get_document_text(user_id, doc_id, filename, storage)
+        
+        if not text.strip():
+            raise ValueError("Document has no text content to build Cornell notes.")
+            
+        prompt = CORNELL_PROMPT.format(context=text[:6000])
+        response = ai_client.invoke(prompt, max_tokens=1500)
+        
+        clean_json = response.strip()
+        if clean_json.startswith("```json"):
+            clean_json = clean_json[7:]
+        elif clean_json.startswith("```"):
+            clean_json = clean_json[3:]
+        if clean_json.endswith("```"):
+            clean_json = clean_json[:-3]
+        clean_json = clean_json.strip()
+        
+        cornell_data = json.loads(clean_json)
+        
+        latency_ms = int((time.time() - start_time) * 1000)
+        _put_cloudwatch_metric("CornellGenerationLatency", latency_ms, "Milliseconds", "ap-southeast-1", "Success")
+        
+        return {
+            "doc_id": doc_id,
+            "filename": filename,
+            "cornell": cornell_data
+        }
+    except Exception as e:
+        print(f"Error generating Cornell notes: {e}")
         traceback.print_exc()
         raise

@@ -28,6 +28,18 @@ from src.app import app
 client = TestClient(app)
 
 
+class DummyStorage:
+    """Minimal storage stub — always raises on get so fallback logic is exercised."""
+    def get(self, key):
+        raise FileNotFoundError(f"DummyStorage: {key} not found")
+
+    def put(self, key, data):
+        return key
+
+    def delete(self, key):
+        pass
+
+
 def test_health_returns_ok():
     r = client.get("/health")
     assert r.status_code == 200
@@ -80,6 +92,193 @@ def test_query_without_upload_handles_empty_index():
     assert "answer" in r.json()
 
 
+def test_quiz_generated_from_uploaded_document():
+    upload_res = client.post(
+        "/upload",
+        files={
+            "file": (
+                "quiz_lec.txt",
+                b"Photosynthesis occurs in chloroplasts. Light reactions split water and release oxygen.",
+                "text/plain",
+            )
+        },
+        headers={"X-User-Id": "quiz-user"},
+    )
+    assert upload_res.status_code == 200
+    doc_id = upload_res.json()["doc_id"]
+
+    quiz_res = client.post(
+        "/quiz",
+        json={"num_questions": 2, "doc_id": doc_id},
+        headers={"X-User-Id": "quiz-user"},
+    )
+
+    assert quiz_res.status_code == 200, quiz_res.text
+    body = quiz_res.json()
+    assert "quiz" in body
+    assert isinstance(body["quiz"], list)
+    assert body["quiz"]
+    assert {"id", "question", "options", "correct_answer", "explanation"} <= set(body["quiz"][0])
+
+
+def test_quiz_falls_back_when_bedrock_is_throttled():
+    from src import handlers
+    from src.adapters.vector import LocalVector
+
+    DOC_TEXT = (
+        "Photosynthesis occurs in chloroplasts and converts light energy into chemical energy. "
+        "Light reactions split water and release oxygen as a byproduct. "
+        "The Calvin cycle uses carbon dioxide to build sugars."
+    )
+
+    class ThrottledAI:
+        def generate_quiz_from_kb(self, prompt, **kwargs):
+            raise Exception("ThrottlingException: Too many tokens per day")
+        def invoke(self, prompt, **kwargs):
+            raise Exception("ThrottlingException: Too many tokens per day")
+
+    class DummyUserStore:
+        def log_query(self, *args, **kwargs):
+            return None
+        def list_docs(self, user_id):
+            return []
+
+    vector = LocalVector()
+    vector.ingest(
+        doc_id="throttled-doc",
+        text=DOC_TEXT,
+        metadata={"user_id": "throttled-user", "filename": "lecture.txt"},
+    )
+
+    quiz = handlers.handle_generate_quiz(
+        user_id="throttled-user",
+        num_questions=3,
+        doc_id="throttled-doc",
+        vector_store=vector,
+        ai_client=ThrottledAI(),
+        userstore=DummyUserStore(),
+        storage=DummyStorage(),
+    )
+
+    assert len(quiz["quiz"]) == 3
+    assert quiz["quiz"][0]["correct_answer"] in quiz["quiz"][0]["options"]
+    assert len({item["question"] for item in quiz["quiz"]}) == len(quiz["quiz"])
+    assert any(item["options"].index(item["correct_answer"]) != 0 for item in quiz["quiz"])
+    assert "Based on the selected notes" in quiz["quiz"][0]["explanation"]
+
+
+def test_quiz_normalization_does_not_leave_all_answers_at_a():
+    from src.handlers import _normalize_quiz_items
+
+    raw_items = [
+        {
+            "id": f"q{i}",
+            "question": f"Question {i}",
+            "options": ["Correct", "Wrong 1", "Wrong 2", "Wrong 3"],
+            "correct_answer": "Correct",
+            "explanation": "Explanation",
+        }
+        for i in range(1, 6)
+    ]
+
+    quiz = _normalize_quiz_items(raw_items, 5)
+    assert len(quiz) == 5
+    assert all(item["correct_answer"] in item["options"] for item in quiz)
+    assert any(item["options"].index(item["correct_answer"]) != 0 for item in quiz)
+
+
+def test_quiz_falls_back_when_bedrock_credentials_are_missing():
+    from src import handlers
+    from src.adapters.vector import LocalVector
+
+    DOC_TEXT = (
+        "Machine learning is a subset of artificial intelligence. "
+        "Gradient descent is used to minimize a loss function. "
+        "Backpropagation computes gradients through a neural network. "
+        "Training data is used to fit model parameters. "
+        "Evaluation data measures how well a model generalizes."
+    )
+
+    class MissingCredentialsAI:
+        def generate_quiz_from_kb(self, prompt, **kwargs):
+            raise Exception("NoCredentialsError: Unable to locate credentials")
+
+    class DummyUserStore:
+        def log_query(self, *args, **kwargs):
+            return None
+        def list_docs(self, user_id):
+            return []
+
+    vector = LocalVector()
+    vector.ingest(
+        doc_id="missing-credentials-doc",
+        text=DOC_TEXT,
+        metadata={"user_id": "missing-credentials-user", "filename": "ml.txt"},
+    )
+
+    quiz = handlers.handle_generate_quiz(
+        user_id="missing-credentials-user",
+        num_questions=5,
+        doc_id="missing-credentials-doc",
+        vector_store=vector,
+        ai_client=MissingCredentialsAI(),
+        userstore=DummyUserStore(),
+        storage=DummyStorage(),
+    )
+
+    assert len(quiz["quiz"]) == 5
+    assert len({item["question"] for item in quiz["quiz"]}) == 5
+    assert any(item["options"].index(item["correct_answer"]) != 0 for item in quiz["quiz"])
+
+
+def test_quiz_fallback_uses_full_local_doc_when_search_returns_partial_chunks():
+    from src import handlers
+    from src.adapters.vector import LocalVector
+
+    DOC_TEXT = (
+        "Mathematics is the study of numbers, shapes, and patterns. "
+        "Numbers: including how things can be counted. "
+        "Structure: including how things are organized. "
+        "Place: where things are and spatial arrangement. "
+        "Change: how things become different. "
+        "Applied math is useful for solving real-world problems. "
+        "Deduction is a way to prove new truths using old truths."
+    )
+
+    class MissingCredentialsAI:
+        def generate_quiz_from_kb(self, prompt, **kwargs):
+            raise Exception("NoCredentialsError: Unable to locate credentials")
+
+    class DummyUserStore:
+        def log_query(self, *args, **kwargs):
+            return None
+        def list_docs(self, user_id):
+            return []
+
+    vector = LocalVector()
+    vector.ingest(
+        doc_id="math-doc",
+        text=DOC_TEXT,
+        metadata={"user_id": "math-user", "filename": "math.txt"},
+        size=80,
+        overlap=0,
+    )
+
+    quiz = handlers.handle_generate_quiz(
+        user_id="math-user",
+        num_questions=5,
+        doc_id="math-doc",
+        vector_store=vector,
+        ai_client=MissingCredentialsAI(),
+        userstore=DummyUserStore(),
+        storage=DummyStorage(),
+    )
+
+    assert len(quiz["quiz"]) == 5
+    assert len({item["question"] for item in quiz["quiz"]}) == 5
+    assert any(item["options"].index(item["correct_answer"]) != 0 for item in quiz["quiz"])
+
+
 def test_list_docs_per_user_isolation():
     client.post(
         "/upload",
@@ -96,3 +295,103 @@ def test_list_docs_per_user_isolation():
     assert any(d["filename"] == "a.txt" for d in a_docs)
     assert all(d["filename"] != "b.txt" for d in a_docs)
     assert any(d["filename"] == "b.txt" for d in b_docs)
+
+
+def test_creative_features_endpoints():
+    # 1. Upload a document first
+    upload_res = client.post(
+        "/upload",
+        files={"file": ("creative_lec.txt", b"Photosynthesis occurs in chloroplasts. The light reactions split water to release oxygen.", "text/plain")},
+        headers={"X-User-Id": "creative-user"},
+    )
+    assert upload_res.status_code == 200
+    doc_id = upload_res.json()["doc_id"]
+
+    # 2. Test Socratic query
+    query_res = client.post(
+        "/query",
+        json={"question": "Where does photosynthesis occur?", "socratic": True},
+        headers={"X-User-Id": "creative-user"},
+    )
+    assert query_res.status_code == 200
+    assert "answer" in query_res.json()
+
+    # 3. Test Mind-map generation
+    mindmap_res = client.post(
+        f"/docs/{doc_id}/mindmap",
+        headers={"X-User-Id": "creative-user"},
+    )
+    assert mindmap_res.status_code == 200
+    assert "mindmap" in mindmap_res.json()
+
+    # 4. Test Cornell notes generation
+    cornell_res = client.post(
+        f"/docs/{doc_id}/cornell",
+        headers={"X-User-Id": "creative-user"},
+    )
+    assert cornell_res.status_code == 200
+    c_data = cornell_res.json()["cornell"]
+    assert "cues" in c_data
+    assert "notes" in c_data
+    assert "summary" in c_data
+
+    # 5. Test Flashcards generation
+    flashcards_res = client.post(
+        "/flashcards",
+        json={"topic": "Photosynthesis", "limit": 2, "doc_id": doc_id},
+        headers={"X-User-Id": "creative-user"},
+    )
+    assert flashcards_res.status_code == 200
+    assert "flashcards" in flashcards_res.json()
+    assert len(flashcards_res.json()["flashcards"]) > 0
+
+
+def test_bedrock_ai_falls_back_to_local_ai():
+    from src.adapters.ai import BedrockAI
+    
+    # Instantiate BedrockAI which will fail to run bedrock due to dummy config / credentials
+    ai = BedrockAI(region="us-east-1", model_id="dummy-model")
+    
+    # Testing invoke fallback
+    prompt = "Practice quiz generator for photosynthesis"
+    ans = ai.invoke(prompt)
+    assert "local-q1" in ans or "chloroplasts" in ans.lower()
+    
+    # Testing retrieve_and_generate fallback
+    res = ai.retrieve_and_generate("What is photosynthesis?", kb_id="dummy-kb")
+    assert "answer" in res
+    assert "photosynthesis" in res["answer"].lower() or "local" in res["answer"].lower()
+
+
+def test_bedrock_ai_short_circuit_on_connection_error():
+    import time
+    from src.adapters.ai import BedrockAI
+    import botocore.exceptions
+    
+    # 1. Instantiate BedrockAI
+    ai = BedrockAI(region="us-east-1", model_id="dummy-model")
+    
+    # 2. Mock runtime.converse to throw a ConnectTimeoutError
+    original_converse = ai.runtime.converse
+    
+    def mock_converse(*args, **kwargs):
+        raise botocore.exceptions.ConnectTimeoutError(
+            endpoint_url="https://bedrock.amazonaws.com",
+            connection_timeout=2.0
+        )
+        
+    ai.runtime.converse = mock_converse
+    
+    start_time = time.time()
+    ans = ai.invoke("Practice quiz generator for photosynthesis")
+    duration = time.time() - start_time
+    
+    # Ensure it falls back to LocalAI successfully
+    assert "local-q1" in ans or "chloroplasts" in ans.lower()
+    # Ensure it short-circuited immediately (in less than 1.0s) instead of looping over all 8 models
+    assert duration < 1.0
+    
+    # Restore
+    ai.runtime.converse = original_converse
+
+
