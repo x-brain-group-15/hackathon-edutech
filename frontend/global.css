@@ -165,11 +165,13 @@ body {
 .topbar {
   max-width: 1400px;
   margin: 0 auto;
-  padding: 1rem 2rem;
+  padding: 0.75rem 2rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 2rem;
+  gap: 1rem;
+  flex-wrap: nowrap;
+  min-height: 64px;
 }
 
 .brand {
@@ -214,6 +216,7 @@ body {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  flex-shrink: 0;
 }
 
 .lang-switch {
@@ -259,7 +262,13 @@ body {
   display: flex;
   gap: 0.5rem;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  max-width: 480px;
+}
+.status-pills::-webkit-scrollbar {
+  display: none;
 }
 
 .pill {
@@ -1238,7 +1247,7 @@ button.ghost:hover {
   color: var(--text);
   font-size: 0.88rem;
   line-height: 1.35;
-  word-break: break-word;
+  word-break: break-all;
   overflow-wrap: anywhere;
   white-space: normal;
 }
