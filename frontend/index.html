@@ -130,6 +130,10 @@
       background: transparent !important;
       font-family: var(--font-sans) !important;
     }
+    #mindmap-mermaid .node,
+    #mindmap-mermaid .mindmap-node {
+      cursor: pointer !important;
+    }
     #mindmap-mermaid .node rect,
     #mindmap-mermaid .node circle,
     #mindmap-mermaid .node ellipse,
@@ -3019,6 +3023,13 @@
       const svg = document.querySelector('#mindmap-mermaid svg');
       if (!svg) return;
 
+      // Add styles to ensure pointer cursor for nodes
+      const style = document.createElement('style');
+      style.innerHTML = `
+        #mindmap-mermaid .node, #mindmap-mermaid .mindmap-node { cursor: pointer !important; }
+      `;
+      document.head.appendChild(style);
+
       svg.style.transformOrigin = 'center center';
       svg.style.transition = 'transform 0.1s ease';
       applyMindmapTransform();
@@ -3028,7 +3039,7 @@
       container.style.cursor = 'grab';
 
       container.onmousedown = (e) => {
-        if (e.target.closest('.mindmap-toolbar') || e.target.closest('.node')) return;
+        if (e.target.closest('.mindmap-toolbar') || e.target.closest('.node') || e.target.closest('.mindmap-node')) return;
         isPanningMindmap = true;
         container.style.cursor = 'grabbing';
         startPanX = e.clientX - mindmapPanX;
@@ -3049,32 +3060,30 @@
         }
       };
 
-      // 2. Click event listeners to Nodes
-      const nodes = document.querySelectorAll('#mindmap-mermaid .node');
-      nodes.forEach(node => {
-        node.style.cursor = 'pointer';
-        node.setAttribute('title', 'Click to learn concept! Double-click to sprout sub-concepts.');
-
-        // Single click to show detailed learning notes
-        node.onclick = (e) => {
+      // 2. Robust Event Delegation to Nodes (fixes async rendering timing issues)
+      container.onclick = (e) => {
+        const node = e.target.closest('#mindmap-mermaid .node, #mindmap-mermaid .mindmap-node');
+        if (node) {
           e.stopPropagation();
           const textEl = node.querySelector('text');
           if (textEl) {
             const concept = textEl.textContent.trim();
             showConceptDetails(concept);
           }
-        };
+        }
+      };
 
-        // Double click to sprout sub-concepts
-        node.ondblclick = (e) => {
+      container.ondblclick = (e) => {
+        const node = e.target.closest('#mindmap-mermaid .node, #mindmap-mermaid .mindmap-node');
+        if (node) {
           e.stopPropagation();
           const textEl = node.querySelector('text');
           if (textEl) {
             const concept = textEl.textContent.trim();
             sproutConcept(concept);
           }
-        };
-      });
+        }
+      };
     }
 
     function applyMindmapTransform() {
