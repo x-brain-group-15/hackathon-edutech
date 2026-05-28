@@ -3612,8 +3612,8 @@ Do not return any other text, headers, or explanations. Keep them very short (1-
       // Update session progress bar
       const fillEl = $('fc-session-fill');
       if (fillEl) {
-        const pct = deck.length > 1
-          ? (leitnerState.index / (deck.length - 1)) * 100
+        const pct = activeDeck.length > 1
+          ? (leitnerState.index / (activeDeck.length - 1)) * 100
           : 100;
         fillEl.style.width = pct + '%';
       }
