@@ -19,6 +19,7 @@ class BedrockAI:
         self.runtime = None
         self.agent_runtime = None
         self.init_error = None
+        self.local_fallback = LocalAI()
         try:
             import boto3
             from botocore.config import Config
@@ -139,9 +140,8 @@ class BedrockAI:
                     logger.warning(f"Bedrock issue detected ({type(e).__name__}). Aborting model loop for immediate fallback.")
                     break
 
-        raise RuntimeError(
-            f"AI service unavailable: all Bedrock models failed. Last error: {last_error}"
-        )
+        logger.warning(f"All Bedrock models failed. Falling back to LocalAI. Last error: {last_error}")
+        return self.local_fallback.invoke(prompt, **kwargs)
 
     def generate_quiz_from_kb(self, prompt: str, **kwargs: Any) -> str:
         """Generate quiz JSON through Bedrock Converse API."""
@@ -210,9 +210,8 @@ class BedrockAI:
                     logger.warning(f"Bedrock agent issue detected ({type(e).__name__}). Aborting model loop for immediate fallback.")
                     break
 
-        raise RuntimeError(
-            f"AI service unavailable: all Bedrock models failed for retrieve_and_generate. Last error: {last_error}"
-        )
+        logger.warning(f"All Bedrock models failed for retrieve_and_generate. Falling back to local RAG. Last error: {last_error}")
+        return self._local_rag_fallback(query, kb_id, last_error)
 
     def _local_rag_fallback(self, query: str, kb_id: str, last_error: Any) -> dict:
         import logging
