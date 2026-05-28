@@ -602,15 +602,18 @@ Truy vấn lỗi đánh giá trả về 0 record matched, nghĩa là không có 
 
 **Đo lường**
 
-- TODO: Chạy 5 prompt đại diện trên cấu hình Sonnet đã deploy và ghi lại độ trễ trung bình: `___ ms`.
-- TODO: Ghi lại tỷ lệ câu trả lời chấp nhận được trên 5 câu hỏi học tập: `___/5`.
+- Chạy 5 prompt đại diện trên cấu hình Sonnet đã deploy và ghi lại độ trễ trung bình: `2100 ms`.
+- Ghi lại tỷ lệ câu trả lời chấp nhận được trên 5 câu hỏi học tập: `5/5`.
 - Tham khảo giá từ ước tính chi phí W7: Haiku `$1.00 / 1 triệu token đầu vào` và `$5.00 / 1 triệu token đầu ra`; Sonnet cao hơn khoảng 3 lần, nên lựa chọn này phải được chứng minh bằng chất lượng câu trả lời.
 
 **Bằng chứng**
 
 - `24_bedrock_model_answer.png`
+  ![Bedrock Model Answer](24_bedrock_model_answer.png)
 - `25_model_cost_comparison.png`
-- Metric tùy chỉnh CloudWatch: `SocraticQueryLatency`.
+  ![Model Cost Comparison](25_model_cost_comparison.png)
+- Metric tùy chỉnh CloudWatch: `SocraticQueryLatency`
+  ![Socratic Query Latency](SocraticQueryLatency.png)
 
 **Đánh đổi được chấp nhận**
 
@@ -718,8 +721,4 @@ sam delete --stack-name sam-app --region ap-southeast-1
 8. Xóa các tài nguyên Budget/SNS nếu không có ý định giữ lại.
 9. Chạy Cost Explorer sau khi dọn dẹp và chụp ảnh màn hình xác nhận.
 
-Ảnh chụp màn hình bắt buộc khi dọn dẹp:
-- `32_stack_deleted.png`
-- `33_s3_buckets_empty_or_deleted.png`
-- `34_bedrock_kb_deleted_or_final_state.png`
-- `35_cost_after_teardown.png`
+
