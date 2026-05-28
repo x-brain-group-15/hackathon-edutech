@@ -2384,8 +2384,10 @@
       }
 
       async function generatePracticeQuiz() {
-        const docId = window.selectedDocId || window.lastDocId;
-        if (!docId) {
+        const activeDocIds = window.selectedDocIds && window.selectedDocIds.size > 0
+          ? [...window.selectedDocIds]
+          : (window.lastDocId ? [window.lastDocId] : null);
+        if (!activeDocIds) {
           toast(t('quizNeedDoc'), 'warn');
           return;
         }
@@ -2399,7 +2401,11 @@
           const res = await call('/quiz', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ num_questions: 5, doc_id: docId }),
+            body: JSON.stringify({
+              num_questions: 5,
+              doc_id: activeDocIds[0],
+              doc_ids: activeDocIds,
+            }),
           });
 
           if (!res.ok) {
@@ -2562,11 +2568,14 @@
 
       // --- Cornell Study Guide ---
       async function generateCornell() {
-        const docId = window.selectedDocId || window.lastDocId;
-        if (!docId) {
+        const activeDocIds = window.selectedDocIds && window.selectedDocIds.size > 0
+          ? [...window.selectedDocIds]
+          : (window.lastDocId ? [window.lastDocId] : null);
+        if (!activeDocIds) {
           toast(t('benchmarkNeedDoc'), 'warn');
           return;
         }
+        const primaryDocId = activeDocIds[0];
 
         const btn = $('btn-generate-cornell');
         btn.disabled = true;
@@ -2574,7 +2583,11 @@
         btn.innerHTML = '<span class="spinner"></span> Generating...';
 
         try {
-          const res = await call(`/docs/${docId}/cornell`, { method: 'POST' });
+          const res = await call(`/docs/${primaryDocId}/cornell`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ doc_ids: activeDocIds }),
+          });
           if (!res.ok) {
             throw new Error(
               res.body.detail || 'Failed to generate Cornell study guide'
@@ -2657,11 +2670,14 @@
 
       // --- Interactive Mind-Map ---
       async function generateMindmap() {
-        const docId = window.selectedDocId || window.lastDocId;
-        if (!docId) {
+        const activeDocIds = window.selectedDocIds && window.selectedDocIds.size > 0
+          ? [...window.selectedDocIds]
+          : (window.lastDocId ? [window.lastDocId] : null);
+        if (!activeDocIds) {
           toast(t('benchmarkNeedDoc'), 'warn');
           return;
         }
+        const primaryDocId = activeDocIds[0];
 
         const btn = $('btn-generate-mindmap');
         btn.disabled = true;
@@ -2669,7 +2685,11 @@
         btn.innerHTML = '<span class="spinner"></span> Generating...';
 
         try {
-          const res = await call(`/docs/${docId}/mindmap`, { method: 'POST' });
+          const res = await call(`/docs/${primaryDocId}/mindmap`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ doc_ids: activeDocIds }),
+          });
           if (!res.ok) {
             throw new Error(res.body.detail || 'Failed to generate Mind-Map');
           }

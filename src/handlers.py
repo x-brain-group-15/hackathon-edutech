@@ -1015,51 +1015,61 @@ def handle_generate_quiz(
     ai_client,
     userstore,
     storage=None,
+    doc_ids: Optional[list[str]] = None,
 ) -> list[dict]:
     start_time = time.time()
     num_questions = max(1, min(num_questions, 20))
 
-    # Resolve filename from userstore when doc_id is provided
-    filename = None
-    if doc_id and userstore:
-        docs = userstore.list_docs(user_id)
-        doc = next((d for d in docs if d.get("doc_id") == doc_id), None)
-        if doc:
-            filename = doc.get("filename", "unknown")
+    # Resolve effective doc list: prefer explicit doc_ids, fall back to single doc_id
+    effective_doc_ids = doc_ids if doc_ids else ([doc_id] if doc_id else None)
 
-    # Step 1: Fetch document text from S3
-    context = ""
-    if doc_id and storage is not None:
-        log_step("generate_quiz", "s3_fetch_start", user_id=user_id, doc_id=doc_id, filename=filename)
+    def _fetch_text_for_doc(did: str) -> str:
+        """Fetch text for a single doc_id, resolving filename from userstore."""
+        fname = None
+        if userstore:
+            docs = userstore.list_docs(user_id)
+            d = next((x for x in docs if x.get("doc_id") == did), None)
+            if d:
+                fname = d.get("filename", "unknown")
+        if storage is None:
+            return ""
         try:
-            if filename:
-                context = _get_document_text(user_id, doc_id, filename, storage)
-            else:
-                # filename unknown — try extracted_text.txt directly, then scan the folder
+            if fname:
+                return _get_document_text(user_id, did, fname, storage)
+            # filename unknown — try extracted_text.txt, then scan folder
+            try:
+                return storage.get(f"{user_id}/{did}/extracted_text.txt").decode("utf-8", errors="replace")
+            except Exception:
+                pass
+            prefix = f"{user_id}/{did}/"
+            for key in storage.list(prefix):
+                fname_k = key.split("/")[-1]
+                if fname_k.endswith(".metadata.json") or fname_k == "extracted_text.txt":
+                    continue
                 try:
-                    txt_data = storage.get(f"{user_id}/{doc_id}/extracted_text.txt")
-                    context = txt_data.decode("utf-8", errors="replace")
+                    text = _extract_text(fname_k, storage.get(key))
+                    if text.strip():
+                        return text
                 except Exception:
-                    pass
-                if not context.strip():
-                    # Scan folder for any file and try to extract text from it
-                    prefix = f"{user_id}/{doc_id}/"
-                    keys = storage.list(prefix)
-                    for key in keys:
-                        fname = key.split("/")[-1]
-                        if fname.endswith(".metadata.json") or fname == "extracted_text.txt":
-                            continue
-                        try:
-                            data = storage.get(key)
-                            context = _extract_text(fname, data)
-                            if context.strip():
-                                break
-                        except Exception:
-                            continue
-            log_step("generate_quiz", "s3_fetch_done", user_id=user_id, doc_id=doc_id, chars=len(context))
+                    continue
         except Exception as e:
-            log_step("generate_quiz", "s3_fetch_failed", user_id=user_id, doc_id=doc_id, error=str(e))
-            logger.warning(f"Quiz S3 fetch failed for {doc_id}: {e}")
+            logger.warning(f"Quiz S3 fetch failed for {did}: {e}")
+        return ""
+
+    # Step 1: Fetch document text (single or multi-doc)
+    context = ""
+    if effective_doc_ids and storage is not None:
+        log_step("generate_quiz", "s3_fetch_start", user_id=user_id, doc_ids=effective_doc_ids)
+        texts = []
+        for did in effective_doc_ids:
+            t = _fetch_text_for_doc(did)
+            if t.strip():
+                texts.append(t)
+        context = "\n\n---\n\n".join(texts)
+        log_step("generate_quiz", "s3_fetch_done", user_id=user_id, doc_ids=effective_doc_ids, chars=len(context))
+        # keep doc_id pointing to first for legacy logging
+        if not doc_id and effective_doc_ids:
+            doc_id = effective_doc_ids[0]
 
     if not context.strip():
         # Fallback: try to reconstruct context from vector_store if available (important for offline tests/local mode)
@@ -1715,36 +1725,46 @@ def handle_generate_mindmap(
     storage,
     userstore,
     ai_client,
+    doc_ids: Optional[list[str]] = None,
 ) -> dict:
-    """Read document text -> invoke Bedrock to generate Mermaid mindmap with robust S3 & AI fallback."""
+    """Read document text -> invoke Bedrock to generate Mermaid mindmap. Supports multi-doc."""
     start_time = time.time()
     try:
-        docs = userstore.list_docs(user_id)
-        doc = next((d for d in docs if d["doc_id"] == doc_id), None)
-        if not doc:
-            raise ValueError(f"Document {doc_id} not found for user {user_id}")
-            
-        filename = doc.get("filename", "unknown")
-        
-        # 1. Fetch text safely with full exception capture
-        text = ""
-        try:
-            text = _get_document_text(user_id, doc_id, filename, storage)
-        except Exception as s3_err:
-            print(f"[/docs/{doc_id}/mindmap] S3 text retrieval failed: {s3_err}")
-            
-        # 2. Invoke model or fall back to local topic-aware simulation if text is empty/missing
-        if not text or not text.strip():
-            print(f"[/docs/{doc_id}/mindmap] Document text is empty or S3 inaccessible. Simulating local mindmap.")
-            clean_topic = filename.replace(".pdf", "").replace(".txt", "").replace("_", " ").replace("-", " ")
+        effective_doc_ids = doc_ids if doc_ids else [doc_id]
+
+        # Collect text and filenames from all selected docs
+        texts = []
+        filenames = []
+        all_docs = userstore.list_docs(user_id)
+        for did in effective_doc_ids:
+            doc = next((d for d in all_docs if d["doc_id"] == did), None)
+            if not doc:
+                continue
+            fname = doc.get("filename", "unknown")
+            filenames.append(fname)
+            try:
+                t = _get_document_text(user_id, did, fname, storage)
+                if t.strip():
+                    texts.append(t)
+            except Exception as s3_err:
+                print(f"[mindmap] S3 text retrieval failed for {did}: {s3_err}")
+
+        if not texts and not filenames:
+            raise ValueError(f"Document(s) not found for user {user_id}")
+
+        combined_text = "\n\n---\n\n".join(texts)
+        display_filename = filenames[0] if filenames else doc_id
+
+        if not combined_text.strip():
+            print(f"[mindmap] Document text is empty. Simulating local mindmap.")
+            clean_topic = display_filename.replace(".pdf", "").replace(".txt", "").replace("_", " ").replace("-", " ")
             prompt = f"mindmap for topic: \"{clean_topic}\"\ncontext: This is a study document about {clean_topic}."
             mindmap_code = ai_client.local_fallback.invoke(prompt)
         else:
-            prompt = MINDMAP_PROMPT.format(context=text[:6000])
+            prompt = MINDMAP_PROMPT.format(context=combined_text[:6000])
             try:
                 response = ai_client.invoke(prompt, max_tokens=1024)
                 mindmap_code = response.strip()
-                # Clean any accidental wrapping codeblocks
                 if mindmap_code.startswith("```mermaid"):
                     mindmap_code = mindmap_code[10:]
                 elif mindmap_code.startswith("```"):
@@ -1753,17 +1773,18 @@ def handle_generate_mindmap(
                     mindmap_code = mindmap_code[:-3]
                 mindmap_code = mindmap_code.strip()
             except Exception as invoke_err:
-                print(f"[/docs/{doc_id}/mindmap] Bedrock invoke failed: {invoke_err}. Falling back to local simulation.")
-                clean_topic = filename.replace(".pdf", "").replace(".txt", "").replace("_", " ").replace("-", " ")
-                sim_prompt = f"mindmap for topic: \"{clean_topic}\"\ncontext: {text[:2000]}"
+                print(f"[mindmap] Bedrock invoke failed: {invoke_err}. Falling back to local simulation.")
+                clean_topic = display_filename.replace(".pdf", "").replace(".txt", "").replace("_", " ").replace("-", " ")
+                sim_prompt = f"mindmap for topic: \"{clean_topic}\"\ncontext: {combined_text[:2000]}"
                 mindmap_code = ai_client.local_fallback.invoke(sim_prompt)
-        
+
         latency_ms = int((time.time() - start_time) * 1000)
         _put_cloudwatch_metric("MindMapGenerationLatency", latency_ms, "Milliseconds", "ap-southeast-1", "Success")
-        
+
         return {
             "doc_id": doc_id,
-            "filename": filename,
+            "doc_ids": effective_doc_ids,
+            "filename": display_filename,
             "mindmap": mindmap_code
         }
     except Exception as e:
@@ -1778,30 +1799,41 @@ def handle_generate_cornell(
     storage,
     userstore,
     ai_client,
+    doc_ids: Optional[list[str]] = None,
 ) -> dict:
-    """Read document text -> invoke Bedrock to generate Cornell Notes structured JSON with robust S3 & AI fallback."""
+    """Read document text -> invoke Bedrock to generate Cornell Notes. Supports multi-doc."""
     start_time = time.time()
     try:
-        docs = userstore.list_docs(user_id)
-        doc = next((d for d in docs if d["doc_id"] == doc_id), None)
-        if not doc:
-            raise ValueError(f"Document {doc_id} not found for user {user_id}")
-            
-        filename = doc.get("filename", "unknown")
-        
-        # 1. Fetch text safely with full exception capture
-        text = ""
-        try:
-            text = _get_document_text(user_id, doc_id, filename, storage)
-        except Exception as s3_err:
-            print(f"[/docs/{doc_id}/cornell] S3 text retrieval failed: {s3_err}")
-            
+        effective_doc_ids = doc_ids if doc_ids else [doc_id]
+
+        # Collect text and filenames from all selected docs
+        texts = []
+        filenames = []
+        all_docs = userstore.list_docs(user_id)
+        for did in effective_doc_ids:
+            doc = next((d for d in all_docs if d["doc_id"] == did), None)
+            if not doc:
+                continue
+            fname = doc.get("filename", "unknown")
+            filenames.append(fname)
+            try:
+                t = _get_document_text(user_id, did, fname, storage)
+                if t.strip():
+                    texts.append(t)
+            except Exception as s3_err:
+                print(f"[cornell] S3 text retrieval failed for {did}: {s3_err}")
+
+        if not texts and not filenames:
+            raise ValueError(f"Document(s) not found for user {user_id}")
+
+        combined_text = "\n\n---\n\n".join(texts)
+        display_filename = filenames[0] if filenames else doc_id
+
         cornell_data = None
-        
-        # 2. If text is empty/missing, immediately use local simulation
-        if not text or not text.strip():
-            print(f"[/docs/{doc_id}/cornell] Document text is empty or S3 inaccessible. Simulating local Cornell notes.")
-            clean_topic = filename.replace(".pdf", "").replace(".txt", "").replace("_", " ").replace("-", " ")
+
+        if not combined_text.strip():
+            print(f"[cornell] Document text is empty. Simulating local Cornell notes.")
+            clean_topic = display_filename.replace(".pdf", "").replace(".txt", "").replace("_", " ").replace("-", " ")
             prompt = f"cornell notes for topic: \"{clean_topic}\"\ncontext: This is a study document about {clean_topic}."
             clean_json = ai_client.local_fallback.invoke(prompt).strip()
             try:
@@ -1809,7 +1841,7 @@ def handle_generate_cornell(
             except Exception:
                 pass
         else:
-            prompt = CORNELL_PROMPT.format(context=text[:6000])
+            prompt = CORNELL_PROMPT.format(context=combined_text[:6000])
             try:
                 response = ai_client.invoke(prompt, max_tokens=1500)
                 clean_json = response.strip()
@@ -1819,19 +1851,17 @@ def handle_generate_cornell(
                     clean_json = clean_json[3:]
                 if clean_json.endswith("```"):
                     clean_json = clean_json[:-3]
-                clean_json = clean_json.strip()
-                
-                cornell_data = json.loads(clean_json)
+                cornell_data = json.loads(clean_json.strip())
             except Exception as invoke_or_parse_err:
-                print(f"[/docs/{doc_id}/cornell] Bedrock invoke or JSON parse failed: {invoke_or_parse_err}. Falling back to local simulation.")
-                sim_prompt = f"cornell notes for topic: \"{filename}\"\ncontext: {text[:2000]}"
+                print(f"[cornell] Bedrock invoke or JSON parse failed: {invoke_or_parse_err}. Falling back to local simulation.")
+                sim_prompt = f"cornell notes for topic: \"{display_filename}\"\ncontext: {combined_text[:2000]}"
                 clean_json = ai_client.local_fallback.invoke(sim_prompt).strip()
                 try:
                     cornell_data = json.loads(clean_json)
                 except Exception:
                     pass
-                    
-        # 3. Last-resort fallback to ensure valid JSON schema
+
+        # Last-resort fallback
         if not cornell_data:
             cornell_data = {
                 "cues": [
@@ -1839,18 +1869,19 @@ def handle_generate_cornell(
                     {"keyword": "Key Concept", "association": "Core definitions"}
                 ],
                 "notes": [
-                    f"This document represents study materials regarding {filename}.",
+                    f"This document represents study materials regarding {display_filename}.",
                     "System successfully recovered using automatic premium fallback."
                 ],
-                "summary": f"A comprehensive study overview of {filename} prepared automatically."
+                "summary": f"A comprehensive study overview of {display_filename} prepared automatically."
             }
-        
+
         latency_ms = int((time.time() - start_time) * 1000)
         _put_cloudwatch_metric("CornellGenerationLatency", latency_ms, "Milliseconds", "ap-southeast-1", "Success")
-        
+
         return {
             "doc_id": doc_id,
-            "filename": filename,
+            "doc_ids": effective_doc_ids,
+            "filename": display_filename,
             "cornell": cornell_data
         }
     except Exception as e:

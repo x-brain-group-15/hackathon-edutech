@@ -50,6 +50,7 @@ class FlashcardRequest(BaseModel):
 class QuizRequest(BaseModel):
     num_questions: int = 5
     doc_id: str | None = None
+    doc_ids: list[str] | None = None
 
 
 @app.post("/query")
@@ -103,11 +104,13 @@ def generate_quiz(
     user_id = _uid(x_user_id)
     requested_count = req.num_questions if req else num_questions
     requested_doc_id = req.doc_id if req and req.doc_id else doc_id
+    requested_doc_ids = req.doc_ids if req and req.doc_ids else None
     try:
         return handlers.handle_generate_quiz(
             user_id=user_id,
             num_questions=requested_count,
             doc_id=requested_doc_id,
+            doc_ids=requested_doc_ids,
             vector_store=vector_store,
             ai_client=ai_client,
             userstore=userstore,
@@ -128,7 +131,11 @@ def get_quiz(doc_id: str, x_user_id: str | None = Header(default=None)) -> dict:
 
 
 @app.post("/docs/{doc_id}/mindmap")
-def generate_mindmap(doc_id: str, x_user_id: str | None = Header(default=None)) -> dict:
+def generate_mindmap(
+    doc_id: str,
+    x_user_id: str | None = Header(default=None),
+    doc_ids: list[str] | None = Body(default=None, embed=True),
+) -> dict:
     user_id = _uid(x_user_id)
     try:
         return handlers.handle_generate_mindmap(
@@ -137,6 +144,7 @@ def generate_mindmap(doc_id: str, x_user_id: str | None = Header(default=None)) 
             storage=storage,
             userstore=userstore,
             ai_client=ai_client,
+            doc_ids=doc_ids,
         )
     except ValueError as e:
         logger.warning(f"[/docs/{doc_id}/mindmap] Not found user={user_id}: {e}")
@@ -147,7 +155,11 @@ def generate_mindmap(doc_id: str, x_user_id: str | None = Header(default=None)) 
 
 
 @app.post("/docs/{doc_id}/cornell")
-def generate_cornell(doc_id: str, x_user_id: str | None = Header(default=None)) -> dict:
+def generate_cornell(
+    doc_id: str,
+    x_user_id: str | None = Header(default=None),
+    doc_ids: list[str] | None = Body(default=None, embed=True),
+) -> dict:
     user_id = _uid(x_user_id)
     try:
         return handlers.handle_generate_cornell(
@@ -156,6 +168,7 @@ def generate_cornell(doc_id: str, x_user_id: str | None = Header(default=None)) 
             storage=storage,
             userstore=userstore,
             ai_client=ai_client,
+            doc_ids=doc_ids,
         )
     except ValueError as e:
         logger.warning(f"[/docs/{doc_id}/cornell] Not found user={user_id}: {e}")
