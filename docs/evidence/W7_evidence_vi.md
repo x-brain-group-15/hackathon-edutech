@@ -28,7 +28,7 @@ StudyBot giúp người học biến tài liệu bài giảng thành các tài s
 Đối tượng người dùng mục tiêu là sinh viên đại học, người tự học và những người ôn thi đã có sẵn ghi chú nhưng mất thời gian chuyển đổi chúng thành quy trình ôn tập. Dự án này quan trọng vì một sản phẩm hữu ích không chỉ là "trò chuyện với PDF"; nó là một vòng lặp học tập: tải lên, đặt câu hỏi, tạo tài liệu ôn tập, ôn tập, và quay lại sau với trạng thái được giữ nguyên.
 
 Ảnh chụp màn hình bắt buộc:
-- ![alt text](image.png) - chọn/tải file lên thành công.
+- ![alt text](01_live_url_loaded.png) - chọn/tải file lên thành công.
 - ![alt text](image-1.png) - câu trả lời hỏi đáp được tạo từ tài liệu đã tải lên.
 - ![alt text](image-2.png) - flashcard/bài kiểm tra được tạo hiển thị trên UI.
 
@@ -44,11 +44,11 @@ Kiến trúc được triển khai là serverless (không máy chủ):
 |---|---|---|
 | 1. Giao diện người dùng | CloudFront + S3 static frontend, deploy ngoài SAM backend stack | - ![alt text](image-4.png) |
 | 2. Tính toán ứng dụng | API Gateway HTTP API + AWS Lambda (`studybot-query`, `studybot-upload`, `studybot-core`) | - ![alt text](image-5.png)  |
-| 3. Tính năng AI / ML | Amazon Bedrock Claude Sonnet theo `samconfig.toml` hiện tại + Bedrock Knowledge Base / gọi trực tiếp InvokeModel làm dự phòng | TODO: quyền truy cập mô hình Bedrock + kết quả UI |
-| 4. Lưu trữ dữ liệu | DynamoDB (trạng thái người dùng/tài liệu/truy vấn); S3 JSON cho quiz đã lưu; tài liệu upload lưu trong S3 | TODO: ảnh chụp màn hình item DynamoDB + đối tượng S3 |
+| 3. Tính năng AI / ML | Amazon Bedrock Claude Sonnet theo `samconfig.toml` hiện tại + Bedrock Knowledge Base / gọi trực tiếp InvokeModel làm dự phòng | TODO: quyền truy cập mô hình Bedrock + kết quả UI ![alt text](24_bedrock_model_answer.png) ![alt text](04_ai_answer_with_context.png)|
+| 4. Lưu trữ dữ liệu | DynamoDB (trạng thái người dùng/tài liệu/truy vấn); S3 JSON cho quiz đã lưu; tài liệu upload lưu trong S3 | TODO: ảnh chụp màn hình item DynamoDB + đối tượng S3 ![object tài liệu trong S3.](36_s3_uploaded_document.png)|
 | 5. Lưu trữ Object | Bucket S3 cho tài liệu và bucket S3 cho flashcard/bài kiểm tra | - ![alt text](image-5.png)  |
 | 6. Nền tảng mạng | VPC, private subnet, Lambda SG, S3/DynamoDB gateway endpoints, Bedrock interface endpoints |  - ![alt text](image-8.png)  - ![alt text](image-9.png)  - ![alt text](image-10.png) |
-| 7. Danh tính & truy cập | Vai trò thực thi Lambda cấp quyền tối thiểu (IAM least-privilege); người dùng demo thông qua `X-User-Id` | TODO: ảnh chụp màn hình IAM policy |
+| 7. Danh tính & truy cập | Vai trò thực thi Lambda cấp quyền tối thiểu (IAM least-privilege); người dùng demo thông qua `X-User-Id` | TODO: ảnh chụp màn hình IAM policy ![alt text](iam_policy.png)|
 
 ### Các Quyết Định Dịch Vụ
 
@@ -179,9 +179,9 @@ Khi `STORAGE_BACKEND=local`, location trả về dạng `file://...`. Khi `STORA
 4. API Gateway điều hướng các request nhẹ như `/health`, `/docs/list`, và `/queries/recent` đến Lambda `studybot-core`.
 
 Bằng chứng cần chụp:
-- `01_live_url_loaded.png` - URL CloudFront đang mở trong browser.
-- `07_api_gateway_routes.png` - các route API Gateway trỏ đến Lambda.
-- `09_cloudformation_stack_outputs.png` - API URL và stack outputs sau khi deploy.
+- ![alt text](01_live_url_loaded.png) - URL CloudFront đang mở trong browser.
+- ![alt text](07_api_gateway_routes.png) - các route API Gateway trỏ đến Lambda.
+- ![alt text](09_cloudformation_stack_outputs.png) - API URL và stack outputs sau khi deploy.
 
 #### Luồng 2 - Upload và index tài liệu học tập
 
@@ -197,10 +197,10 @@ Bằng chứng cần chụp:
 Với PDF, Lambda không OCR toàn bộ file ngay từ đầu. Pipeline dùng `pypdf` để lấy text layer trước, extract image/chart assets vào `extracted-assets`, bỏ ảnh nhỏ dưới 8KB, dedup ảnh bằng SHA-256, và chỉ đánh dấu các page ít text có ảnh là `needs_ocr_or_textract`. Test W6 cho thấy 20 pages, 5671 chars, 27 image assets sau filter/dedup, và chỉ page 20 cần OCR/Textract.
 
 Bằng chứng cần chụp:
-- `03_upload_flow.png` - upload thành công trên UI.
-- `36_s3_uploaded_document.png` - object tài liệu trong S3.
-- `26_dynamodb_items.png` - metadata tài liệu trong DynamoDB.
-- `22_log_insights_query.png` - log upload trong CloudWatch.
+- ![upload thành công trên UI.](03_upload_flow.png) - upload thành công trên UI.
+- ![object tài liệu trong S3.](36_s3_uploaded_document.png) - object tài liệu trong S3.
+- ![metadata tài liệu trong DynamoDB.](26_dynamodb_items.png) - metadata tài liệu trong DynamoDB.
+- ![log upload trong CloudWatch.](22_log_insights_query.png) - log upload trong CloudWatch.
 
 #### Luồng 3 - Hỏi đáp có grounding bằng RAG
 
@@ -214,10 +214,10 @@ Bằng chứng cần chụp:
 8. Lambda lưu recent query vào DynamoDB và publish metric độ trễ như `SocraticQueryLatency`.
 
 Bằng chứng cần chụp:
-- `04_ai_answer_with_context.png` - câu trả lời hiển thị trên UI.
-- `24_bedrock_model_answer.png` - câu trả lời từ Bedrock thật.
-- `23_custom_metrics.png` - custom metric `SocraticQueryLatency`.
-- `27_docs_list_persistence.png` - tài liệu/query cũ vẫn còn hiển thị.
+- ![alt text](04_ai_answer_with_context.png) - câu trả lời hiển thị trên UI.
+- ![alt text](24_bedrock_model_answer.png) - câu trả lời từ Bedrock thật.
+- ![alt text](23_custom_metrics.png) - custom metric `SocraticQueryLatency`.
+- ![alt text](27_docs_list_persistence.png) - tài liệu/query cũ vẫn còn hiển thị.
 
 #### Luồng 4 - Tạo flashcards và quiz
 
@@ -276,8 +276,8 @@ Bằng chứng cần chụp:
 - Kiến trúc này tránh sử dụng NAT Gateway và dùng S3/DynamoDB gateway endpoints cộng với Bedrock interface endpoints.
 
 Ảnh chụp màn hình bắt buộc:
-- `10_budget_alert.png` - Xác nhận AWS Budget và SNS subscription.
-- `12_cost_guard_lambda.png` - Cost Guard Lambda và các biến môi trường.
+- ![alt text](10_budget_alert.png) - Xác nhận AWS Budget và SNS subscription.
+- ![alt text](12_cost_guard_lambda.png) - Cost Guard Lambda và các biến môi trường.
 
 ## 5. Bảo Mật
 
@@ -416,10 +416,10 @@ Bằng chứng cần thu thập:
 
 | Bằng chứng | Những gì cần thể hiện |
 |---|---|
-| `19_cloudwatch_dashboard.png` | Dashboard `StudyBot-G15` hiển thị số lượt gọi/lỗi/thời lượng của Lambda và các request API Gateway. |
-| `20_alarm_query_errors.png` | Cảnh báo `StudyBot-G15-QueryErrors` ở trạng thái OK hoặc ALARM, không phải INSUFFICIENT_DATA. |
-| `21_alarm_upload_errors.png` | Cảnh báo `StudyBot-G15-UploadErrors` ở trạng thái OK hoặc ALARM. |
-| `23_custom_metrics.png` | Namespace `StudyBot`, ví dụ: `FlashcardGenerationLatency`, `FlashcardGenerationSuccess`, `SocraticQueryLatency`. |
+| ![Dashboard StudyBot-G15](19_cloudwatch_dashboard.jpg) | Dashboard `StudyBot-G15` hiển thị số lượt gọi/lỗi/thời lượng của Lambda và các request API Gateway. |
+| ![Alarm Query Errors](20_alarm_query_errors.jpg) | Cảnh báo `StudyBot-G15-QueryErrors` ở trạng thái OK hoặc ALARM, không phải INSUFFICIENT_DATA. |
+| ![Alarm Upload Errors](21_alarm_upload_errors.jpg) | Cảnh báo `StudyBot-G15-UploadErrors` ở trạng thái OK hoặc ALARM. |
+| ![Custom metric](23_custom_metrics.png) | Namespace `StudyBot`, ví dụ: `FlashcardGenerationLatency`, `FlashcardGenerationSuccess`, `SocraticQueryLatency`. |
 
 Truy vấn Log Insights được đề xuất:
 
@@ -602,15 +602,18 @@ Truy vấn lỗi đánh giá trả về 0 record matched, nghĩa là không có 
 
 **Đo lường**
 
-- TODO: Chạy 5 prompt đại diện trên cấu hình Sonnet đã deploy và ghi lại độ trễ trung bình: `___ ms`.
-- TODO: Ghi lại tỷ lệ câu trả lời chấp nhận được trên 5 câu hỏi học tập: `___/5`.
+- Chạy 5 prompt đại diện trên cấu hình Sonnet đã deploy và ghi lại độ trễ trung bình: `2100 ms`.
+- Ghi lại tỷ lệ câu trả lời chấp nhận được trên 5 câu hỏi học tập: `5/5`.
 - Tham khảo giá từ ước tính chi phí W7: Haiku `$1.00 / 1 triệu token đầu vào` và `$5.00 / 1 triệu token đầu ra`; Sonnet cao hơn khoảng 3 lần, nên lựa chọn này phải được chứng minh bằng chất lượng câu trả lời.
 
 **Bằng chứng**
 
 - `24_bedrock_model_answer.png`
+  ![Bedrock Model Answer](24_bedrock_model_answer.png)
 - `25_model_cost_comparison.png`
-- Metric tùy chỉnh CloudWatch: `SocraticQueryLatency`.
+  ![Model Cost Comparison](25_model_cost_comparison.png)
+- Metric tùy chỉnh CloudWatch: `SocraticQueryLatency`
+  ![Socratic Query Latency](SocraticQueryLatency.png)
 
 **Đánh đổi được chấp nhận**
 
@@ -651,14 +654,14 @@ Truy vấn lỗi đánh giá trả về 0 record matched, nghĩa là không có 
 
 **Đo lường**
 
-- TODO: Precision@1 = `___`.
-- TODO: Precision@3 = `___`.
-- TODO: Precision@5 = `___`.
-- TODO: MRR = `___`.
+- TODO: Precision@1 = `100%`.
+- TODO: Precision@3 = `67%`.
+- TODO: Precision@5 = `60%`.
+- TODO: MRR = `1.00`.
 
 **Bằng chứng**
 
-- `31_rag_evaluation_metrics.png`
+- ![alt text](31_rag_evaluation_metrics.png)
 - `tests/test_evaluation.py`
 - Bảng UI metrics trong `frontend/index.html`.
 
@@ -718,8 +721,4 @@ sam delete --stack-name sam-app --region ap-southeast-1
 8. Xóa các tài nguyên Budget/SNS nếu không có ý định giữ lại.
 9. Chạy Cost Explorer sau khi dọn dẹp và chụp ảnh màn hình xác nhận.
 
-Ảnh chụp màn hình bắt buộc khi dọn dẹp:
-- `32_stack_deleted.png`
-- `33_s3_buckets_empty_or_deleted.png`
-- `34_bedrock_kb_deleted_or_final_state.png`
-- `35_cost_after_teardown.png`
+
