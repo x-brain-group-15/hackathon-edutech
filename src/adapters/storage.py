@@ -12,9 +12,17 @@ from typing import Any
 class S3Storage:
     def __init__(self, bucket: str, region: str):
         import boto3
+        from botocore.config import Config
         if not bucket:
             raise ValueError("STORAGE_BUCKET must be set for S3 backend")
-        self.s3 = boto3.client("s3", region_name=region)
+        
+        # Enforce short connection (2.0s) and read (3.0s) timeouts to prevent Lambda from hanging
+        config_boto = Config(
+            connect_timeout=2.0,
+            read_timeout=3.0,
+            retries={"max_attempts": 1}
+        )
+        self.s3 = boto3.client("s3", region_name=region, config=config_boto)
         self.bucket = bucket
 
     def put(self, key: str, data: bytes) -> str:
