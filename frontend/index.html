@@ -628,7 +628,21 @@
               </span>
               <h2 data-i18n="askTitle"></h2>
             </div>
-            <span class="meta" data-i18n="askMeta"></span>
+            <div style="display:flex;align-items:center;gap:0.75rem;">
+              <span class="meta" data-i18n="askMeta"></span>
+              <button id="btn-reset-chat" onclick="resetChat()" title="Clear chat history"
+                style="display:none;padding:0.45rem 0.85rem;font-size:0.8rem;font-weight:600;border-radius:8px;border:1px solid rgba(239,68,68,0.3);background:rgba(239,68,68,0.08);color:#f87171;cursor:pointer;display:flex;align-items:center;gap:0.4rem;transition:all 0.2s ease;"
+                onmouseover="this.style.background='rgba(239,68,68,0.18)';this.style.borderColor='rgba(239,68,68,0.5)'"
+                onmouseout="this.style.background='rgba(239,68,68,0.08)';this.style.borderColor='rgba(239,68,68,0.3)'">
+                <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="3 6 5 6 21 6"></polyline>
+                  <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+                  <path d="M10 11v6"></path><path d="M14 11v6"></path>
+                  <path d="M9 6V4h6v2"></path>
+                </svg>
+                Reset Chat
+              </button>
+            </div>
           </div>
 
           <!-- Socratic Tutor Switcher -->
@@ -1946,6 +1960,34 @@
   `;
     }
 
+    function resetChat() {
+      const card = $('answer-card');
+      const resetBtn = $('btn-reset-chat');
+      if (!card) return;
+
+      // Animate out
+      card.style.transition = 'opacity 0.25s ease, transform 0.25s ease';
+      card.style.opacity = '0';
+      card.style.transform = 'translateY(4px)';
+
+      setTimeout(() => {
+        card.innerHTML = '';
+        card.removeAttribute('data-has-messages');
+        card.classList.remove('visible');
+        card.style.opacity = '';
+        card.style.transform = '';
+        card.style.transition = '';
+        // Hide reset button
+        if (resetBtn) resetBtn.style.display = 'none';
+        // Clear input
+        const input = $('question');
+        if (input) input.value = '';
+        toast('Chat cleared ✨', 'success');
+        // Show welcome again
+        setTimeout(() => renderWelcomeMessage(), 100);
+      }, 250);
+    }
+
     function parseMarkdownAndCitations(text) {
       if (!text) return '';
       // 1. Escape HTML first for security (excluding our own generated HTML later)
@@ -2200,6 +2242,10 @@
         return;
       }
       $('answer-card').setAttribute('data-has-messages', 'true');
+
+      // Show reset button once chat has started
+      const resetBtn = $('btn-reset-chat');
+      if (resetBtn) resetBtn.style.display = 'flex';
 
       $('question').value = '';
 
