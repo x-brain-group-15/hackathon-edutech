@@ -280,9 +280,13 @@ Bằng chứng cần chụp:
 
 Ảnh chụp màn hình bắt buộc:
 - `10_budget_alert.png` - Xác nhận AWS Budget và SNS subscription.
+![alt text](10_budget_alert.png)
 - `11_cost_anomaly_detection.png` - Cost Anomaly Detection (Phát hiện chi phí bất thường) được bật.
+![alt text](11_cost_anomaly_detection.png)
 - `12_cost_guard_lambda.png` - Cost Guard Lambda và các biến môi trường.
+![alt text](12_cost_guard_lambda.png)
 - `13_cost_explorer_by_service.png` - chi phí nhóm theo dịch vụ.
+![alt text](13_cost_explorer_by_service.png)
 
 ## 5. Bảo Mật
 
