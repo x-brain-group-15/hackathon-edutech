@@ -19,14 +19,17 @@ class BedrockAI:
 
     def _build_arn_for_model(self, model_id: str) -> str:
         """Build model ARN or Inference Profile ARN dynamically based on region constraints."""
+        if model_id.startswith("arn:aws:bedrock:"):
+            return model_id
+
         region_group = self.region.split("-")[0]  # "us", "eu", "ap"
 
         # Models released after mid-2024 require cross-region inference profiles.
         NEEDS_PROFILE_PREFIXES = (
-            "claude-3-5-sonnet-20241022",
+            "claude-3-5-sonnet",
             "claude-3-7",
             "claude-sonnet-4",
-            "claude-3-5-haiku-20250307",
+            "claude-3-5-haiku",
             "claude-sonnet-4-5",
             "claude-haiku-4-5",
             "claude-sonnet-4-6",
@@ -35,14 +38,16 @@ class BedrockAI:
             "nova-pro",
         )
         needs_prefix = any(p in model_id for p in NEEDS_PROFILE_PREFIXES)
-        already_prefixed = any(model_id.startswith(f"{p}.") for p in ("us", "eu", "ap"))
+        
+        PROFILE_PREFIXES = ("us", "eu", "ap", "apac", "usac", "euac")
+        already_prefixed = any(model_id.startswith(f"{p}.") for p in PROFILE_PREFIXES)
 
         if needs_prefix and not already_prefixed:
             model_id = f"{region_group}.{model_id}"
 
-        # If it is a cross-region inference profile (prefixed with us., eu., ap.),
+        # If it is a cross-region inference profile (prefixed with us., eu., ap., apac., etc.),
         # use the ::inference-profile/ ARN format instead of ::foundation-model/
-        is_profile = any(model_id.startswith(f"{p}.") for p in ("us", "eu", "ap"))
+        is_profile = any(model_id.startswith(f"{p}.") for p in PROFILE_PREFIXES)
         if is_profile:
             return f"arn:aws:bedrock:{self.region}::inference-profile/{model_id}"
         else:
