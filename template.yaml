@@ -287,33 +287,120 @@ Resources:
           Value: !Ref TeamName
 
   # --------------------------------------------------------------------------
-  # 3. Lambda Function — the FastAPI app
+  # 3a. Lambda — Query & AI features (Bedrock-heavy)
+  #     Routes: /query, /flashcards, /docs/{id}/mindmap, /docs/{id}/cornell
   # --------------------------------------------------------------------------
-  StudyBotFunction:
+  StudyBotQueryFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub "studybot-api-${TeamName}"
-      # Handler points to lambda_handler.py → handler object (Mangum instance)
-      Handler: lambda_handler.handler
-      CodeUri: .                  # sam build packages everything from this dir
+      FunctionName: !Sub "studybot-query-${TeamName}"
+      Handler: lambda_query.handler
+      CodeUri: .
       Role: !GetAtt StudyBotLambdaRole.Arn
-      Description: "StudyBot FastAPI app — RAG over uploaded lecture notes"
+      MemorySize: 512
+      Timeout: 60
+      Description: "StudyBot — Query & AI features (Bedrock RAG, flashcards, mindmap, cornell)"
       VpcConfig:
         SecurityGroupIds: [!Ref LambdaSecurityGroup]
         SubnetIds: [!Ref PrivateSubnet]
-      # API Gateway HTTP API — cheapest ($1.00/1M requests vs REST $3.50/1M)
       Events:
-        ApiRoot:
+        Query:
           Type: HttpApi
           Properties:
             ApiId: !Ref StudyBotHttpApi
-            Path: /{proxy+}
-            Method: ANY
-        ApiHealth:
+            Path: /query
+            Method: POST
+        Flashcards:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref StudyBotHttpApi
+            Path: /flashcards
+            Method: POST
+        Mindmap:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref StudyBotHttpApi
+            Path: /docs/{doc_id}/mindmap
+            Method: POST
+        Cornell:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref StudyBotHttpApi
+            Path: /docs/{doc_id}/cornell
+            Method: POST
+
+  # --------------------------------------------------------------------------
+  # 3b. Lambda — Upload & Document management (I/O-heavy)
+  #     Routes: /upload, DELETE /docs/{id}, /docs/{id}/evaluate
+  # --------------------------------------------------------------------------
+  StudyBotUploadFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "studybot-upload-${TeamName}"
+      Handler: lambda_upload.handler
+      CodeUri: .
+      Role: !GetAtt StudyBotLambdaRole.Arn
+      MemorySize: 1024
+      Timeout: 120
+      Description: "StudyBot — Upload & document management (S3, vector ingest, evaluate)"
+      VpcConfig:
+        SecurityGroupIds: [!Ref LambdaSecurityGroup]
+        SubnetIds: [!Ref PrivateSubnet]
+      Events:
+        Upload:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref StudyBotHttpApi
+            Path: /upload
+            Method: POST
+        DeleteDoc:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref StudyBotHttpApi
+            Path: /docs/{doc_id}
+            Method: DELETE
+        Evaluate:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref StudyBotHttpApi
+            Path: /docs/{doc_id}/evaluate
+            Method: POST
+
+  # --------------------------------------------------------------------------
+  # 3c. Lambda — Core / lightweight CRUD
+  #     Routes: /health, /docs/list, /queries/recent
+  # --------------------------------------------------------------------------
+  StudyBotCoreFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "studybot-core-${TeamName}"
+      Handler: lambda_core.handler
+      CodeUri: .
+      Role: !GetAtt StudyBotLambdaRole.Arn
+      MemorySize: 256
+      Timeout: 15
+      Description: "StudyBot — Core routes (health, list docs, recent queries)"
+      VpcConfig:
+        SecurityGroupIds: [!Ref LambdaSecurityGroup]
+        SubnetIds: [!Ref PrivateSubnet]
+      Events:
+        Health:
           Type: HttpApi
           Properties:
             ApiId: !Ref StudyBotHttpApi
             Path: /health
+            Method: GET
+        ListDocs:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref StudyBotHttpApi
+            Path: /docs/list
+            Method: GET
+        RecentQueries:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref StudyBotHttpApi
+            Path: /queries/recent
             Method: GET
 
   # --------------------------------------------------------------------------
@@ -331,12 +418,26 @@ Resources:
   # --------------------------------------------------------------------------
   # 5. CloudWatch Log Group — explicit so it gets deleted on stack teardown
   # --------------------------------------------------------------------------
-  StudyBotLogGroup:
+  StudyBotQueryLogGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Delete
     Properties:
-      LogGroupName: !Sub "/aws/lambda/studybot-api-${TeamName}"
-      RetentionInDays: 3          # only keep 3 days — hackathon, not prod
+      LogGroupName: !Sub "/aws/lambda/studybot-query-${TeamName}"
+      RetentionInDays: 3
+
+  StudyBotUploadLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/studybot-upload-${TeamName}"
+      RetentionInDays: 3
+
+  StudyBotCoreLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/studybot-core-${TeamName}"
+      RetentionInDays: 3
 
   # --------------------------------------------------------------------------
   # 6. CloudWatch Dashboard (Optional Capability #8 — Observability)
@@ -354,8 +455,12 @@ Resources:
                 "title": "Lambda Invocations & Errors",
                 "region": "${AWS::Region}",
                 "metrics": [
-                  ["AWS/Lambda", "Invocations", "FunctionName", "studybot-api-${TeamName}"],
-                  ["AWS/Lambda", "Errors",       "FunctionName", "studybot-api-${TeamName}"]
+                  ["AWS/Lambda", "Invocations", "FunctionName", "studybot-query-${TeamName}"],
+                  ["AWS/Lambda", "Errors",       "FunctionName", "studybot-query-${TeamName}"],
+                  ["AWS/Lambda", "Invocations", "FunctionName", "studybot-upload-${TeamName}"],
+                  ["AWS/Lambda", "Errors",       "FunctionName", "studybot-upload-${TeamName}"],
+                  ["AWS/Lambda", "Invocations", "FunctionName", "studybot-core-${TeamName}"],
+                  ["AWS/Lambda", "Errors",       "FunctionName", "studybot-core-${TeamName}"]
                 ],
                 "period": 300, "stat": "Sum", "view": "timeSeries"
               }
@@ -366,7 +471,9 @@ Resources:
                 "title": "Lambda Duration (avg ms)",
                 "region": "${AWS::Region}",
                 "metrics": [
-                  ["AWS/Lambda", "Duration", "FunctionName", "studybot-api-${TeamName}"]
+                  ["AWS/Lambda", "Duration", "FunctionName", "studybot-query-${TeamName}"],
+                  ["AWS/Lambda", "Duration", "FunctionName", "studybot-upload-${TeamName}"],
+                  ["AWS/Lambda", "Duration", "FunctionName", "studybot-core-${TeamName}"]
                 ],
                 "period": 300, "stat": "Average", "view": "timeSeries"
               }
@@ -388,16 +495,33 @@ Resources:
   # --------------------------------------------------------------------------
   # 7. CloudWatch Alarm — fires when Lambda error rate spikes
   # --------------------------------------------------------------------------
-  StudyBotErrorAlarm:
+  StudyBotQueryErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub "StudyBot-${TeamName}-LambdaErrors"
-      AlarmDescription: "Lambda error count > 5 in 5 minutes"
+      AlarmName: !Sub "StudyBot-${TeamName}-QueryErrors"
+      AlarmDescription: "Query Lambda error count > 5 in 5 minutes"
       MetricName: Errors
       Namespace: AWS/Lambda
       Dimensions:
         - Name: FunctionName
-          Value: !Ref StudyBotFunction
+          Value: !Ref StudyBotQueryFunction
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+
+  StudyBotUploadErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "StudyBot-${TeamName}-UploadErrors"
+      AlarmDescription: "Upload Lambda error count > 5 in 5 minutes"
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref StudyBotUploadFunction
       Statistic: Sum
       Period: 300
       EvaluationPeriods: 1
@@ -888,7 +1012,7 @@ Resources:
       FunctionName: !Sub "studybot-cost-guard-${TeamName}"
       Handler: cost_guard.lambda_handler
       CodeUri: ./aws
-      Description: "Cost Guard Lambda to freeze backend (reserved concurrency=0) and IAM role on budget thresholds (30%, 50%, 80%)"
+      Description: "Cost Guard Lambda to freeze all backend functions (reserved concurrency=0) and IAM role on budget thresholds (30%, 50%, 80%)"
       Timeout: 30
       Policies:
         - Version: "2012-10-17"
@@ -902,7 +1026,9 @@ Resources:
               Resource: "*"
       Environment:
         Variables:
-          STUDYBOT_BACKEND_LAMBDA: !Ref StudyBotFunction
+          STUDYBOT_BACKEND_LAMBDA: !Ref StudyBotQueryFunction
+          STUDYBOT_UPLOAD_LAMBDA: !Ref StudyBotUploadFunction
+          STUDYBOT_CORE_LAMBDA: !Ref StudyBotCoreFunction
           APP_IAM_ROLE_NAME: !Sub "studybot-lambda-role-${TeamName}"
           DENY_POLICY_ARN: !Ref StudyBotCostDenyPolicy
       Events:
@@ -957,9 +1083,17 @@ Outputs:
     Description: "API Gateway HTTP API URL — use this as your backend URL"
     Value: !Sub "https://${StudyBotHttpApi}.execute-api.${AWS::Region}.amazonaws.com"
 
-  LambdaFunctionArn:
-    Description: "Lambda function ARN"
-    Value: !GetAtt StudyBotFunction.Arn
+  QueryFunctionArn:
+    Description: "Query Lambda function ARN"
+    Value: !GetAtt StudyBotQueryFunction.Arn
+
+  UploadFunctionArn:
+    Description: "Upload Lambda function ARN"
+    Value: !GetAtt StudyBotUploadFunction.Arn
+
+  CoreFunctionArn:
+    Description: "Core Lambda function ARN"
+    Value: !GetAtt StudyBotCoreFunction.Arn
 
   LambdaRoleArn:
     Description: "IAM Role ARN (for Evidence Pack security section)"
