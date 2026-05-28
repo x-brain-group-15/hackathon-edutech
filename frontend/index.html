@@ -1368,6 +1368,58 @@ async function generateMindmap() {
   }
 }
 
+// --- Leitner Flashcard Generation ---
+async function generateFlashcards() {
+  const topic = $('flashcard-topic').value.trim();
+  if (!topic) {
+    toast('Enter a topic first', 'warn');
+    return;
+  }
+
+  const docId = window.selectedDocId || window.lastDocId || null;
+
+  const btn = $('btn-generate-flashcards');
+  btn.disabled = true;
+  const oldText = btn.textContent;
+  btn.innerHTML = '<span class="spinner"></span> Generating...';
+
+  try {
+    const res = await call('/flashcards', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ topic, limit: 5, doc_id: docId }),
+    });
+
+    if (!res.ok) {
+      throw new Error(res.body.detail || 'Failed to generate flashcards');
+    }
+
+    const cards = res.body.flashcards;
+    if (!cards || !cards.length) {
+      throw new Error('No flashcards returned from server');
+    }
+
+    // Map server format { front, back } → Leitner format { term, definition, box }
+    leitnerState.cards = cards.map(f => ({ term: f.front, definition: f.back, box: 1 }));
+    leitnerState.index = 0;
+    leitnerState.flipped = false;
+
+    saveLeitnerState();
+    updateLeitnerStats();
+
+    $('leitner-empty').style.display = 'none';
+    $('leitner-deck-view').style.display = 'block';
+    renderLeitnerCard();
+
+    toast(`Generated ${cards.length} flashcards for "${topic}"`, 'success');
+  } catch (err) {
+    toast(err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = oldText;
+  }
+}
+
 // --- Leitner Active Recall Arena SRS ---
 const DEFAULT_LEITNER_CARDS = {
   en: [
