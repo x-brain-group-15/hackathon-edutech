@@ -1813,7 +1813,7 @@ async function runBenchmark() {
                 <span style="white-space: nowrap;">${t('benchmarkChunkLabel', {chunk: r.chunk, score: r.score.toFixed(2)})}</span>
                 <span style="color: ${r.relevant ? 'var(--success)' : 'var(--error)'}; white-space: nowrap;">${r.relevant ? t('benchmarkRelevant') : t('benchmarkIrrelevant')}</span>
               </div>
-              <div style="white-space: pre-wrap; word-break: break-word; overflow-wrap: break-word; font-family: var(--font-sans); line-height:1.4; color: var(--text); max-height: 8rem; overflow-y: auto;">${r.text.replace(/</g, '&lt;')}</div>
+              <div class="chunk-text" style="white-space: pre-wrap; word-break: break-word; overflow-wrap: break-word; font-family: var(--font-sans); line-height:1.4; color: var(--text); max-height: 8rem; overflow-y: auto;">${r.text.replace(/</g, '&lt;')}</div>
             </div>
           `).join('')}
         </div>
