@@ -1906,25 +1906,76 @@
 
       function parseMarkdownAndCitations(text) {
         if (!text) return '';
-        // 1. Escape HTML to prevent XSS
+        // 1. Escape HTML first for security (excluding our own generated HTML later)
         let html = text
           .replace(/&/g, '&amp;')
           .replace(/</g, '&lt;')
           .replace(/>/g, '&gt;');
 
-        // 2. Line breaks
-        html = html.replace(/\n/g, '<br/>');
+        // 2. Parse Code Blocks: ```javascript ... ```
+        // We temporarily extract code blocks to protect their contents from other markdown formatting
+        const codeBlocks = [];
+        html = html.replace(/```([\s\S]*?)```/g, (match, code) => {
+          const id = `__CODE_BLOCK_${codeBlocks.length}__`;
+          // Split language if specified
+          const lines = code.trim().split('\n');
+          let lang = '';
+          let actualCode = code.trim();
+          if (lines.length > 0 && lines[0].length < 15 && !lines[0].includes(' ') && !lines[0].includes('\n')) {
+            lang = lines[0].trim();
+            actualCode = lines.slice(1).join('\n').trim();
+          }
+          
+          const codeHtml = `
+            <div class="md-code-block">
+              <div class="md-code-header">
+                <span>${lang.toUpperCase() || 'CODE'}</span>
+                <button class="md-copy-btn" onclick="navigator.clipboard.writeText(decodeURIComponent('${encodeURIComponent(actualCode)}')); toast('Copied to clipboard', 'success');">
+                  <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                  Copy
+                </button>
+              </div>
+              <pre><code>${actualCode}</code></pre>
+            </div>
+          `;
+          codeBlocks.push(codeHtml);
+          return id;
+        });
 
-        // 3. Bold (**text**)
+        // 3. Headers: ### Title, ## Title, # Title
+        html = html.replace(/^### (.*?)$/gm, '<h4 class="md-h3">$1</h4>');
+        html = html.replace(/^## (.*?)$/gm, '<h3 class="md-h2">$1</h3>');
+        html = html.replace(/^# (.*?)$/gm, '<h2 class="md-h1">$1</h2>');
+
+        // 4. Blockquotes: > Quote
+        html = html.replace(/^&gt;\s+(.*?)$/gm, '<blockquote class="md-quote">$1</blockquote>');
+
+        // 5. Bold (**text**)
         html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
 
-        // 4. Italic (*text*)
+        // 6. Italic (*text*)
         html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
 
-        // 5. Inline Code (`code`)
-        html = html.replace(/`(.*?)`/g, '<code>$1</code>');
+        // 7. Inline Code (`code`)
+        html = html.replace(/`(.*?)`/g, '<code class="md-inline-code">$1</code>');
 
-        // 6. Inline Citation Badges: e.g. (Source: [chunk X]) or [chunk X]
+        // 8. Lists (Unordered & Ordered)
+        // Parse unordered list items: - item or * item
+        html = html.replace(/^\s*[-*]\s+(.*?)$/gm, '<li class="md-li">$1</li>');
+        // Wrap contiguous list items in <ul>
+        html = html.replace(/(<li class="md-li">.*?<\/li>)+/gs, '<ul class="md-ul">$&</ul>');
+
+        // Parse ordered list items: 1. item
+        html = html.replace(/^\s*(\d+)\.\s+(.*?)$/gm, '<li class="md-ol-li" data-index="$1">$2</li>');
+        // Wrap contiguous ordered list items in <ol>
+        html = html.replace(/(<li class="md-ol-li">.*?<\/li>)+/gs, '<ol class="md-ol">$&</ol>');
+
+        // 9. Paragraphs and Line Breaks
+        // Replace double newlines with clean paragraph gaps
+        html = html.replace(/\n\n/g, '<div class="md-p-gap"></div>');
+        html = html.replace(/\n/g, '<br/>');
+
+        // 10. Inline Citation Badges: e.g. (Source: [chunk X]) or [chunk X] or [X]
         html = html.replace(
           /\(Source:\s*\[chunk\s*(\d+)\]\)/gi,
           '<span class="inline-citation-badge" onclick="scrollToCitation($1)"><svg style="width: 10px; height: 10px; margin-right: 2px; display: inline-block; vertical-align: middle;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>Chunk $1</span>'
@@ -1933,6 +1984,16 @@
           /\[chunk\s*(\d+)\]/gi,
           '<span class="inline-citation-badge" onclick="scrollToCitation($1)"><svg style="width: 10px; height: 10px; margin-right: 2px; display: inline-block; vertical-align: middle;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>Chunk $1</span>'
         );
+        // Add support for [X] standard citations returned by Bedrock KB or other LLMs
+        html = html.replace(
+          /\[(\d+)\]/g,
+          '<span class="inline-citation-badge" onclick="scrollToCitation($1)"><svg style="width: 10px; height: 10px; margin-right: 2px; display: inline-block; vertical-align: middle;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>Chunk $1</span>'
+        );
+
+        // 11. Put back the code blocks
+        codeBlocks.forEach((codeHtml, idx) => {
+          html = html.replace(`__CODE_BLOCK_${idx}__`, codeHtml);
+        });
 
         return html;
       }

@@ -172,7 +172,15 @@ def _put_cloudwatch_metric(metric_name: str, value: float, unit: str, aws_region
     """Real-world scenario: Put custom metrics to CloudWatch to monitor AI operations."""
     try:
         import boto3
-        cw = boto3.client("cloudwatch", region_name=aws_region)
+        from botocore.config import Config
+        # Use highly aggressive timeouts (0.5s connect, 0.5s read) and 0 retries
+        # to guarantee we never block/hang the main request thread in isolated subnets.
+        config_cw = Config(
+            connect_timeout=0.5,
+            read_timeout=0.5,
+            retries={"max_attempts": 0}
+        )
+        cw = boto3.client("cloudwatch", region_name=aws_region, config=config_cw)
         cw.put_metric_data(
             Namespace="StudyBot",
             MetricData=[
@@ -190,6 +198,7 @@ def _put_cloudwatch_metric(metric_name: str, value: float, unit: str, aws_region
     except Exception as e:
         # Never fail the user request just because metrics failed to publish
         print(f"Failed to put CloudWatch metric: {e}")
+
 
 
 
@@ -456,15 +465,9 @@ def handle_query(
                 user_id=user_id
             )
             
-            # Retrieve chunks
+            # Retrieve chunks using unified and robust vector search with user isolation
             chunks = []
             if vector_backend == "bedrock_kb":
-                log_step(
-                    "rag_query",
-                    "bedrock_retrieve_start",
-                    user_id=user_id,
-                    kb_id=bedrock_kb_id
-                )
                 try:
                     ret_res = ai_client.agent_runtime.retrieve(
                         knowledgeBaseId=bedrock_kb_id,
@@ -543,7 +546,23 @@ def handle_query(
             )
 
             answer = result["answer"]
-            citations = result.get("citations", [])
+            raw_citations = result.get("citations", [])
+            citations = []
+            for i, rc in enumerate(raw_citations):
+                text = rc.get("text", "")
+                loc = rc.get("source", {})
+                doc_id = "knowledge-base"
+                if loc.get("type") == "S3":
+                    uri = loc.get("s3Location", {}).get("uri", "")
+                    if uri:
+                        doc_id = uri.split("/")[-1]
+                
+                citations.append({
+                    "chunk": i + 1,
+                    "doc_id": doc_id,
+                    "score": 1.0 - (i * 0.05),
+                    "text": text,
+                })
 
             input_tokens = result.get("input_tokens", 0)
             output_tokens = result.get("output_tokens", 0)
@@ -632,7 +651,7 @@ def handle_query(
                         "chunk": i + 1,
                         "doc_id": c["doc_id"],
                         "score": c["score"],
-                        "text": c["text"][:200]
+                        "text": c["text"]
                     }
                     for i, c in enumerate(chunks)
                 ]
@@ -1187,7 +1206,13 @@ def handle_generate_quiz(
     if doc_id and config.flashcard_bucket:
         try:
             import boto3
-            s3 = boto3.client("s3", region_name=config.aws_region)
+            from botocore.config import Config
+            config_s3 = Config(
+                connect_timeout=2.0,
+                read_timeout=3.0,
+                retries={"max_attempts": 1}
+            )
+            s3 = boto3.client("s3", region_name=config.aws_region, config=config_s3)
             key = f"{user_id}/quiz/{doc_id}.json"
             s3.put_object(
                 Bucket=config.flashcard_bucket,
@@ -1210,7 +1235,13 @@ def handle_get_quiz(user_id: str, doc_id: str) -> dict:
         return {"doc_id": doc_id, "quiz": []}
     try:
         import boto3
-        s3 = boto3.client("s3", region_name=config.aws_region)
+        from botocore.config import Config
+        config_s3 = Config(
+            connect_timeout=2.0,
+            read_timeout=3.0,
+            retries={"max_attempts": 1}
+        )
+        s3 = boto3.client("s3", region_name=config.aws_region, config=config_s3)
         key = f"{user_id}/quiz/{doc_id}.json"
         resp = s3.get_object(Bucket=config.flashcard_bucket, Key=key)
         quiz_items = json.loads(resp["Body"].read().decode("utf-8"))

@@ -1073,7 +1073,109 @@ button.ghost:hover {
   color: var(--text);
   border: 1px solid var(--bubble-ai-border);
   border-top-left-radius: 4px;
+  white-space: normal !important;
 }
+
+/* --- Premium Markdown Styles inside Chat --- */
+.md-p-gap {
+  height: 0.8rem;
+}
+
+.md-h1, .md-h2, .md-h3, .md-h4 {
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+.md-h1 { font-size: 1.25rem; }
+.md-h2 { font-size: 1.15rem; }
+.md-h3 { font-size: 1.05rem; }
+.md-h4 { font-size: 0.95rem; }
+
+.md-quote {
+  margin: 0.8rem 0;
+  padding: 0.5rem 1rem;
+  border-left: 4px solid var(--accent);
+  background: var(--card);
+  border-radius: 4px;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.md-inline-code {
+  background: var(--border);
+  padding: 0.15rem 0.35rem;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 0.88rem;
+  color: var(--accent);
+}
+
+.md-code-block {
+  margin: 1rem 0;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+  background: var(--bg);
+}
+
+.md-code-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0.85rem;
+  background: var(--border);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.md-copy-btn {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  transition: color 0.2s ease;
+}
+.md-copy-btn:hover {
+  color: var(--accent);
+}
+
+.md-code-block pre {
+  margin: 0;
+  padding: 1rem;
+  overflow-x: auto;
+  background: var(--card);
+}
+
+.md-code-block code {
+  font-family: monospace;
+  font-size: 0.88rem;
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.md-ul, .md-ol {
+  margin: 0.6rem 0;
+  padding-left: 1.5rem;
+}
+
+.md-li {
+  list-style-type: disc;
+  margin-bottom: 0.3rem;
+}
+
+.md-ol-li {
+  list-style-type: decimal;
+  margin-bottom: 0.3rem;
+}
+
 
 /* Citations inside AI bubble */
 .citations {
