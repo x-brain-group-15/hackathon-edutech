@@ -1247,9 +1247,10 @@ button.ghost:hover {
   color: var(--text);
   font-size: 0.88rem;
   line-height: 1.35;
-  word-break: break-all;
-  overflow-wrap: anywhere;
+  word-break: break-word;
+  overflow-wrap: break-word;
   white-space: normal;
+  hyphens: none;
 }
 
 .doc-item .name-text {
