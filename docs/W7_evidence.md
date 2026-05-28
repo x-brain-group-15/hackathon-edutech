@@ -10,7 +10,7 @@
 | Members | TODO: member names |
 | Domain | EduTech - AI Study Buddy |
 | Use case | Upload lecture PDFs/slides/text notes, then ask questions, generate flashcards/quizzes, and continue studying from saved state. |
-| Live public URL | TODO: CloudFront HTTPS URL |
+| Live public URL | TODO: CloudFront HTTPS URL, or final HTTPS frontend URL used by trainer |
 | API URL | `https://1lse4odraj.execute-api.ap-southeast-1.amazonaws.com` or TODO: final API Gateway URL |
 | GitHub repo | TODO: public repo URL |
 | AWS region | `ap-southeast-1` |
@@ -42,10 +42,10 @@ The deployed architecture is serverless:
 
 | Capability | Service used | Evidence |
 |---|---|---|
-| 1. Public user interface | CloudFront + S3 static frontend | TODO: CloudFront distribution screenshot |
+| 1. Public user interface | CloudFront + S3 static frontend, deployed outside the SAM backend stack | TODO: CloudFront distribution screenshot |
 | 2. Application compute | API Gateway HTTP API + AWS Lambda (`studybot-query`, `studybot-upload`, `studybot-core`) | TODO: Lambda/API Gateway screenshots |
-| 3. AI / ML feature | Amazon Bedrock Claude 3.5 Haiku + Bedrock Knowledge Base / direct InvokeModel fallback | TODO: Bedrock model access + UI result |
-| 4. Data persistence | DynamoDB user/document/query state; S3 JSON for flashcards/quizzes | TODO: DynamoDB item + S3 object screenshots |
+| 3. AI / ML feature | Amazon Bedrock Claude Sonnet in current `samconfig.toml` + Bedrock Knowledge Base / direct InvokeModel fallback | TODO: Bedrock model access + UI result |
+| 4. Data persistence | DynamoDB user/document/query state; S3 JSON for saved quizzes; uploaded documents in S3 | TODO: DynamoDB item + S3 object screenshots |
 | 5. Object storage | S3 document bucket and flashcard/quiz bucket | TODO: S3 bucket object list |
 | 6. Network foundation | VPC, private subnet, Lambda SG, S3/DynamoDB gateway endpoints, Bedrock interface endpoints | TODO: VPC/subnet/endpoint screenshots |
 | 7. Identity & access | IAM least-privilege Lambda execution role; demo user via `X-User-Id` | TODO: IAM policy screenshot |
@@ -58,8 +58,8 @@ The deployed architecture is serverless:
 | API entry | API Gateway HTTP API | Cheaper and simpler than REST API for this request/response app. |
 | Frontend | S3 + CloudFront | Public HTTPS, low cost, no server to manage. |
 | Database | DynamoDB on-demand | Access patterns are key-value/user-document state; no relational joins needed for demo. |
-| Object storage | S3 | PDFs, extracted content, flashcards, and quiz JSON are blob/document data. |
-| AI model | Claude 3.5 Haiku | Cheapest sufficient model for study Q&A/flashcard/quiz generation during hackathon. |
+| Object storage | S3 | PDFs, extracted content, and saved quiz JSON are blob/document data. |
+| AI model | Claude 3.5 Sonnet in current deployment config | Higher quality for final demo answers; if cost becomes the priority, switch `AiModelId` back to Haiku and update this evidence. |
 | RAG | Bedrock Knowledge Base, with local keyword fallback in code | Better grounded answers when KB is ready; fallback keeps demo path alive if KB ingestion has issues. |
 | Network | Private Lambda subnet + VPC endpoints, no NAT Gateway | S3/DynamoDB gateway endpoints are free; Bedrock endpoints avoid NAT fixed cost. |
 | Observability | CloudWatch dashboard, alarms, logs, custom metrics | Gives operational proof and supports optional Full Observability. |
@@ -70,6 +70,84 @@ The deployed architecture is serverless:
 1. Lambda vs EC2/ECS: chose Lambda for 48-hour speed and low idle cost. Accepted cold starts and request timeout limits.
 2. DynamoDB vs RDS: chose DynamoDB because user state and document metadata are simple access patterns. Accepted weaker ad-hoc querying.
 3. Bedrock KB vs direct InvokeModel: chose KB for grounded retrieval. Kept direct/local fallback because KB setup and ingestion can be the riskiest demo dependency.
+
+### End-to-End Processing Flow
+
+This is the real application flow the demo should prove, not only a service list.
+
+#### Flow 1 - Open the public app
+
+1. Student opens the final HTTPS frontend URL, expected to be CloudFront if the separate frontend deployment is active.
+2. CloudFront serves static HTML/CSS/JS from the S3 frontend bucket.
+3. The browser calls API Gateway using the configured API base URL.
+4. API Gateway routes lightweight requests such as `/health`, `/docs/list`, and `/queries/recent` to `studybot-core`.
+
+Evidence to capture:
+- `docs/evidence/01_live_url_loaded.png` - CloudFront URL in browser.
+- `docs/evidence/07_api_gateway_routes.png` - API Gateway routes mapped to Lambda.
+- `docs/evidence/09_cloudformation_stack_outputs.png` - deployed API URL and stack outputs.
+
+#### Flow 2 - Upload and index a learning document
+
+1. Student uploads a PDF/TXT/slide export from the StudyBot UI.
+2. Browser sends `POST /upload` to API Gateway with `X-User-Id`.
+3. API Gateway invokes `studybot-upload`.
+4. Lambda extracts text and document metadata.
+5. Lambda stores the original file and extracted artifacts in S3.
+6. Lambda stores document metadata under the user's state in DynamoDB.
+7. If Bedrock Knowledge Base is configured, the document content is prepared for retrieval/indexing; otherwise the local keyword retrieval fallback can still support demo Q&A.
+8. Lambda writes logs and metrics to CloudWatch.
+
+Evidence to capture:
+- `docs/evidence/03_upload_flow.png` - upload success in UI.
+- `docs/evidence/36_s3_uploaded_document.png` - uploaded object in S3.
+- `docs/evidence/26_dynamodb_items.png` - document metadata in DynamoDB.
+- `docs/evidence/22_log_insights_query.png` - upload log lines in CloudWatch.
+
+#### Flow 3 - Ask a grounded question with RAG
+
+1. Student asks a question in the chat UI.
+2. Browser sends `POST /query` to API Gateway.
+3. API Gateway invokes `studybot-query`.
+4. Lambda identifies the current user and selected document.
+5. Lambda retrieves relevant context from Bedrock Knowledge Base or the fallback local/vector path.
+6. Lambda calls the configured Bedrock model from `samconfig.toml` with the question and retrieved context.
+7. Lambda returns the answer and supporting context/citations to the browser.
+8. Lambda stores recent query state in DynamoDB and publishes latency metrics such as `SocraticQueryLatency`.
+
+Evidence to capture:
+- `docs/evidence/04_ai_answer_with_context.png` - answer visible in UI.
+- `docs/evidence/24_bedrock_model_answer.png` - real Bedrock-backed answer.
+- `docs/evidence/23_custom_metrics.png` - `SocraticQueryLatency` custom metric.
+- `docs/evidence/27_docs_list_persistence.png` - prior document/query still visible.
+
+#### Flow 4 - Generate flashcards and quizzes
+
+1. Student chooses a selected document and clicks Generate AI / Generate Quiz.
+2. Browser sends `POST /flashcards` or `POST /quiz` to API Gateway.
+3. API Gateway invokes `studybot-query`.
+4. Lambda builds the prompt from selected document context and asks Bedrock to return structured JSON.
+5. Lambda validates/parses the generated JSON.
+6. For quizzes, Lambda stores generated JSON in the flashcard S3 bucket, keyed by user and document.
+7. For flashcards, current backend returns generated JSON and publishes CloudWatch metrics; do not claim S3 persistence unless the flashcard S3 save/load feature is implemented.
+8. UI renders the generated study set; a later `GET /quiz/{doc_id}` can reload saved quiz state.
+
+Evidence to capture:
+- `docs/evidence/05_flashcards_or_quiz.png` - generated study set in UI.
+- `docs/evidence/37_s3_quiz_json.png` - saved quiz JSON object in S3.
+- `docs/evidence/23_custom_metrics.png` - `FlashcardGenerationLatency` or `FlashcardGenerationSuccess`.
+
+#### Flow 5 - Return later and verify persistence
+
+1. Student refreshes the browser or opens a new session.
+2. Browser calls `/docs/list`, `/queries/recent`, and saved quiz endpoints.
+3. Core/query Lambda reads user state from DynamoDB and saved quiz JSON from S3.
+4. UI shows previous uploaded documents, recent query state, and saved quizzes. Flashcards should be shown as generated-on-demand unless S3 flashcard persistence is completed.
+
+Evidence to capture:
+- `docs/evidence/28_fresh_session_persistence.png` - fresh session still shows prior data.
+- `docs/evidence/26_dynamodb_items.png` - persisted document/user records.
+- `docs/evidence/37_s3_quiz_json.png` - persisted quiz artifact.
 
 Required screenshots:
 - `docs/evidence/06_architecture_diagram.png`
@@ -97,7 +175,7 @@ Required screenshots:
 
 ### Cost Controls
 
-- Budget alert configured through SAM as `studybot-monthly-budget-G15` with SNS notifications at 30%, 50%, and 80%.
+- Budget evidence must show the W7-required alert at `$80` with confirmed SNS email. `template.yaml` now defines a `$100` monthly budget with an `80%` threshold, which maps to the required `$80` alert.
 - Cost Guard Lambda can freeze backend Lambda reserved concurrency and attach `StudyBotCostDenyPolicy` if budget thresholds are reached.
 - Auto-fix Lambda watches CloudTrail events for unauthorized EC2/RDS/OpenSearch creation and can delete costly resources.
 - The architecture avoids NAT Gateway and uses S3/DynamoDB gateway endpoints plus Bedrock interface endpoints.
@@ -116,7 +194,7 @@ The Lambda execution role `studybot-lambda-role-G15` is scoped to the app resour
 
 - S3 read/write/list/delete only for the document bucket and flashcard bucket.
 - DynamoDB read/write/query/update/delete only for the StudyBot table.
-- Bedrock `InvokeModel`, `Retrieve`, and `RetrieveAndGenerate` for model and knowledge-base use.
+- Bedrock `InvokeModel`, `Retrieve`, and `RetrieveAndGenerate` for model and knowledge-base use. Bedrock resource scope may include foundation models/inference profiles because model ARNs differ by provider and region.
 - CloudWatch `PutMetricData` only for namespace `StudyBot`.
 - Lambda VPC access and CloudWatch logging through managed execution role policy.
 
@@ -166,29 +244,29 @@ fields @timestamp, @message
 
 ## 6.5 Measurement and Decisions
 
-### Decision 1: Use Claude 3.5 Haiku for study generation during the hackathon
+### Decision 1: Use Claude 3.5 Sonnet for final demo quality, with Haiku as the lower-cost alternative
 
 **Alternatives considered**
 
-- Claude 3.5 Sonnet: eliminated for default usage because it costs about 3x Haiku per input/output token and the demo workload does not require deep reasoning on long complex documents.
+- Claude 3.5 Haiku: lower-cost alternative and good for development loops; use it if Cost Explorer shows Bedrock becoming a top cost driver.
 - Local-only stub model: eliminated for final demo because the rules require real Bedrock calls from the app, not console or mock output.
-- Larger/fallback models listed in `AI_MODEL_FALLBACKS`: kept only as fallback, not the normal path, to control cost.
+- Larger/fallback models listed in `AI_MODEL_FALLBACKS`: kept only as fallback, not the normal path, to avoid uncontrolled cost.
 
 **Measurement**
 
-- TODO: Run 5 representative prompts and record average latency: `___ ms`.
+- TODO: Run 5 representative prompts on the deployed Sonnet config and record average latency: `___ ms`.
 - TODO: Record acceptable answer rate on 5 study questions: `___/5`.
-- Pricing reference from W7 cost estimate: Haiku `$1.00 / 1M input tokens` and `$5.00 / 1M output tokens`; Sonnet about 3x higher.
+- Pricing reference from W7 cost estimate: Haiku `$1.00 / 1M input tokens` and `$5.00 / 1M output tokens`; Sonnet is about 3x higher, so this choice must be justified by answer quality.
 
 **Evidence**
 
-- `docs/evidence/24_bedrock_haiku_answer.png`
+- `docs/evidence/24_bedrock_model_answer.png`
 - `docs/evidence/25_model_cost_comparison.png`
 - CloudWatch custom metric: `SocraticQueryLatency`.
 
 **Trade-off accepted**
 
-- Haiku may produce less polished reasoning than Sonnet on complex material. We accept this because the product goal is fast, affordable study assistance under a 48-hour cost cap; higher models remain fallback only when quality requires it.
+- Sonnet costs more than Haiku. We accept this only for final demo quality; if total cost approaches the warning zone, switch back to Haiku in `samconfig.toml` and update the evidence.
 
 ### Decision 2: Use DynamoDB for persistent study state instead of RDS
 
@@ -283,14 +361,14 @@ Ordered teardown:
 
 1. Save final Cost Explorer screenshot and demo evidence.
 2. Empty the frontend S3 bucket and document/flashcard buckets.
-3. Delete the SAM stack:
+3. Delete the SAM stack configured in `samconfig.toml`:
 
 ```bash
-sam delete --stack-name studybot-G15 --region ap-southeast-1
+sam delete --stack-name sam-app --region ap-southeast-1
 ```
 
 4. Delete or verify deletion of any separately-created Bedrock Knowledge Base/vector store.
-5. Delete CloudFront distribution after disabling it if it was created outside SAM.
+5. Delete or disable the CloudFront distribution after emptying the frontend S3 bucket if it was created outside SAM.
 6. Delete any OpenSearch Serverless collection if used.
 7. Delete any leftover VPC endpoints, security groups, subnets, and VPC if not owned by the stack.
 8. Delete Budget/SNS resources if not retained intentionally.
@@ -332,5 +410,7 @@ Use this checklist while building and demoing. Put all images in `docs/evidence/
 | `28_fresh_session_persistence.png` | Data still visible in fresh session | Browser |
 | `29_no_nat_gateway.png` | NAT Gateway count is zero | VPC NAT Gateway page |
 | `31_rag_evaluation_metrics.png` | Precision@K/MRR panel | StudyBot UI |
+| `36_s3_uploaded_document.png` | Uploaded document object | S3 console |
+| `37_s3_quiz_json.png` | Saved quiz JSON object | S3 console |
 | `32_stack_deleted.png` | Stack deleted after demo | CloudFormation |
 | `35_cost_after_teardown.png` | Final cost after teardown | Cost Explorer |
