@@ -231,9 +231,9 @@ Bằng chứng cần chụp:
 8. UI render bộ học tập đã sinh; `GET /quiz/{doc_id}` có thể load lại quiz đã lưu.
 
 Bằng chứng cần chụp:
-- `05_flashcards_or_quiz.png` - flashcard/quiz hiển thị trên UI.
-- `37_s3_quiz_json.png` - JSON quiz đã lưu trong S3.
-- `23_custom_metrics.png` - `FlashcardGenerationLatency` hoặc `FlashcardGenerationSuccess`.
+- ![alt text](05_flashcards_or_quiz.png) - flashcard/quiz hiển thị trên UI.
+- ![alt text](37_s3_quiz_json.png) - JSON quiz đã lưu trong S3.
+- ![alt text](23_custom_metrics.png) - `FlashcardGenerationLatency` hoặc `FlashcardGenerationSuccess`.
 
 #### Luồng 5 - Quay lại session mới và kiểm tra persistence
 
@@ -243,12 +243,12 @@ Bằng chứng cần chụp:
 4. UI hiển thị tài liệu đã upload, recent query, và quiz đã lưu. Flashcards hiện là generated-on-demand trừ khi save/load flashcard S3 được implement.
 
 Bằng chứng cần chụp:
-- `28_fresh_session_persistence.png` - session mới vẫn thấy dữ liệu cũ.
-- `26_dynamodb_items.png` - record user/document đã persist.
-- `37_s3_quiz_json.png` - artifact quiz đã persist trong S3.
+- ![alt text](28_fresh_session_persistence.png) - session mới vẫn thấy dữ liệu cũ.
+- ![alt text](26_dynamodb_items.png) - record user/document đã persist.
+- ![alt text](37_s3_quiz_json.png) - artifact quiz đã persist trong S3.
 
 Ảnh chụp màn hình bắt buộc:
-- `07_api_gateway_routes.png`
+- ![alt text](07_api_gateway_routes.png)
 
 ## 4. Kiểm Soát Chi Phí
 
@@ -632,9 +632,9 @@ Truy vấn lỗi đánh giá trả về 0 record matched, nghĩa là không có 
 
 **Bằng chứng**
 
-- `26_dynamodb_items.png`
-- `27_docs_list_persistence.png`
-- `28_fresh_session_persistence.png`
+- ![alt text](26_dynamodb_items.png)
+- ![alt text](27_docs_list_persistence.png)
+- ![alt text](28_fresh_session_persistence.png)
 
 **Đánh đổi được chấp nhận**
 
