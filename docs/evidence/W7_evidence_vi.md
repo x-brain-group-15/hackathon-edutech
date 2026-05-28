@@ -28,7 +28,7 @@ StudyBot giúp người học biến tài liệu bài giảng thành các tài s
 Đối tượng người dùng mục tiêu là sinh viên đại học, người tự học và những người ôn thi đã có sẵn ghi chú nhưng mất thời gian chuyển đổi chúng thành quy trình ôn tập. Dự án này quan trọng vì một sản phẩm hữu ích không chỉ là "trò chuyện với PDF"; nó là một vòng lặp học tập: tải lên, đặt câu hỏi, tạo tài liệu ôn tập, ôn tập, và quay lại sau với trạng thái được giữ nguyên.
 
 Ảnh chụp màn hình bắt buộc:
-- ![alt text](image.png) - chọn/tải file lên thành công.
+- ![alt text](01_live_url_loaded.png) - chọn/tải file lên thành công.
 - ![alt text](image-1.png) - câu trả lời hỏi đáp được tạo từ tài liệu đã tải lên.
 - ![alt text](image-2.png) - flashcard/bài kiểm tra được tạo hiển thị trên UI.
 
@@ -44,11 +44,11 @@ Kiến trúc được triển khai là serverless (không máy chủ):
 |---|---|---|
 | 1. Giao diện người dùng | CloudFront + S3 static frontend, deploy ngoài SAM backend stack | - ![alt text](image-4.png) |
 | 2. Tính toán ứng dụng | API Gateway HTTP API + AWS Lambda (`studybot-query`, `studybot-upload`, `studybot-core`) | - ![alt text](image-5.png)  |
-| 3. Tính năng AI / ML | Amazon Bedrock Claude Sonnet theo `samconfig.toml` hiện tại + Bedrock Knowledge Base / gọi trực tiếp InvokeModel làm dự phòng | TODO: quyền truy cập mô hình Bedrock + kết quả UI |
-| 4. Lưu trữ dữ liệu | DynamoDB (trạng thái người dùng/tài liệu/truy vấn); S3 JSON cho quiz đã lưu; tài liệu upload lưu trong S3 | TODO: ảnh chụp màn hình item DynamoDB + đối tượng S3 |
+| 3. Tính năng AI / ML | Amazon Bedrock Claude Sonnet theo `samconfig.toml` hiện tại + Bedrock Knowledge Base / gọi trực tiếp InvokeModel làm dự phòng | TODO: quyền truy cập mô hình Bedrock + kết quả UI ![alt text](24_bedrock_model_answer.png) ![alt text](04_ai_answer_with_context.png)|
+| 4. Lưu trữ dữ liệu | DynamoDB (trạng thái người dùng/tài liệu/truy vấn); S3 JSON cho quiz đã lưu; tài liệu upload lưu trong S3 | TODO: ảnh chụp màn hình item DynamoDB + đối tượng S3 ![object tài liệu trong S3.](36_s3_uploaded_document.png)|
 | 5. Lưu trữ Object | Bucket S3 cho tài liệu và bucket S3 cho flashcard/bài kiểm tra | - ![alt text](image-5.png)  |
 | 6. Nền tảng mạng | VPC, private subnet, Lambda SG, S3/DynamoDB gateway endpoints, Bedrock interface endpoints |  - ![alt text](image-8.png)  - ![alt text](image-9.png)  - ![alt text](image-10.png) |
-| 7. Danh tính & truy cập | Vai trò thực thi Lambda cấp quyền tối thiểu (IAM least-privilege); người dùng demo thông qua `X-User-Id` | TODO: ảnh chụp màn hình IAM policy |
+| 7. Danh tính & truy cập | Vai trò thực thi Lambda cấp quyền tối thiểu (IAM least-privilege); người dùng demo thông qua `X-User-Id` | TODO: ảnh chụp màn hình IAM policy ![alt text](iam_policy.png)|
 
 ### Các Quyết Định Dịch Vụ
 
