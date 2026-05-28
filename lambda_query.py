@@ -37,12 +37,14 @@ def _uid(x_user_id):
 class QueryRequest(BaseModel):
     question: str
     socratic: bool = False
+    doc_ids: list[str] | None = None
 
 
 class FlashcardRequest(BaseModel):
     topic: str
     limit: int = 5
     doc_id: str | None = None
+    doc_ids: list[str] | None = None
 
 
 class QuizRequest(BaseModel):
@@ -66,6 +68,7 @@ def query(req: QueryRequest, x_user_id: str | None = Header(default=None)) -> di
             vector_backend=config.vector_backend,
             bedrock_kb_id=config.vector_bedrock_kb_id,
             socratic=req.socratic,
+            doc_ids=req.doc_ids or None,
         )
     except Exception as e:
         logger.error(f"[/query] Unexpected error user={user_id}: {type(e).__name__}: {e}", exc_info=True)
@@ -83,6 +86,7 @@ def generate_flashcards(req: FlashcardRequest, x_user_id: str | None = Header(de
         topic=req.topic,
         limit=req.limit,
         doc_id=req.doc_id,
+        doc_ids=req.doc_ids or None,
         vector_store=vector_store,
         ai_client=ai_client,
         aws_region=config.aws_region,

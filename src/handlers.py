@@ -406,8 +406,12 @@ def handle_query(
     vector_backend: str,
     bedrock_kb_id: str,
     socratic: bool = False,
+    doc_ids: Optional[list[str]] = None,
 ) -> dict:
-    """RAG flow: retrieve user's relevant chunks → call AI with context → log + return."""
+    """RAG flow: retrieve user's relevant chunks → call AI with context → log + return.
+    
+    If doc_ids is provided, only retrieve chunks from those documents.
+    """
 
     start_time = time.time()
 
@@ -417,8 +421,32 @@ def handle_query(
         user_id=user_id,
         question=question,
         vector_backend=vector_backend,
-        socratic=socratic
+        socratic=socratic,
+        doc_ids=doc_ids,
     )
+
+    def _build_vector_filter() -> dict:
+        """Build filter dict: always scope to user, optionally scope to selected docs."""
+        f: dict = {"user_id": user_id}
+        if doc_ids and len(doc_ids) == 1:
+            f["doc_id"] = doc_ids[0]
+        return f
+
+    def _search_chunks(query: str, top_k: int = 5) -> list[dict]:
+        """Search vector store, handling multi-doc fan-out when needed."""
+        if not doc_ids or len(doc_ids) <= 1:
+            return vector_store.search(query, top_k=top_k, filter=_build_vector_filter())
+        # Multiple docs: search each separately and merge by score
+        per_doc = max(top_k, 3)
+        all_chunks: list[dict] = []
+        for did in doc_ids:
+            try:
+                results = vector_store.search(query, top_k=per_doc, filter={"user_id": user_id, "doc_id": did})
+                all_chunks.extend(results)
+            except Exception as e:
+                logger.warning(f"Vector search failed for doc_id={did}: {e}")
+        all_chunks.sort(key=lambda c: c.get("score", 0), reverse=True)
+        return all_chunks[:top_k]
 
     try:
         if socratic:
@@ -456,22 +484,12 @@ def handle_query(
                 except Exception as e:
                     logger.warning(f"Bedrock KB retrieve failed, falling back to local vector: {e}")
                     try:
-                        from src.adapters.factory import _local_vector_singleton
-                        if _local_vector_singleton:
-                            chunks = _local_vector_singleton.search(
-                                question,
-                                top_k=5,
-                                filter={"user_id": user_id}
-                            )
+                        chunks = _search_chunks(question, top_k=5)
                     except Exception as le:
                         logger.warning(f"Local vector fallback failed: {le}")
             else:
                 try:
-                    chunks = vector_store.search(
-                        question,
-                        top_k=5,
-                        filter={"user_id": user_id}
-                    )
+                    chunks = _search_chunks(question, top_k=5)
                 except Exception as e:
                     logger.warning(f"Local vector search failed: {e}")
 
@@ -545,11 +563,7 @@ def handle_query(
                 top_k=5
             )
 
-            chunks = vector_store.search(
-                question,
-                top_k=5,
-                filter={"user_id": user_id}
-            )
+            chunks = _search_chunks(question, top_k=5)
 
             log_step(
                 "rag_query",
@@ -1599,18 +1613,33 @@ def handle_generate_flashcards(
     doc_id: Optional[str],
     vector_store,
     ai_client,
-    aws_region: str
+    aws_region: str,
+    doc_ids: Optional[list[str]] = None,
 ) -> dict:
     start_time = time.time()
     raw_response = ""
     try:
         context = ""
-        if doc_id:
+        # Resolve effective doc_ids: prefer explicit doc_ids list, fall back to single doc_id
+        effective_doc_ids = doc_ids if doc_ids else ([doc_id] if doc_id else None)
+        if effective_doc_ids:
             try:
-                results = vector_store.search(query=topic, top_k=10, filter={"doc_id": doc_id})
+                if len(effective_doc_ids) == 1:
+                    results = vector_store.search(query=topic, top_k=10, filter={"doc_id": effective_doc_ids[0]})
+                else:
+                    # Fan-out across selected docs
+                    all_results: list[dict] = []
+                    for did in effective_doc_ids:
+                        try:
+                            r = vector_store.search(query=topic, top_k=5, filter={"doc_id": did})
+                            all_results.extend(r)
+                        except Exception as ve:
+                            logger.warning(f"Vector search failed for flashcards doc_id={did}: {ve}")
+                    all_results.sort(key=lambda c: c.get("score", 0), reverse=True)
+                    results = all_results[:10]
                 context = "\n\n".join(r["text"] for r in results)
             except Exception as ve:
-                logger.warning(f"Vector search failed for flashcards (topic='{topic}', doc_id='{doc_id}'): {ve}")
+                logger.warning(f"Vector search failed for flashcards (topic='{topic}'): {ve}")
                 context = ""
 
         prompt = FLASHCARD_PROMPT.format(limit=limit, topic=topic, context=context)
@@ -1654,6 +1683,7 @@ def handle_generate_flashcards(
             user_id=user_id,
             topic=topic,
             doc_id=doc_id,
+            doc_ids=effective_doc_ids,
             limit=limit,
             returned_count=len(flashcards),
             latency_ms=latency_ms,
