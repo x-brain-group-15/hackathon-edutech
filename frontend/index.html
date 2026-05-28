@@ -2347,7 +2347,7 @@
         items: [],
         index: 0,
         answers: {},
-        sourceDocId: null,
+        sourceDocIds: null,   // array of doc ids used to generate current quiz
         savedToS3: false,
       };
 
@@ -2430,7 +2430,7 @@
           const res = await call(`/quiz/${docId}`, { method: 'GET' });
           if (res.ok && res.body.quiz && res.body.quiz.length > 0) {
             initQuiz(res.body.quiz, true);
-            quizState.sourceDocId = docId;
+            quizState.sourceDocIds = [docId];
             toast(t('quizLoadedFromS3'), 'success');
           }
           // If empty, do nothing — keep empty state, let user generate
@@ -2476,7 +2476,7 @@
           const quizItems = res.body.quiz || (Array.isArray(res.body) ? res.body : []);
           const saved = res.body.saved === true;
           initQuiz(quizItems, saved);
-          quizState.sourceDocId = docId;
+          quizState.sourceDocIds = activeDocIds;
           toast(t('quizGenerated'), 'success');
         } catch (err) {
           toast(t('quizFailed', { detail: err.message }), 'error');
@@ -2618,10 +2618,14 @@
         }
         if (tabId === 'tab-quiz') {
           updateQuizDocLabel();
-          const docId = window.selectedDocId || window.lastDocId;
-          if (docId && quizState.sourceDocId !== docId) {
-            loadQuizFromS3(docId).then(() => {
-              quizState.sourceDocId = docId;
+          const activeDocIds = window.selectedDocIds && window.selectedDocIds.size > 0
+            ? [...window.selectedDocIds]
+            : (window.lastDocId ? [window.lastDocId] : null);
+          const currentKey = activeDocIds ? activeDocIds.join(',') : null;
+          const sourceKey = quizState.sourceDocIds ? quizState.sourceDocIds.join(',') : null;
+          if (activeDocIds && currentKey !== sourceKey) {
+            loadQuizFromS3(activeDocIds[0]).then(() => {
+              quizState.sourceDocIds = activeDocIds;
             });
           }
         }
@@ -3279,8 +3283,10 @@
           toast(count === 1 ? t('docSelectedToast', { filename: names }) : `${count} tài liệu đã chọn`, 'info');
         }
         // Reset quiz state when selection changes
-        if (quizState.sourceDocId !== firstId) {
-          quizState.sourceDocId = null;
+        const newKey = [...window.selectedDocIds].join(',');
+        const sourceKey = quizState.sourceDocIds ? quizState.sourceDocIds.join(',') : null;
+        if (newKey !== sourceKey) {
+          quizState.sourceDocIds = null;
           initQuiz(null);
         }
         updateQuizDocLabel();
