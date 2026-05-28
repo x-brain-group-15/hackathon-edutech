@@ -55,6 +55,13 @@ class Config:
     # Vector
     vector_backend: str = _env("VECTOR_BACKEND", "local")
     vector_bedrock_kb_id: str = _env("VECTOR_BEDROCK_KB_ID", "")
+    
+    # Cohere Rerank
+    cohere_api_key: str = _env("COHERE_API_KEY", "")
+    reranking_enabled: bool = _env("RERANKING_ENABLED", "false").lower() == "true"
+    rerank_top_k: int = int(_env("RERANK_TOP_K", "3"))
+    retrieve_top_k: int = int(_env("RETRIEVE_TOP_K", "15"))
+    aws_role_arn: str = _env("AWS_ROLE_ARN", "")
 
     # Chunking
     chunking_strategy: str = _env("CHUNKING_STRATEGY", "fixed")
