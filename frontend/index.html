@@ -108,7 +108,7 @@
       border: 1px solid var(--border);
       border-radius: var(--radius-sm);
       background: rgba(255, 255, 255, 0.02);
-      overflow: auto;
+      overflow: hidden !important;
       text-align: center;
       min-height: 450px;
       max-height: 600px;
@@ -205,11 +205,6 @@
     .mermaid .node, .mermaid .mindmap-node,
     #mindmap-mermaid .node, #mindmap-mermaid .mindmap-node {
       cursor: pointer !important;
-      transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
-    }
-    .mermaid .node:hover, .mermaid .mindmap-node:hover,
-    #mindmap-mermaid .node:hover, #mindmap-mermaid .mindmap-node:hover {
-      transform: scale(1.05) !important;
     }
     
     /* Central Root Node Specific Styles */
