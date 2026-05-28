@@ -147,6 +147,26 @@ def test_quiz_falls_back_when_bedrock_is_throttled():
     assert "Based on the selected notes" in quiz[0]["explanation"]
 
 
+def test_quiz_normalization_does_not_leave_all_answers_at_a():
+    from src.handlers import _normalize_quiz_items
+
+    raw_items = [
+        {
+            "id": f"q{i}",
+            "question": f"Question {i}",
+            "options": ["Correct", "Wrong 1", "Wrong 2", "Wrong 3"],
+            "correct_answer": "Correct",
+            "explanation": "Explanation",
+        }
+        for i in range(1, 6)
+    ]
+
+    quiz = _normalize_quiz_items(raw_items, 5)
+    assert len(quiz) == 5
+    assert all(item["correct_answer"] in item["options"] for item in quiz)
+    assert any(item["options"].index(item["correct_answer"]) != 0 for item in quiz)
+
+
 def test_quiz_falls_back_when_bedrock_credentials_are_missing():
     from src import handlers
     from src.adapters.vector import LocalVector

@@ -5,6 +5,7 @@ import time
 import logging
 import re
 import hashlib
+import random
 import traceback
 from typing import Optional
 
@@ -663,17 +664,19 @@ def _normalize_quiz_items(raw_items, num_questions: int) -> list[dict]:
         if correct_answer not in options:
             continue
 
+        options = _randomize_options(options, correct_answer)
+
         normalized.append({
             "id": str(item.get("id") or f"q{index}"),
             "question": str(item.get("question") or "").strip(),
-            "options": options[:4],
+            "options": options,
             "correct_answer": correct_answer,
             "explanation": str(item.get("explanation") or "").strip(),
         })
 
     if not normalized:
         raise ValueError("Quiz model response did not contain valid quiz items")
-    return normalized
+    return _avoid_all_correct_answers_at_a(normalized)
 
 
 def _is_bedrock_fallback_error(exc: Exception) -> bool:
@@ -692,6 +695,28 @@ def _is_bedrock_fallback_error(exc: Exception) -> bool:
 
 def _hash_int(value: str) -> int:
     return int(hashlib.sha256(value.encode("utf-8")).hexdigest()[:12], 16)
+
+
+def _randomize_options(options: list[str], correct_answer: str) -> list[str]:
+    clean_options = _dedupe_preserve_order(options)
+    distractors = [option for option in clean_options if option != correct_answer]
+    selected = [correct_answer, *distractors[:3]]
+    random.SystemRandom().shuffle(selected)
+    return selected
+
+
+def _avoid_all_correct_answers_at_a(quiz_items: list[dict]) -> list[dict]:
+    if len(quiz_items) < 2:
+        return quiz_items
+    if any(item["options"].index(item["correct_answer"]) != 0 for item in quiz_items):
+        return quiz_items
+
+    for offset, item in enumerate(quiz_items[1:], start=1):
+        options = item["options"]
+        if len(options) > 1:
+            target_index = offset % len(options)
+            options[0], options[target_index] = options[target_index], options[0]
+    return quiz_items
 
 
 def _dedupe_preserve_order(items: list[str]) -> list[str]:
@@ -753,11 +778,7 @@ def _make_options(correct: str, distractor_pool: list[str], seed: str) -> list[s
         if item.lower() != correct.lower() and item not in distractors:
             distractors.append(item)
 
-    options = _deterministic_shuffle([correct, *distractors[:3]], f"options:{seed}")
-    if options[0] == correct and len(options) > 1:
-        swap_idx = (_hash_int(f"swap:{seed}") % (len(options) - 1)) + 1
-        options[0], options[swap_idx] = options[swap_idx], options[0]
-    return options
+    return _randomize_options([correct, *distractors[:3]], correct)
 
 
 def _extract_quiz_facts(chunks: list[dict]) -> tuple[list[dict], list[str]]:
@@ -863,7 +884,7 @@ def _fallback_quiz_from_chunks(chunks: list[dict], num_questions: int) -> list[d
 
     if not fallback_items:
         raise ValueError("Quiz fallback could not find enough document text to generate questions")
-    return fallback_items
+    return _avoid_all_correct_answers_at_a(fallback_items)
 
 
 def handle_generate_quiz(

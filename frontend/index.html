@@ -1209,7 +1209,7 @@
         ) {
           return 'http://localhost:8000';
         }
-        return 'http://localhost:8000';
+        return 'https://1lse4odraj.execute-api.ap-southeast-1.amazonaws.com';
       };
       const API_BASE = getApiDefault().replace(/\/$/, '');
       const USER_ID =
@@ -1337,6 +1337,130 @@
           quizFailed: 'Tạo quiz thất bại: {detail}',
         },
       };
+
+      Object.assign(I18N.en, {
+        languageGroup: 'Language switcher',
+        toggleThemeTitle: 'Toggle light/dark theme',
+        docSearchPlaceholder: 'Search library...',
+        docSearchLabel: 'Search documents',
+        docMeta: '{chars} chars - {size} KB',
+        docDeleteTitle: 'Delete document',
+        uploadDragStrong: 'Drag a file here',
+        uploadDragOr: 'or',
+        uploadDragBrowse: 'click to browse',
+        uploadHintPrefix: 'Max ~10MB. Try a Wikipedia article from ',
+        uploadHintSuffix: '.',
+        chunkingSummary: 'Chunking settings',
+        chunkingStrategyLabel: 'Chunking strategy',
+        chunkingStrategyFixed: 'Fixed-size (sentence-aware)',
+        chunkingStrategyStructural: 'Structural (Markdown headers)',
+        chunkingStrategySemantic: 'Local semantic (Jaccard)',
+        chunkingSizeLabel: 'Chunk size (characters)',
+        chunkingOverlapLabel: 'Overlap (characters)',
+        chunkingThresholdLabel: 'Semantic distance threshold',
+        fileTooLarge:
+          'File is too large ({size} MB). Maximum size allowed is {max}MB.',
+        uploading: 'Uploading {filename} ({size} KB)...',
+        uploadFailed: 'Upload failed: {detail}',
+        uploadSuccessChars: '{chars} chars extracted & indexed',
+        uploadChunkPrefix: ' (using ',
+        uploadChunkSuffix: ' chunking)',
+        uploadSuccessDoc: 'doc_id: {docId}',
+        uploadedToast: 'Uploaded {filename}',
+        toastAskEmpty: 'Type a question first',
+        welcomeMessage:
+          'Hello! I am your AI Study Buddy. Upload your lecture notes, then ask me anything about them.',
+        labelYou: 'You',
+        labelBot: 'StudyBot',
+        errorQuery: 'Error occurred while querying the notes.',
+        citationsTitle: 'Citations from your documents',
+        citationChunk: 'chunk {chunk}',
+        citationScore: 'score {score}',
+        citationsNone: 'No citations matched.',
+        benchmarkMeta: 'Evaluate chunking quality',
+        benchmarkIntroPrefix: 'We automatically run ',
+        benchmarkIntroStrong: '5 test questions',
+        benchmarkIntroSuffix:
+          ' about Photosynthesis and score retrieval accuracy.',
+        benchmarkRunButton: 'Run benchmark evaluation',
+        benchmarkStatusRunning: 'Running benchmark evaluation...',
+        benchmarkMetricsTitle: 'RAG quality metrics',
+        benchmarkMetricP1: 'Top-1 accuracy',
+        benchmarkMetricP3: 'Top-3 accuracy',
+        benchmarkMetricP5: 'Top-5 accuracy',
+        benchmarkMetricMrr: 'Mean reciprocal rank',
+        benchmarkDetailsTitle: 'Retrieval details for 5 test questions',
+        benchmarkNeedDoc: 'Please upload or select a document first.',
+        benchmarkFailed: 'Evaluation failed: {detail}',
+        benchmarkSuccess: 'Evaluation completed successfully.',
+        benchmarkQuestionLabel: 'Q{index}: {query}',
+        benchmarkTargetKeywords: 'Target keywords',
+        debugSummary: 'Raw API responses (debug)',
+        debugEmpty: 'No requests yet.',
+      });
+
+      Object.assign(I18N.vi, {
+        languageGroup: 'Chá»n ngÃ´n ngá»¯',
+        toggleThemeTitle: 'Chuyá»ƒn giao diá»‡n sÃ¡ng/tá»‘i',
+        docSearchPlaceholder: 'TÃ¬m tÃ i liá»‡u...',
+        docSearchLabel: 'TÃ¬m kiáº¿m tÃ i liá»‡u',
+        docMeta: '{chars} kÃ½ tá»± - {size} KB',
+        uploadDragStrong: 'KÃ©o file vÃ o Ä‘Ã¢y',
+        uploadDragOr: 'hoáº·c',
+        uploadDragBrowse: 'báº¥m Ä‘á»ƒ chá»n file',
+        uploadHintPrefix: 'Tá»‘i Ä‘a ~10MB. Thá»­ má»™t bÃ i Wikipedia trong ',
+        uploadHintSuffix: '.',
+        chunkingSummary: 'Cáº¥u hÃ¬nh tÃ¡ch',
+        chunkingStrategyLabel: 'Chiáº¿n lÆ°á»£c chunking',
+        chunkingStrategyFixed: 'KÃ­ch thÆ°á»›c cá»‘ Ä‘á»‹nh (theo cÃ¢u)',
+        chunkingStrategyStructural: 'Cáº¥u trÃºc (tiÃªu Ä‘á» Markdown)',
+        chunkingStrategySemantic: 'Ngá»¯ nghÄ©a cá»¥c bá»™ (Jaccard)',
+        chunkingSizeLabel: 'KÃ­ch thÆ°á»›c chunk (kÃ½ tá»±)',
+        chunkingOverlapLabel: 'Overlap gá»‘i Ä‘áº§u (kÃ½ tá»±)',
+        chunkingThresholdLabel: 'NgÆ°á»¡ng khoáº£ng cÃ¡ch ngá»¯ nghÄ©a',
+        fileTooLarge:
+          'File vÆ°á»£t quÃ¡ dung lÆ°á»£ng cho phÃ©p ({size} MB). Dung lÆ°á»£ng tá»‘i Ä‘a lÃ  {max}MB.',
+        uploading: 'Äang táº£i {filename} ({size} KB)...',
+        uploadFailed: 'Táº£i lÃªn tháº¥t báº¡i: {detail}',
+        uploadSuccessChars:
+          '{chars} kÃ½ tá»± Ä‘Ã£ Ä‘Æ°á»£c tÃ¡ch vÃ  láº­p chá»‰ má»¥c',
+        uploadChunkPrefix: ' (dÃ¹ng ',
+        uploadChunkSuffix: ' chunking)',
+        uploadSuccessDoc: 'doc_id: {docId}',
+        uploadedToast: 'ÄÃ£ táº£i {filename}',
+        toastAskEmpty: 'HÃ£y nháº­p cÃ¢u há»i trÆ°á»›c',
+        welcomeMessage:
+          'Xin chÃ o! TÃ´i lÃ  trá»£ lÃ½ há»c táº­p AI. HÃ£y táº£i bÃ i giáº£ng, sau Ä‘Ã³ Ä‘áº·t cÃ¢u há»i.',
+        labelYou: 'Báº¡n',
+        labelBot: 'StudyBot',
+        errorQuery: 'ÄÃ£ xáº£y ra lá»—i khi truy váº¥n ghi chÃº.',
+        citationsTitle: 'TrÃ­ch dáº«n tá»« tÃ i liá»‡u cá»§a báº¡n',
+        citationChunk: 'pháº§n {chunk}',
+        citationScore: 'Ä‘iá»ƒm {score}',
+        citationsNone: 'KhÃ´ng tÃ¬m tháº¥y trÃ­ch dáº«n phÃ¹ há»£p.',
+        benchmarkMeta: 'ÄÃ¡nh giÃ¡ cháº¥t lÆ°á»£ng tÃ¡ch',
+        benchmarkIntroPrefix: 'Há»‡ thá»‘ng tá»± Ä‘á»™ng cháº¡y ',
+        benchmarkIntroStrong: '5 cÃ¢u há»i kiá»ƒm thá»­',
+        benchmarkIntroSuffix:
+          ' vá» quang há»£p Ä‘á»ƒ cháº¥m Ä‘á»™ chÃ­nh xÃ¡c truy xuáº¥t.',
+        benchmarkRunButton: 'Cháº¡y Ä‘Ã¡nh giÃ¡ benchmark',
+        benchmarkStatusRunning: 'Äang cháº¡y Ä‘Ã¡nh giÃ¡ benchmark...',
+        benchmarkMetricsTitle: 'Chá»‰ sá»‘ cháº¥t lÆ°á»£ng RAG',
+        benchmarkMetricP1: 'Äá»™ chÃ­nh xÃ¡c top-1',
+        benchmarkMetricP3: 'Äá»™ chÃ­nh xÃ¡c top-3',
+        benchmarkMetricP5: 'Äá»™ chÃ­nh xÃ¡c top-5',
+        benchmarkMetricMrr: 'Thá»© háº¡ng trung bÃ¬nh',
+        benchmarkDetailsTitle:
+          'Chi tiáº¿t truy xuáº¥t 5 cÃ¢u há»i kiá»ƒm thá»­',
+        benchmarkNeedDoc:
+          'Vui lÃ²ng táº£i lÃªn hoáº·c chá»n tÃ i liá»‡u trÆ°á»›c.',
+        benchmarkFailed: 'ÄÃ¡nh giÃ¡ tháº¥t báº¡i: {detail}',
+        benchmarkSuccess: 'ÄÃ¡nh giÃ¡ hoÃ n táº¥t.',
+        benchmarkQuestionLabel: 'CÃ¢u {index}: {query}',
+        benchmarkTargetKeywords: 'Tá»« khÃ³a má»¥c tiÃªu',
+        debugSummary: 'Pháº£n há»“i API (debug)',
+        debugEmpty: 'ChÆ°a cÃ³ yÃªu cáº§u nÃ o.',
+      });
 
       let currentLang =
         document.documentElement.getAttribute('data-lang') || 'en';
@@ -2714,7 +2838,7 @@
         }
 
         toast(t('docDeleteProgress', { filename }), 'info');
-        const res = await call(`/ docs / ${docId}`, { method: 'DELETE' });
+        const res = await call(`/docs/${docId}`, { method: 'DELETE' });
 
         if (!res.ok) {
           toast(
@@ -2790,6 +2914,34 @@
                 ? 'dark'
                 : 'default',
             securityLevel: 'loose',
+          });
+        }
+
+        const fileInput = $('file');
+        if (fileInput) {
+          fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+              doUpload(file);
+              e.target.value = '';
+            }
+          });
+        }
+
+        const dropZone = $('drop');
+        if (dropZone) {
+          dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('drag-over');
+          });
+          dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('drag-over');
+          });
+          dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('drag-over');
+            const file = e.dataTransfer.files[0];
+            if (file) doUpload(file);
           });
         }
       });

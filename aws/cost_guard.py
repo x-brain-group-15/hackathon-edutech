@@ -13,9 +13,18 @@ lambda_client = boto3.client('lambda')
 iam_client = boto3.client('iam')
 
 # Lấy thông tin tài nguyên từ các biến môi trường được cấu hình trong template.yaml
-STUDYBOT_BACKEND_LAMBDA = os.getenv('STUDYBOT_BACKEND_LAMBDA')
+STUDYBOT_BACKEND_LAMBDA = os.getenv('STUDYBOT_BACKEND_LAMBDA')   # query function
+STUDYBOT_UPLOAD_LAMBDA = os.getenv('STUDYBOT_UPLOAD_LAMBDA')
+STUDYBOT_CORE_LAMBDA = os.getenv('STUDYBOT_CORE_LAMBDA')
 APP_IAM_ROLE_NAME = os.getenv('APP_IAM_ROLE_NAME')
 DENY_POLICY_ARN = os.getenv('DENY_POLICY_ARN')
+
+# Tất cả các Lambda cần bị freeze khi vượt ngưỡng 80%
+ALL_BACKEND_LAMBDAS = [f for f in [
+    STUDYBOT_BACKEND_LAMBDA,
+    STUDYBOT_UPLOAD_LAMBDA,
+    STUDYBOT_CORE_LAMBDA,
+] if f]
 
 def extract_threshold(sns_message):
     """
@@ -97,19 +106,20 @@ def lambda_handler(event, context):
     elif threshold >= 80:
         logger.error("!!! EMERGENCY STOP ACTIVATED (80%+) !!!")
         
-        # A. Đóng băng compute: Đặt Reserved Concurrency của API Backend Lambda về 0
-        if STUDYBOT_BACKEND_LAMBDA:
-            try:
-                logger.info(f"Setting reserved concurrency of backend function '{STUDYBOT_BACKEND_LAMBDA}' to 0...")
-                lambda_client.put_function_concurrency(
-                    FunctionName=STUDYBOT_BACKEND_LAMBDA,
-                    ReservedConcurrentExecutions=0
-                )
-                logger.info("Lambda Backend successfully locked. RateExceededException will reject further calls.")
-            except Exception as e:
-                logger.error(f"Failed to freeze Lambda Backend concurrency: {str(e)}")
+        # A. Đóng băng compute: Đặt Reserved Concurrency của tất cả Lambda về 0
+        if ALL_BACKEND_LAMBDAS:
+            for fn_name in ALL_BACKEND_LAMBDAS:
+                try:
+                    logger.info(f"Setting reserved concurrency of '{fn_name}' to 0...")
+                    lambda_client.put_function_concurrency(
+                        FunctionName=fn_name,
+                        ReservedConcurrentExecutions=0
+                    )
+                    logger.info(f"Lambda '{fn_name}' successfully locked.")
+                except Exception as e:
+                    logger.error(f"Failed to freeze Lambda '{fn_name}': {str(e)}")
         else:
-            logger.error("Variable STUDYBOT_BACKEND_LAMBDA is not set.")
+            logger.error("No Lambda function names configured.")
             
         # B. Khóa quyền: Đính kèm chính sách Deny Policy vào Lambda execution IAM role
         if DENY_POLICY_ARN and APP_IAM_ROLE_NAME:
