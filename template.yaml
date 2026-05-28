@@ -253,9 +253,9 @@ Resources:
                   - bedrock:InvokeModel
                   - bedrock:InvokeModelWithResponseStream
                 Resource:
-                  - !Sub "arn:aws:bedrock:${AWS::Region}::foundation-model/*"
-                  - !Sub "arn:aws:bedrock:${AWS::Region}::inference-profile/*"
-                  - !Sub "arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/*"
+                  - "arn:aws:bedrock:*::foundation-model/*"
+                  - "arn:aws:bedrock:*::inference-profile/*"
+                  - "arn:aws:bedrock:*:${AWS::AccountId}:inference-profile/*"
 
               - Sid: MarketplaceAccess
                 Effect: Allow
