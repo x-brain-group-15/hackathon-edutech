@@ -172,6 +172,29 @@ def _extract_text(filename: str, data: bytes) -> str:
     except Exception:
         return ""
 
+
+def _get_document_text(user_id: str, doc_id: str, filename: str, storage) -> str:
+    """Helper to fetch document text. First attempts to read pre-extracted plain text
+    from S3 (highly optimized, low-memory), falling back to raw PDF/txt parsing if absent.
+    """
+    # 1. Try to fetch already-extracted plain text from S3 (highly optimized)
+    try:
+        txt_key = f"{user_id}/{doc_id}/extracted_text.txt"
+        txt_data = storage.get(txt_key)
+        return txt_data.decode("utf-8", errors="replace")
+    except Exception:
+        pass
+
+    # 2. Fall back to parsing the raw file if extracted_text.txt doesn't exist
+    try:
+        key = f"{user_id}/{doc_id}/{filename}"
+        data = storage.get(key)
+        return _extract_text(filename, data)
+    except Exception as e:
+        print(f"Error getting document text for doc_id {doc_id}: {e}")
+        return ""
+
+
 def handle_upload(
     user_id: str,
     filename: str,
@@ -224,6 +247,12 @@ def handle_upload(
         else:
             text = _extract_text(filename, data)
         log_step("upload", "extract_text_done", user_id=user_id, doc_id=doc_id, filename=filename, chars_extracted=len(text))
+
+        # Save pre-extracted plain text to S3 for lightning-fast, OOM-free future retrieval by other features
+        try:
+            storage.put(f"{user_id}/{doc_id}/extracted_text.txt", text.encode("utf-8"))
+        except Exception as text_save_err:
+            log_step("upload", "save_extracted_text_failed", error=str(text_save_err))
 
         if text.strip():
             log_step("upload", "vector_ingest_start", user_id=user_id, doc_id=doc_id, filename=filename, strategy=strategy or "default")
@@ -956,8 +985,7 @@ def handle_generate_quiz(
                     doc_id=doc_id,
                     filename=filename,
                 )
-                data = storage.get(key)
-                text = _extract_text(filename, data)
+                text = _get_document_text(user_id, doc_id, filename, storage)
                 if text.strip():
                     vector_store.ingest(
                         doc_id=doc_id,
@@ -1262,8 +1290,7 @@ def handle_evaluate(
             key=key
         )
 
-        data = storage.get(key)
-        text = _extract_text(filename, data)
+        text = _get_document_text(user_id, doc_id, filename, storage)
 
         log_step(
             "evaluate",
@@ -1567,9 +1594,7 @@ def handle_generate_mindmap(
             raise ValueError(f"Document {doc_id} not found for user {user_id}")
             
         filename = doc.get("filename", "unknown")
-        key = f"{user_id}/{doc_id}/{filename}"
-        data = storage.get(key)
-        text = _extract_text(filename, data)
+        text = _get_document_text(user_id, doc_id, filename, storage)
         
         if not text.strip():
             raise ValueError("Document has no text content to build a mind-map.")
@@ -1617,9 +1642,7 @@ def handle_generate_cornell(
             raise ValueError(f"Document {doc_id} not found for user {user_id}")
             
         filename = doc.get("filename", "unknown")
-        key = f"{user_id}/{doc_id}/{filename}"
-        data = storage.get(key)
-        text = _extract_text(filename, data)
+        text = _get_document_text(user_id, doc_id, filename, storage)
         
         if not text.strip():
             raise ValueError("Document has no text content to build Cornell notes.")
