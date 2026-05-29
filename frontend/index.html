@@ -1330,16 +1330,71 @@
       </section>
 
       <!-- Raw Drawer (Accordion) -->
-      <details>
-        <summary>
-          <svg style="width: 14px; height: 14px; vertical-align: middle" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd"
-              d="M12.316 3.051a1 1 0 01.633 1.265l-4 12a1 1 0 11-1.898-.632l4-12a1 1 0 011.265-.633zM5.707 6.293a1 1 0 010 1.414L3.414 10l2.293 2.293a1 1 0 11-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0zm8.586 0a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 11-1.414-1.414L16.586 10l-2.293-2.293a1 1 0 010-1.414z"
-              clip-rule="evenodd" />
-          </svg>
-          <span data-i18n="debugSummary"></span>
+      <details id="debug-drawer">
+        <summary style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <svg style="width: 14px; height: 14px; vertical-align: middle" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd"
+                d="M12.316 3.051a1 1 0 01.633 1.265l-4 12a1 1 0 11-1.898-.632l4-12a1 1 0 011.265-.633zM5.707 6.293a1 1 0 010 1.414L3.414 10l2.293 2.293a1 1 0 11-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0zm8.586 0a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 11-1.414-1.414L16.586 10l-2.293-2.293a1 1 0 010-1.414z"
+                clip-rule="evenodd" />
+            </svg>
+            <span data-i18n="debugSummary"></span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 0.5rem; margin-left: auto;">
+            <button id="btn-expand-debug" style="
+              background: rgba(255, 255, 255, 0.05);
+              border: 1px solid var(--border);
+              color: var(--muted);
+              padding: 0.25rem 0.6rem;
+              border-radius: 4px;
+              cursor: pointer;
+              font-size: 0.72rem;
+              font-weight: 600;
+              display: flex;
+              align-items: center;
+              gap: 0.25rem;
+              transition: all 0.2s ease;
+            }">
+              <svg style="width: 12px; height: 12px;" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M3 8V4m0 0h4M3 4l4 4m8 0V4m0 0h-4m4 0l-4 4m-8 4v4m0 0h4m-4 0l4-4m8 4v-4m0 4h-4m4 0l-4-4" />
+              </svg>
+              <span id="expand-btn-text">Expand Console</span>
+            </button>
+            <button id="btn-clear-debug" style="
+              background: rgba(239, 68, 68, 0.08);
+              border: 1px solid rgba(239, 68, 68, 0.2);
+              color: var(--error);
+              padding: 0.25rem 0.6rem;
+              border-radius: 4px;
+              cursor: pointer;
+              font-size: 0.72rem;
+              font-weight: 600;
+              display: flex;
+              align-items: center;
+              gap: 0.25rem;
+              transition: all 0.2s ease;
+            }">
+              ✕ Clear
+            </button>
+          </div>
         </summary>
-        <pre id="debug-log" data-empty="true">No requests yet.</pre>
+        <div id="debug-log-container" style="
+          padding: 1rem;
+          border-top: 1px solid var(--border);
+          background: rgba(10, 15, 30, 0.4);
+          max-height: 400px;
+          overflow-y: auto;
+          display: flex;
+          flex-direction: column;
+          gap: 0.75rem;
+        ">
+          <div class="debug-empty" style="
+            text-align: center;
+            color: var(--muted);
+            font-size: 0.8rem;
+            padding: 2rem 0;
+          " id="debug-empty-placeholder" data-i18n="debugEmpty">No requests yet.</div>
+        </div>
       </details>
     </div>
   </main>
@@ -1699,10 +1754,7 @@
         el.setAttribute('aria-label', t(key));
       });
 
-      const debugLog = $('debug-log');
-      if (debugLog && debugLog.getAttribute('data-empty') === 'true') {
-        debugLog.textContent = t('debugEmpty');
-      }
+      renderDrawerLogs();
     }
 
     function setLanguage(lang) {
@@ -1819,19 +1871,261 @@
       $('status-pills').innerHTML = tenantBadgeHtml + statusHtml;
     }
 
-    function logDebug(label, data) {
-      const lines =
-        $('debug-log').textContent === 'No requests yet.'
-          ? []
-          : $('debug-log').textContent.split('\n');
-      lines.unshift(
-        `── ${new Date().toLocaleTimeString()} — ${label} ──\n${JSON.stringify(
-          data,
-          null,
-          2
-        )}\n`
-      );
-      $('debug-log').textContent = lines.slice(0, 6).join('\n');
+    // Global array to store API request logs
+    window.apiLogs = [];
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function logDebug(method, path, status, ok, data) {
+      const timestamp = new Date().toLocaleTimeString();
+      const logId = Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+      
+      const logEntry = {
+        id: logId,
+        timestamp,
+        method,
+        path,
+        status,
+        ok,
+        data
+      };
+      
+      window.apiLogs.unshift(logEntry);
+      
+      if (window.apiLogs.length > 50) {
+        window.apiLogs.pop();
+      }
+      
+      renderDrawerLogs();
+      
+      const modal = $('debug-modal');
+      if (modal && modal.classList.contains('active')) {
+        renderModalLogs();
+      }
+    }
+
+    function renderDrawerLogs() {
+      const container = $('debug-log-container');
+      if (!container) return;
+      
+      if (window.apiLogs.length === 0) {
+        container.innerHTML = `<div class="debug-empty" style="text-align: center; color: var(--muted); font-size: 0.8rem; padding: 2rem 0;" id="debug-empty-placeholder" data-i18n="debugEmpty">${t('debugEmpty') || 'No requests yet.'}</div>`;
+        return;
+      }
+      
+      let html = '';
+      const visibleLogs = window.apiLogs.slice(0, 10);
+      visibleLogs.forEach((log) => {
+        const methodClass = `badge-${log.method.toLowerCase()}`;
+        const statusClass = log.ok ? 'status-success' : 'status-error';
+        const formattedData = typeof log.data === 'object' ? JSON.stringify(log.data, null, 2) : String(log.data);
+        
+        html += `
+          <div class="api-log-item" id="log-item-${log.id}">
+            <div class="api-log-item-header" onclick="toggleLogItem('${log.id}')">
+              <span class="api-method-badge ${methodClass}">${log.method}</span>
+              <span class="api-path-text">${escapeHtml(log.path)}</span>
+              <span class="api-status-badge ${statusClass}">${log.status}</span>
+              <span class="api-timestamp">${log.timestamp}</span>
+              <svg class="api-log-item-toggle-icon" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+              </svg>
+            </div>
+            <div class="api-log-item-body">
+              <div class="api-log-pre-wrapper">
+                <button class="btn-item-copy" onclick="copyLogContent(event, '${log.id}')">📋 Copy</button>
+                <pre><code>${escapeHtml(formattedData)}</code></pre>
+              </div>
+            </div>
+          </div>
+        `;
+      });
+      container.innerHTML = html;
+    }
+
+    function toggleLogItem(id) {
+      const el = $('log-item-' + id);
+      if (el) {
+        el.classList.toggle('open');
+      }
+    }
+
+    function copyLogContent(event, id) {
+      if (event) event.stopPropagation();
+      const log = window.apiLogs.find(l => l.id === id);
+      if (!log) return;
+      
+      const textToCopy = typeof log.data === 'object' ? JSON.stringify(log.data, null, 2) : String(log.data);
+      
+      navigator.clipboard.writeText(textToCopy).then(() => {
+        toast('Copied response to clipboard!', 'success');
+      }).catch(err => {
+        console.error('Failed to copy text: ', err);
+        toast('Failed to copy to clipboard', 'error');
+      });
+    }
+
+    let selectedModalLogId = null;
+    let modalSearchQuery = '';
+
+    function openDebugModal(e) {
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      const modal = $('debug-modal');
+      if (modal) {
+        modal.classList.add('active');
+        document.body.style.overflow = 'hidden';
+        
+        const searchInput = $('modal-debug-search');
+        if (searchInput) {
+          searchInput.value = '';
+        }
+        modalSearchQuery = '';
+        const clearSearchBtn = $('btn-clear-modal-search');
+        if (clearSearchBtn) {
+          clearSearchBtn.style.display = 'none';
+        }
+        
+        renderModalLogs();
+      }
+    }
+
+    function closeDebugModal() {
+      const modal = $('debug-modal');
+      if (modal) {
+        modal.classList.remove('active');
+        document.body.style.overflow = '';
+      }
+    }
+
+    function renderModalLogs() {
+      const listEl = $('modal-log-list');
+      if (!listEl) return;
+      
+      const query = modalSearchQuery.toLowerCase().trim();
+      const filteredLogs = window.apiLogs.filter(log => {
+        if (!query) return true;
+        const formattedData = typeof log.data === 'object' ? JSON.stringify(log.data) : String(log.data);
+        return log.method.toLowerCase().includes(query) || 
+               log.path.toLowerCase().includes(query) || 
+               String(log.status).includes(query) ||
+               formattedData.toLowerCase().includes(query);
+      });
+      
+      if (filteredLogs.length === 0) {
+        listEl.innerHTML = `
+          <div style="padding: 2rem 1.5rem; text-align: center; color: var(--muted); font-size: 0.82rem;">
+            ${query ? 'No matching logs found.' : 'No logs recorded.'}
+          </div>
+        `;
+        if (selectedModalLogId && !filteredLogs.some(l => l.id === selectedModalLogId)) {
+          showModalDetailPlaceholder();
+        }
+        return;
+      }
+      
+      let html = '';
+      filteredLogs.forEach(log => {
+        const methodClass = `badge-${log.method.toLowerCase()}`;
+        const statusClass = log.ok ? 'status-success' : 'status-error';
+        const isActive = log.id === selectedModalLogId ? 'active' : '';
+        
+        html += `
+          <div class="modal-log-item ${isActive}" onclick="selectModalLog('${log.id}')">
+            <div class="modal-log-item-row-1">
+              <span class="api-method-badge ${methodClass}">${log.method}</span>
+              <span class="api-status-badge ${statusClass}">${log.status}</span>
+              <span class="api-timestamp">${log.timestamp}</span>
+            </div>
+            <div class="modal-log-item-row-2">
+              ${escapeHtml(log.path)}
+            </div>
+          </div>
+        `;
+      });
+      listEl.innerHTML = html;
+      
+      if (filteredLogs.length > 0 && !selectedModalLogId) {
+        selectModalLog(filteredLogs[0].id);
+      } else if (selectedModalLogId) {
+        selectModalLog(selectedModalLogId, true);
+      }
+    }
+
+    function showModalDetailPlaceholder() {
+      $('modal-log-detail-placeholder').style.display = 'flex';
+      $('modal-log-detail-content').style.display = 'none';
+      selectedModalLogId = null;
+    }
+
+    function selectModalLog(id, forceRefresh = false) {
+      if (selectedModalLogId === id && !forceRefresh) return;
+      
+      selectedModalLogId = id;
+      
+      const items = document.querySelectorAll('.modal-log-item');
+      items.forEach(item => {
+        item.classList.remove('active');
+      });
+      
+      const log = window.apiLogs.find(l => l.id === id);
+      if (!log) {
+        showModalDetailPlaceholder();
+        return;
+      }
+      
+      $('modal-log-detail-placeholder').style.display = 'none';
+      $('modal-log-detail-content').style.display = 'flex';
+      
+      const methodBadge = $('detail-method');
+      methodBadge.className = `api-method-badge badge-${log.method.toLowerCase()}`;
+      methodBadge.textContent = log.method;
+      
+      $('detail-path').textContent = log.path;
+      
+      const statusBadge = $('detail-status');
+      statusBadge.className = `api-status-badge ${log.ok ? 'status-success' : 'status-error'}`;
+      statusBadge.textContent = log.status + (log.ok ? ' OK' : ' Error');
+      
+      $('detail-time').textContent = log.timestamp;
+      
+      const formattedData = typeof log.data === 'object' ? JSON.stringify(log.data, null, 2) : String(log.data);
+      $('detail-response-pre').innerHTML = `<code>${escapeHtml(formattedData)}</code>`;
+      
+      $('btn-copy-response').onclick = (e) => {
+        copyLogContent(e, id);
+      };
+      
+      const preContainer = $('detail-response-pre');
+      if (preContainer) {
+        preContainer.scrollTop = 0;
+      }
+    }
+
+    function clearAllLogs(e) {
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      
+      if (confirm('Are you sure you want to clear all API logs?')) {
+        window.apiLogs = [];
+        selectedModalLogId = null;
+        renderDrawerLogs();
+        renderModalLogs();
+        showModalDetailPlaceholder();
+        toast('Cleared API logs', 'info');
+      }
     }
 
     async function call(path, opts = {}) {
@@ -1839,16 +2133,21 @@
         { 'X-User-Id': USER_ID },
         opts.headers || {}
       );
-      const r = await fetch(API_BASE + path, opts);
-      const text = await r.text();
-      let body;
       try {
-        body = JSON.parse(text);
-      } catch {
-        body = text;
+        const r = await fetch(API_BASE + path, opts);
+        const text = await r.text();
+        let body;
+        try {
+          body = JSON.parse(text);
+        } catch {
+          body = text;
+        }
+        logDebug(opts.method || 'GET', path, r.status, r.ok, body);
+        return { ok: r.ok, status: r.status, body };
+      } catch (err) {
+        logDebug(opts.method || 'GET', path, 0, false, { error: err.message });
+        return { ok: false, status: 0, body: err.message };
       }
-      logDebug(`${opts.method || 'GET'} ${path}`, body);
-      return { ok: r.ok, status: r.status, body };
     }
 
     async function doUpload(file) {
@@ -4339,8 +4638,120 @@ Do not return any other text, headers, or explanations. Keep them very short (1-
           if (file) doUpload(file);
         });
       }
+
+      // Bind event listeners for the new API Debug modal & actions
+      const btnExpand = $('btn-expand-debug');
+      if (btnExpand) {
+        btnExpand.addEventListener('click', openDebugModal);
+      }
+      
+      const btnClear = $('btn-clear-debug');
+      if (btnClear) {
+        btnClear.addEventListener('click', clearAllLogs);
+      }
+      
+      const btnModalClose = $('btn-modal-close');
+      if (btnModalClose) {
+        btnModalClose.addEventListener('click', closeDebugModal);
+      }
+      
+      const btnModalClear = $('btn-modal-clear');
+      if (btnModalClear) {
+        btnModalClear.addEventListener('click', clearAllLogs);
+      }
+      
+      const modalOverlay = $('debug-modal');
+      if (modalOverlay) {
+        modalOverlay.addEventListener('click', (e) => {
+          if (e.target === modalOverlay) {
+            closeDebugModal();
+          }
+        });
+      }
+      
+      const modalSearch = $('modal-debug-search');
+      if (modalSearch) {
+        modalSearch.addEventListener('input', (e) => {
+          modalSearchQuery = e.target.value;
+          const clearBtn = $('btn-clear-modal-search');
+          if (clearBtn) {
+            clearBtn.style.display = modalSearchQuery ? 'block' : 'none';
+          }
+          renderModalLogs();
+        });
+      }
+      
+      const btnClearSearch = $('btn-clear-modal-search');
+      if (btnClearSearch) {
+        btnClearSearch.addEventListener('click', () => {
+          if (modalSearch) {
+            modalSearch.value = '';
+            modalSearchQuery = '';
+            btnClearSearch.style.display = 'none';
+            renderModalLogs();
+          }
+        });
+      }
+      
+      // Escape key to close modal
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          const modal = $('debug-modal');
+          if (modal && modal.classList.contains('active')) {
+            closeDebugModal();
+          }
+        }
+      });
     });
   </script>
+  <!-- Debug Modal Popup -->
+  <div id="debug-modal" class="debug-modal-overlay">
+    <div class="debug-modal-content">
+      <div class="debug-modal-header">
+        <div class="debug-modal-title">
+          <svg style="width: 18px; height: 18px; color: var(--accent); vertical-align: middle; display: inline-block; margin-right: 4px;" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M12.316 3.051a1 1 0 01.633 1.265l-4 12a1 1 0 11-1.898-.632l4-12a1 1 0 011.265-.633zM5.707 6.293a1 1 0 010 1.414L3.414 10l2.293 2.293a1 1 0 11-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0zm8.586 0a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 11-1.414-1.414L16.586 10l-2.293-2.293a1 1 0 010-1.414z" clip-rule="evenodd" />
+          </svg>
+          <span style="font-family: var(--font-display); font-weight: 700; font-size: 1.1rem; color: var(--text);">API Response Debug Console</span>
+        </div>
+        <div class="debug-modal-actions">
+          <div class="debug-search-wrapper">
+            <input type="text" id="modal-debug-search" placeholder="Search logs, paths, content..." />
+            <span class="search-clear-btn" id="btn-clear-modal-search">✕</span>
+          </div>
+          <button id="btn-modal-clear" class="btn-clear-all">✕ Clear All</button>
+          <button id="btn-modal-close" class="btn-close-modal">✕ Close</button>
+        </div>
+      </div>
+      <div class="debug-modal-body">
+        <div class="debug-sidebar">
+          <div id="modal-log-list" class="modal-log-list">
+            <!-- List of logs will go here -->
+          </div>
+        </div>
+        <div class="debug-detail-view">
+          <div id="modal-log-detail-placeholder" class="detail-placeholder">
+            Select an API request from the list to view full details.
+          </div>
+          <div id="modal-log-detail-content" class="detail-content" style="display: none;">
+            <div class="detail-header-info">
+              <span id="detail-method" class="api-method-badge">GET</span>
+              <span id="detail-path" class="path-mono">/api/endpoint</span>
+              <span id="detail-status" class="api-status-badge">200 OK</span>
+              <span id="detail-time" class="time-label">08:02:50</span>
+            </div>
+            <div class="detail-body-wrapper">
+              <div class="body-header">
+                <span>Response Body</span>
+                <button id="btn-copy-response" class="btn-copy">📋 Copy JSON</button>
+              </div>
+              <pre id="detail-response-pre"><code></code></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 </body>
 
 </html>
