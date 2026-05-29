@@ -14,12 +14,11 @@
 | API URL | `https://1lse4odraj.execute-api.ap-southeast-1.amazonaws.com` |
 | GitHub repo | https://github.com/x-brain-group-15/hackathon-edutech |
 | AWS region | `ap-southeast-1` |
-| Tổng chi phí | TODO: USD từ ảnh chụp màn hình Cost Explorer cuối cùng |
-| Video demo | TODO: `docs/demo.mp4` hoặc liên kết YouTube không công khai |
+| Tổng chi phí | ![Cost Last](./cost-29.png) |
+| Video demo | [Demo](https://drive.google.com/file/d/1e-PzQd61jTC5qLI82FUjB67cnpG1vsii/view?usp=drive_link) |
 
-Ảnh chụp màn hình bắt buộc cho phần này:
-- `01_live_url_loaded.png` - ứng dụng HTTPS hiển thị cho người đánh giá được tải trên trình duyệt.
-- `02_repo_readme.png` - repo GitHub công khai với README, kiến trúc, hướng dẫn cài đặt, dọn dẹp.
+![Live URL](./live-url.png)
+- ứng dụng HTTPS hiển thị cho người đánh giá được tải trên trình duyệt.
 
 ## 2. Bài Thuyết Trình và Tầm Nhìn
 
@@ -257,16 +256,18 @@ Bằng chứng cần chụp:
 | Thời gian | Ảnh chụp màn hình | Ghi chú |
 |---|---|---|
 | Cuối Ngày 1 - 2026-05-27 | ![Cost Wed](./cost-27.png) |0.25$ - Top3: WAF, KMS, S3|
-| Cuối Ngày 2 - 2026-05-28 | ![Cost Thur](./cost-28.png) |0.66$ - (Top3: OpenSearch Service, KMS, S3)|
-| Sáng ngày Demo - 2026-05-29 | `cost_demo_morning.png` | TODO: tổng trước khi demo |
+| Cuối Ngày 2 - 2026-05-28 | ![Cost Thur](./cost-28.png) |0.66$ - Top3: OpenSearch Service, KMS, S3|
+| Sáng ngày Demo - 2026-05-29 | ![Cost Sat](./cost-29.png) | 0.97$ - Top 3: Open Search, KMS, S3 & Embedding Model |
 
 ### Các Yếu Tố Tốn Kém Nhất
 
 | Hạng | Dịch vụ | Chi phí | Lý do xuất hiện |
 |---|---:|---:|---|
-| 1 | Open Search Service |  | Lượng truy vấn nhiều vào Knowledge Base |
-| 2 | KMS |  | Cần lưu trữ các key mã hoá |
-| 3 | S3 |  | Người dùng Upload và lưu trữ các bài tập hoặc thẻ ghi nhớ |
+| 1 | Open Search Service | 0.9$ | Lượng truy vấn nhiều vào Knowledge Base |
+| 2 | S3 | 0.1$ | Lượng truy cập đọc và ghi liên tục từ KB hoặc Người dùng upload tài liệu |
+| 3 | Embedding Model | 0.1$ | Lượng truy vấn nhiều vào Knowledge Base |
+
+*P/S: Bảng ghi trên là chi phí dự tính, bởi vì gặp các vấn đề về account không thể gọi model từ Bedrock và chỉ vừa giải quyết vào cuối ngày 28 cho nên chi phí thực sự có thể vẫn chưa cập nhật hoàn toàn trong Cost Explorer*
 
 ### Các Biện Pháp Kiểm Soát Chi Phí
 
