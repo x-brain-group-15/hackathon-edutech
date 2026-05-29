@@ -1930,7 +1930,7 @@
             <span data-i18n="debugSummary"></span>
           </div>
           <div style="display: flex; align-items: center; gap: 0.5rem; margin-left: auto;">
-            <button id="btn-expand-debug" style="
+            <button id="btn-expand-debug" onclick="openDebugModal(event)" style="
               background: rgba(255, 255, 255, 0.05);
               border: 1px solid var(--border);
               color: var(--muted);
@@ -1949,7 +1949,7 @@
               </svg>
               <span id="expand-btn-text">Expand Console</span>
             </button>
-            <button id="btn-clear-debug" style="
+            <button id="btn-clear-debug" onclick="clearAllLogs(event)" style="
               background: rgba(239, 68, 68, 0.08);
               border: 1px solid rgba(239, 68, 68, 0.2);
               color: var(--error);
@@ -2591,7 +2591,11 @@
       }
     }
 
-    function closeDebugModal() {
+    function closeDebugModal(e) {
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
       const modal = $('debug-modal');
       if (modal) {
         modal.classList.remove('active');
@@ -5315,8 +5319,8 @@ Do not return any other text, headers, or explanations. Keep them very short (1-
             <input type="text" id="modal-debug-search" placeholder="Search logs, paths, content..." />
             <span class="search-clear-btn" id="btn-clear-modal-search">✕</span>
           </div>
-          <button id="btn-modal-clear" class="btn-clear-all">✕ Clear All</button>
-          <button id="btn-modal-close" class="btn-close-modal">✕ Close</button>
+          <button id="btn-modal-clear" onclick="clearAllLogs(event)" class="btn-clear-all">✕ Clear All</button>
+          <button id="btn-modal-close" onclick="closeDebugModal(event)" class="btn-close-modal">✕ Close</button>
         </div>
       </div>
       <div class="debug-modal-body">
