@@ -20,6 +20,22 @@ class BedrockAI:
         self.agent_runtime = None
         self.init_error = None
         self.groq_fallback = None
+
+        # Check if cross-account role assumption is needed
+        from src.config import config
+        credentials = None
+        if config.aws_role_arn:
+            try:
+                import boto3
+                sts = boto3.client("sts", region_name=region)
+                assumed_role = sts.assume_role(
+                    RoleArn=config.aws_role_arn,
+                    RoleSessionName="StudyBotCrossAccountBedrock"
+                )
+                credentials = assumed_role["Credentials"]
+            except Exception as e:
+                self.init_error = RuntimeError(f"Failed to assume cross-account role: {e}")
+
         try:
             import boto3
             from botocore.config import Config
@@ -29,8 +45,26 @@ class BedrockAI:
                 read_timeout=6.0,
                 retries={"max_attempts": 1}
             )
-            self.runtime = boto3.client("bedrock-runtime", region_name=region, config=config_boto)
-            self.agent_runtime = boto3.client("bedrock-agent-runtime", region_name=region, config=config_boto)
+            if credentials:
+                self.runtime = boto3.client(
+                    "bedrock-runtime",
+                    region_name=region,
+                    config=config_boto,
+                    aws_access_key_id=credentials["AccessKeyId"],
+                    aws_secret_access_key=credentials["SecretAccessKey"],
+                    aws_session_token=credentials["SessionToken"]
+                )
+                self.agent_runtime = boto3.client(
+                    "bedrock-agent-runtime",
+                    region_name=region,
+                    config=config_boto,
+                    aws_access_key_id=credentials["AccessKeyId"],
+                    aws_secret_access_key=credentials["SecretAccessKey"],
+                    aws_session_token=credentials["SessionToken"]
+                )
+            else:
+                self.runtime = boto3.client("bedrock-runtime", region_name=region, config=config_boto)
+                self.agent_runtime = boto3.client("bedrock-agent-runtime", region_name=region, config=config_boto)
         except Exception as e:
             self.init_error = e
         
@@ -126,15 +160,15 @@ class BedrockAI:
         logger = logging.getLogger("StudyBot")
 
 
-        if self.init_error or not self.runtime:
-            raise RuntimeError(
-                f"Bedrock runtime failed to initialize: {self.init_error}"
-            )
-
         max_tokens = kwargs.get("max_tokens", 1024)
-        
-        # Primary model first, then fallbacks from env (AI_MODEL_FALLBACKS)
-        models_to_try = [self.model_id] + self.model_fallbacks
+
+        if self.init_error or not self.runtime:
+            logger.warning(f"Bedrock runtime failed to initialize: {self.init_error or 'no runtime'}. Falling back directly.")
+            last_error = self.init_error or RuntimeError("Bedrock runtime not initialized")
+            models_to_try = []
+        else:
+            # Primary model first, then fallbacks from env (AI_MODEL_FALLBACKS)
+            models_to_try = [self.model_id] + self.model_fallbacks
 
         start_time = time.time()
         last_error = None
@@ -202,9 +236,8 @@ class BedrockAI:
         logger = logging.getLogger("StudyBot")
 
         if self.init_error or not self.agent_runtime:
-            raise RuntimeError(
-                f"Bedrock agent runtime failed to initialize: {self.init_error}"
-            )
+            logger.warning(f"Bedrock agent runtime failed to initialize: {self.init_error or 'no agent runtime'}. Falling back directly to local RAG.")
+            return self._local_rag_fallback(query, kb_id, self.init_error or RuntimeError("Bedrock agent runtime not initialized"))
 
         if not kb_id:
             raise ValueError("VECTOR_BEDROCK_KB_ID must be set for Bedrock KB retrieve_and_generate")
