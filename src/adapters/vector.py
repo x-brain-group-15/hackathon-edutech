@@ -212,8 +212,6 @@ class LocalVector:
 
     def search(self, query: str, top_k: int = 5, filter: Optional[dict] = None) -> list:
         user_id = filter.get("user_id") if filter else "test-user-001"
-        if not self.docs:
-            self._seed_default_document(user_id)
 
         q_tokens = set(self._tokens(query))
         results = []
@@ -229,5 +227,24 @@ class LocalVector:
                     "score": float(score),
                     "metadata": md,
                 })
+
+        # Only fall back to the default seed doc when: no real docs exist at all
+        # (i.e. self.docs is empty). Never seed when a real filter is provided
+        # since that would incorrectly return photosynthesis content for a user
+        # who selected a different document.
+        if not results and not self.docs:
+            self._seed_default_document(user_id)
+            for chunk_id, text, md in self.docs:
+                d_tokens = Counter(self._tokens(text))
+                score = sum(d_tokens[t] for t in q_tokens)
+                if score > 0:
+                    results.append({
+                        "text": text,
+                        "doc_id": md.get("doc_id", chunk_id),
+                        "score": float(score),
+                        "metadata": md,
+                    })
+            results.sort(key=lambda r: -r["score"])
+
         results.sort(key=lambda r: -r["score"])
         return results[:top_k]

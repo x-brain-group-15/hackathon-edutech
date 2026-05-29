@@ -975,14 +975,16 @@ button.ghost:hover {
 
 .answer-card {
   margin-top: 0.5rem;
-  padding: 1.25rem 1.5rem 1.5rem;
+  padding: 1.5rem 1.75rem 1.75rem;
   background: var(--chat-bg);
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   display: none;
   box-shadow: var(--shadow);
-  max-height: 450px;
+  min-height: 200px;
+  max-height: 560px;
   overflow-y: auto;
+  scroll-behavior: smooth;
   transition: background-color 0.3s ease;
 }
 
@@ -996,7 +998,7 @@ button.ghost:hover {
 .chat-bubble {
   display: flex;
   gap: 1rem;
-  max-width: 85%;
+  max-width: 90%;
   animation: slideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -1054,10 +1056,10 @@ button.ghost:hover {
 }
 
 .bubble-text {
-  padding: 0.85rem 1.15rem;
-  border-radius: 14px;
-  font-size: 0.94rem;
-  line-height: 1.6;
+  padding: 0.95rem 1.25rem;
+  border-radius: 16px;
+  font-size: 0.96rem;
+  line-height: 1.72;
   white-space: pre-wrap;
   box-shadow: var(--shadow-sm);
 }
